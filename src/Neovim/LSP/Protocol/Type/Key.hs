@@ -1,0 +1,75 @@
+
+{-# LANGUAGE DataKinds        #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TemplateHaskell  #-}
+{-# OPTIONS_GHC -Wno-simplifiable-class-constraints #-}
+
+module Neovim.LSP.Protocol.Type.Key where
+
+import           Data.Extensible (mkField)
+
+$(concat <$> mapM mkField
+  [ "jsonrpc"
+  , "id"
+  , "method"
+  , "params"
+  , "code"
+  , "message"
+  , "data_" -- "data" is preserved...
+  , "result"
+  , "error"
+  , "line"
+  , "character"
+  , "start"
+  , "end"
+  , "uri"
+  , "range"
+  , "severity"
+  , "source"
+  , "title"
+  , "command"
+  , "arguments"
+  , "newText"
+  , "changes"
+  , "version"
+  , "languageId"
+  , "text"
+  , "textDocument"
+  , "position"
+  , "processId"
+  , "rootPath"
+  , "rootUri"
+  , "initializationOptions"
+  , "capabilities"
+  , "retry"
+  , "resolveProvider"
+  , "triggerCharacters"
+  , "firstTriggerCharacter"
+  , "moreTriggerCharacter"
+  , "textDocumentSync"
+  , "hoverProvider"
+  , "completionProvider"
+  , "signatureHelpProvider"
+  , "definitionProvider"
+  , "referencesProvider"
+  , "documentHighlightProvider"
+  , "documentSymbolProvider"
+  , "workspaceSymbolProvider"
+  , "codeActionProvider"
+  , "codeLensProvider"
+  , "documentFormattingProvider"
+  , "documentRangeFormattingProvider"
+  , "documentOnTypeFormattingProvider"
+  , "renameProvider"
+  , "documentChanges"
+  , "language"
+  , "scheme"
+  , "pattern"
+  , "trace"
+  , "workspace"
+  , "experimental"
+  , "diagnostics"
+  , "contentChanges"
+  , "rangeLength"
+  ])
+
