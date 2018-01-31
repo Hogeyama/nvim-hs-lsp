@@ -12,7 +12,7 @@
 -- BuildMessageとかのほうがいいかしら
 module Neovim.LSP.Protocol.Messages where
 
-import           Data.Extensible
+import           Data.Extensible hiding (Nullable)
 import           Data.Singletons
 
 import           Neovim.LSP.Protocol.Type
@@ -56,7 +56,7 @@ request id' a = Request $ K.jsonrpc @= "2.0"
 
 -- | Build 'ClientResponse'
 response :: forall (m :: ServerMethodK). SingI m
-         => Maybe ID
+         => Nullable ID
          -> ResResult m
          -> Option (ResponseError (ResError m))
          -> ClientResponse m
@@ -70,7 +70,7 @@ response id' res err = Response $ K.jsonrpc @= "2.0"
 -- Initialize
 -------------------------------------------------------------------------------
 
-initializeParam :: Maybe Number -> Maybe Uri -> RequestParam 'InitializeK
+initializeParam :: Nullable Number -> Nullable Uri -> RequestParam 'InitializeK
 initializeParam processId rootUri
    = K.processId             @= processId
   <: K.rootPath              @= None

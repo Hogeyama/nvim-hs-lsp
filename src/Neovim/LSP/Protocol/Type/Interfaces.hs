@@ -21,7 +21,9 @@
 {-# OPTIONS_GHC -Wall               #-}
 
 module Neovim.LSP.Protocol.Type.Interfaces
-  ( ID(..)
+  ( Nullable
+  , (:|:)(..)
+  , ID(..)
   , Number
   , Version
   , Uri
@@ -99,7 +101,7 @@ import           Control.Applicative             ((<|>))
 import           Control.Monad                   (mzero)
 import           Data.Aeson                      hiding (Error)
 import           Data.Char                       (digitToInt, toLower)
-import           Data.Extensible
+import           Data.Extensible                 hiding (Nullable)
 import           Data.Hashable                   (Hashable)
 import           Data.Singletons                 (SingI)
 import           Data.Text                       (Text)
@@ -114,13 +116,19 @@ import           Safe                            (lookupJust)
 -- https://github.com/Microsoft/language-server-protocol/blob/master/protocol.md
 
 -------------------------------------------------------------------------------
--- Util
+-- Type for fields
 -------------------------------------------------------------------------------
 
-revLookup :: Eq a => a -> [(b,a)] -> Maybe b
-revLookup x dic = lookup x $ map flip' dic
-  where flip' (a,b) = (b,a)
+type Nullable = Maybe
 
+-- | Sum type for record. The differnce against 'Either' is:
+--
+-- >>> :set -XOverloadedStrings -XTypeOperators
+-- >>> encode (Left 1 :: Either Int Bool)
+-- "{\"Left\":1}"
+-- >>> encode (L 1 :: Int :|: Bool)
+-- "1"
+--
 data (:|:) a b = L a | R b
   deriving (Show, Eq, Ord)
 instance (FromJSON a, FromJSON b) => FromJSON (a :|: b) where
@@ -158,7 +166,7 @@ type RequestMessageF (x :: X) a =
 type ResponseMessage  (x :: X) a e = Record (ResponseMessageF x a e)
 type ResponseMessageF (x :: X) a e =
   MessageF ++
-  '[ "id"      >: Maybe ID
+  '[ "id"      >: Nullable ID
    , "result"  >: a -- NOTE 本来はOption a
                     -- TODO 整合性とれてるか見直す
    , "error"   >: Option (ResponseError e) -- 同上
@@ -498,9 +506,9 @@ deriving instance ImplResponse m => FromJSON (Response m)
 
 -- | Initialize Request
 type instance RequestParam 'InitializeK = Record
-  '[ "processId"             >: Maybe Number
-   , "rootPath"              >: Option (Maybe String)
-   , "rootUri"               >: Maybe Uri  -- rootPathよりこっち推奨
+  '[ "processId"             >: Nullable Number
+   , "rootPath"              >: Option (Nullable String)
+   , "rootUri"               >: Nullable Uri  -- rootPathよりこっち推奨
    , "initializationOptions" >: Option ()  -- TODO
    , "capabilities"          >: ClientCapabilities
    , "trace"                 >: Option Trace
@@ -756,4 +764,13 @@ type instance ResError          ('MiscK s) = Value
 ------------
 -- Server --
 ------------
+
+
+-------------------------------------------------------------------------------
+-- Util
+-------------------------------------------------------------------------------
+
+revLookup :: Eq a => a -> [(b,a)] -> Maybe b
+revLookup x dic = lookup x $ map flip' dic
+  where flip' (a,b) = (b,a)
 
