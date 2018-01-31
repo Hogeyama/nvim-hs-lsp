@@ -1,6 +1,5 @@
 
-#resolver: nightly-2017-08-02
 resolver: lts-10.0
-extra-deps:
-- extensible-0.4.5
 
+extra-deps:
+- nvim-hs-0.2.5

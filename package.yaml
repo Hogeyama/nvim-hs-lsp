@@ -15,7 +15,8 @@ library:
   ghc-options:
   - -Wall
   dependencies:
-  - nvim-hs >= 0.2.2
+  - nvim-hs >= 0.2.5
+    # 0.2.4の testWithEmbeddedNeovim は壊れている模様
   - lifted-base
   - resourcet
   - ansi-wl-pprint
@@ -23,7 +24,6 @@ library:
   - constraints
   - containers
   - unordered-containers
-  - deepseq
   - directory
   - extensible
   - hashable
@@ -36,6 +36,8 @@ library:
   - stm
   - bytestring
   - mtl
+  - async
+  - exceptions
 
 executables:
   tmp:
@@ -50,8 +52,6 @@ executables:
     - nvim-hs >= 0.2.2
     - nvim-hs-lsp
     - stm
-    - bytestring
-    - mtl
 
 tests:
   doctests:
