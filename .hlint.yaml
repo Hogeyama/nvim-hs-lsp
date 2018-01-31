@@ -1,2 +1,4 @@
 - ignore: {name: Eta reduce}
 - ignore: {name: Redundant do}
+- functions:
+  - {name: undefined, within: []}
