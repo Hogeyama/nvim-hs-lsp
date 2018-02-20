@@ -106,6 +106,7 @@ import           Data.Hashable                   (Hashable)
 import           Data.Singletons                 (SingI)
 import           Data.Text                       (Text)
 import qualified Data.Text                       as T
+import           Data.Map                        (Map)
 import           GHC.Generics                    (Generic)
 import           Neovim.LSP.Protocol.Type.JSON   (JSONField, Option (..))
 import qualified Neovim.LSP.Protocol.Type.Key    as K
@@ -298,8 +299,8 @@ type TextDocumentEdit = Record
 -- WorkspaceEdit
 ----------------------------------------
 type WorkspaceEdit = Record
-  '[ "changes"         >: Option [ (Record '[ "uri" >: Uri ], TextEdit) ]
-      -- TODO changes?: { [uri: string]: TextEdit[]; }; この意味で合ってる？
+  '[ "changes"         >: Option (Map String [TextEdit])
+      -- changes?: { [uri: string]: TextEdit[]; };
    , "documentChanges" >: Option [TextDocumentEdit]
    ]
 
