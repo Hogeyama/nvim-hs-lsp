@@ -17,14 +17,10 @@ library:
   dependencies:
   - nvim-hs >= 0.2.5
     # 0.2.4の testWithEmbeddedNeovim は壊れている模様
-  - lifted-base
-  - resourcet
-  - ansi-wl-pprint
   - aeson
   - constraints
   - containers
   - unordered-containers
-  - directory
   - extensible
   - hashable
   - hslogger
