@@ -32,11 +32,10 @@ responseHandlerAction = forever @_ @() @() $ do
     case singByProxy res of
       -- General
       SInitialize -> do
-        -- TVarにServerCapabilitiesをセットする
+        -- TODO TVarにServerCapabilitiesをセットする
         debugM $ "responseHandler got: " ++ show res
         debugM "responseHandler: Initialize not implemented"
       SShutdown                        -> notImplemented
-      SCancelRequest                   -> notImplemented
 
       -- Workspace
       SWorkspaceSymbol                 -> notImplemented
@@ -61,7 +60,7 @@ responseHandlerAction = forever @_ @() @() $ do
       STextDocumentDocumentLink        -> notImplemented
       SDocumentLinkResolve             -> notImplemented
       STextDocumentRename              -> notImplemented
-      _ -> error "impossible" -- TODO かっこわるい
+      SClientRequestMisc{}             -> notImplemented
   where
     notImplemented :: HandlerAction ()
     notImplemented = errorM "responseHandler: not implemented"

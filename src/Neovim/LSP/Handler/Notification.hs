@@ -33,10 +33,10 @@ notificationHandler = Handler notificationPred notificationHandlerAction
 
 notificationPred :: InMessage -> Bool
 notificationPred x = case methodOf x of
-  Right TextDocumentPublishDiagnostics -> True
-  Right WindowLogMessage               -> True
-  Right WindowShowMessage              -> True
-  Right TelemetryEvent                 -> True
+  Right (SNoti TextDocumentPublishDiagnostics) -> True
+  Right (SNoti WindowLogMessage              ) -> True
+  Right (SNoti WindowShowMessage             ) -> True
+  Right (SNoti TelemetryEvent                ) -> True
   _ -> False
 
 notificationHandlerAction :: HandlerAction ()
@@ -53,26 +53,10 @@ notificationHandlerAction = forever @_ @() @() $ do
           errorM "notificationHandler: WindowLogMessage: not implemented"
         STelemetryEvent -> do
           errorM "notificationHandler: TelemetryEvent: not implemented"
-        SWindowShowMessageRequest ->
-          let _ = show @(NotificationParam m) undefined
-              _ = show @(NotificationParam 'WindowShowMessageRequestK) undefined
-          in undefined
-          -- ここでimpossibleになってほしい
-          --    noti :: ServerNotification m
-          --    SWindowShowMessageRequest :: Sing m
-          --    IsNotification 'Server m
-          -- が使える
-          --    IsNotification 'Server WindowShowMessageRequest
-          -- からabsurdが使えればいいんだが，
-          -- 今のIsNotificationの定義も便利なので捨てたくない
-          --    Show (NotificationParam 'Server WindowShowMessage)
-          -- から矛盾が言えないかな
-          --    + NotificationParamがdefinedならそのまま
-          --    + そうでなければ Bottom (class Bottom where void :: Void)
-          -- になるような制約が欲しい．結局これがわからなくて詰んだのであった
-          -- ConstraintでOrが書ける良い？
-          -- やっぱり定義を捨てるのがよいかな
-        _ -> error "impossible" -- TODO これかっこわるいよなあ
+        SServerCancel -> do
+          errorM "notificationHandler: ServerCancel: not implemented"
+        SServerNotificationMisc _ -> do
+          errorM "notificationHandler: Misc: not implemented"
       _ -> error "impossible"
 
 -------------------------------------------------------------------------------
@@ -93,22 +77,22 @@ showDiagnotics (Notification noti) = do
 
 -------------------------------------------------------------------------------
 
-diagnosticToQFItem :: Uri -> Diagnostic -> QuickfixListItem Text
-diagnosticToQFItem uri d = Q.QFItem
-    { Q.bufOrFile     = Right $ T.pack $ uriToFilePath uri
-    , Q.lnumOrPattern = Left lnum
-    , Q.col           = Just (col, True)
-    , Q.nr            = Nothing
-    , Q.text          = d^. #message
-    , Q.errorType     = errorType
-    }
-  where
-    start = d^. (#range :: FieldOptic "range") . #start
-    lnum = 1 + round (start^. #line)
-    col  = 1 + round (start^. #character)
-    errorType = case d^. #severity of
-      Some Error -> Q.Error
-      _ -> Q.Warning
+--diagnosticToQFItem :: Uri -> Diagnostic -> QuickfixListItem Text
+--diagnosticToQFItem uri d = Q.QFItem
+--    { Q.bufOrFile     = Right $ T.pack $ uriToFilePath uri
+--    , Q.lnumOrPattern = Left lnum
+--    , Q.col           = Just (col, True)
+--    , Q.nr            = Nothing
+--    , Q.text          = d^. #message
+--    , Q.errorType     = errorType
+--    }
+--  where
+--    start = d^. (#range :: FieldOptic "range") . #start
+--    lnum = 1 + round (start^. #line)
+--    col  = 1 + round (start^. #character)
+--    errorType = case d^. #severity of
+--      Some Error -> Q.Error
+--      _ -> Q.Warning
 
 diagnosticToQFItems :: Uri -> Diagnostic -> [QuickfixListItem Text]
 diagnosticToQFItems uri d = header : rest

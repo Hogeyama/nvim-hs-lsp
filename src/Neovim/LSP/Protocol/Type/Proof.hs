@@ -7,29 +7,30 @@
 {-# LANGUAGE TypeOperators   #-}
 
 module Neovim.LSP.Protocol.Type.Proof
-  ( entailClientNoti
-  , entailClientReq
-  , entailServerNoti
-  , entailServerReq
+  ( prfClientReq
+  , prfClientNoti
+  , prfClientRes
+  , prfServerReq
+  , prfServerNoti
+  , prfServerRes
   ) where
 
-import           Data.Constraint                     hiding (Bottom, bottom)
+import           Data.Constraint
 import           Data.Singletons.TypeLits
 import           Neovim.LSP.Protocol.Type.Interfaces
 import           Neovim.LSP.Protocol.Type.Method
 
-entailClientReq :: forall (m :: ClientMethodK). Sing m
-                -> IsClientRequest m :- ImplRequest m
-entailClientReq = \case-- {{{
-    SInitialize                      -> Sub Dict
+prfClientReq :: forall (m :: ClientRequestMethodK). Sing m -> Dict (ImplRequest m)
+prfClientReq = \case -- {{{
+    SInitialize                      -> Dict
     SShutdown                        -> notImplemented
     SWorkspaceSymbol                 -> notImplemented
     SWorkspaceExecuteCommand         -> notImplemented
     STextDocumentWillSaveWaitUntil   -> notImplemented
     STextDocumentCompletion          -> notImplemented
     SCompletionItemResolve           -> notImplemented
-    STextDocumentHover               -> Sub Dict
-    STextDocumentSignatureHelp       -> Sub Dict
+    STextDocumentHover               -> Dict
+    STextDocumentSignatureHelp       -> Dict
     STextDocumentReferences          -> notImplemented
     STextDocumentDocumentHighlight   -> notImplemented
     STextDocumentDocumentSymbol      -> notImplemented
@@ -43,64 +44,78 @@ entailClientReq = \case-- {{{
     STextDocumentDocumentLink        -> notImplemented
     SDocumentLinkResolve             -> notImplemented
     STextDocumentRename              -> notImplemented
-    SMisc SSym                       -> Sub Dict
-    SInitialized                     -> bottom
-    SCancelRequest                   -> bottom
-    SExit                            -> bottom
-    SWorkspaceDidChangeConfiguration -> bottom
-    SWorkspaceDidChangeWatchedFiles  -> bottom
-    STextDocumentDidOpen             -> bottom
-    STextDocumentDidChange           -> bottom
-    STextDocumentWillSave            -> bottom
-    STextDocumentDidSave             -> bottom
-    STextDocumentDidClose            -> bottom
-  -- }}}
+    SClientRequestMisc SSym          -> Dict
+-- }}}
 
-entailClientNoti :: forall (m :: ClientMethodK). Sing m
-                 -> IsClientNotification m :- ImplNotification m
-entailClientNoti = \case-- {{{
+prfClientNoti :: forall (m :: ClientNotificationMethodK). Sing m -> Dict (ImplNotification m)
+prfClientNoti = \case-- {{{
     SInitialized                     -> notImplemented
     SExit                            -> notImplemented -- TODO
     SWorkspaceDidChangeConfiguration -> notImplemented
     SWorkspaceDidChangeWatchedFiles  -> notImplemented
-    STextDocumentDidOpen             -> Sub Dict
-    STextDocumentDidChange           -> Sub Dict
+    STextDocumentDidOpen             -> Dict
+    STextDocumentDidChange           -> Dict
     STextDocumentWillSave            -> notImplemented
-    STextDocumentDidSave             -> Sub Dict
+    STextDocumentDidSave             -> Dict
     STextDocumentDidClose            -> notImplemented
-    SCancelRequest                   -> Sub Dict
-    SInitialize                      -> bottom
-    SShutdown                        -> bottom
-    SWorkspaceSymbol                 -> bottom
-    SWorkspaceExecuteCommand         -> bottom
-    STextDocumentWillSaveWaitUntil   -> bottom
-    STextDocumentCompletion          -> bottom
-    SCompletionItemResolve           -> bottom
-    STextDocumentHover               -> bottom
-    STextDocumentSignatureHelp       -> bottom
-    STextDocumentReferences          -> bottom
-    STextDocumentDocumentHighlight   -> bottom
-    STextDocumentDocumentSymbol      -> bottom
-    STextDocumentFormatting          -> bottom
-    STextDocumentRangeFormatting     -> bottom
-    STextDocumentOnTypeFormatting    -> bottom
-    STextDocumentDefinition          -> bottom
-    STextDocumentCodeAction          -> bottom
-    STextDocumentCodeLens            -> bottom
-    SCodeLensResolve                 -> bottom
-    STextDocumentDocumentLink        -> bottom
-    SDocumentLinkResolve             -> bottom
-    STextDocumentRename              -> bottom
-    SMisc SSym                       -> bottom
+    SClientCancel                    -> Dict
+    SClientNotificationMisc SSym     -> Dict
   -- }}}
 
-entailServerReq :: forall (m :: ServerMethodK). Sing m
-                -> IsServerRequest m :- ImplRequest m
-entailServerReq = notImplemented
+prfServerRes :: forall (m :: ClientRequestMethodK). Sing m -> Dict (ImplResponse m)
+prfServerRes = \case  -- {{{
+    SInitialize                      -> Dict
+    SShutdown                        -> notImplemented
+    SWorkspaceSymbol                 -> notImplemented
+    SWorkspaceExecuteCommand         -> notImplemented
+    STextDocumentWillSaveWaitUntil   -> notImplemented
+    STextDocumentCompletion          -> notImplemented
+    SCompletionItemResolve           -> notImplemented
+    STextDocumentHover               -> Dict
+    STextDocumentSignatureHelp       -> Dict
+    STextDocumentReferences          -> notImplemented
+    STextDocumentDocumentHighlight   -> notImplemented
+    STextDocumentDocumentSymbol      -> notImplemented
+    STextDocumentFormatting          -> notImplemented
+    STextDocumentRangeFormatting     -> notImplemented
+    STextDocumentOnTypeFormatting    -> notImplemented
+    STextDocumentDefinition          -> notImplemented
+    STextDocumentCodeAction          -> notImplemented
+    STextDocumentCodeLens            -> notImplemented
+    SCodeLensResolve                 -> notImplemented
+    STextDocumentDocumentLink        -> notImplemented
+    SDocumentLinkResolve             -> notImplemented
+    STextDocumentRename              -> notImplemented
+    SClientRequestMisc SSym          -> Dict
+-- }}}
 
-entailServerNoti :: forall (m :: ServerMethodK). Sing m
-                 -> IsServerNotification m :- ImplNotification m
-entailServerNoti = notImplemented
+prfServerReq :: forall (m :: ServerRequestMethodK). Sing m -> Dict (ImplRequest m)
+prfServerReq = \case -- {{{
+  SWindowShowMessageRequest       -> notImplemented
+  SClientRegisterCapability       -> notImplemented
+  SClientUnregisterCapability     -> notImplemented
+  SWorkspaceApplyEdit             -> notImplemented
+  SServerRequestMisc SSym         -> Dict
+-- }}}
+
+prfServerNoti :: forall (m :: ServerNotificationMethodK). Sing m -> Dict (ImplNotification m)
+prfServerNoti = \case -- {{{
+  SWindowShowMessage              -> Dict
+  SWindowLogMessage               -> Dict
+  STelemetryEvent                 -> Dict
+  STextDocumentPublishDiagnostics -> Dict
+  SServerCancel                   -> notImplemented
+  SServerNotificationMisc SSym    -> Dict
+-- }}}
+
+prfClientRes :: forall (m :: ServerRequestMethodK). Sing m -> Dict (ImplResponse m)
+prfClientRes = \case -- {{{
+  SWindowShowMessageRequest       -> notImplemented
+  SClientRegisterCapability       -> notImplemented
+  SClientUnregisterCapability     -> notImplemented
+  SWorkspaceApplyEdit             -> notImplemented
+  SServerRequestMisc SSym         -> Dict
+-- }}}
 
 notImplemented :: a
 notImplemented = error "Neovim.LSP.Protocol.Type.Proof: not implemented"

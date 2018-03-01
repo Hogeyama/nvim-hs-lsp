@@ -5,6 +5,8 @@
 {-# LANGUAGE LambdaCase     #-}
 {-# OPTIONS_GHC -Wall       #-}
 
+-- 多分使わないで済むmodule
+
 module Neovim.LSP.Protocol.Type.Singleton where
 
 import           Data.Constraint
@@ -25,18 +27,12 @@ isServerRequest = \case
   --STextDocumentPublishDiagnostics -> Just Dict
   _ -> trace "warning: isServerRequest: not implemented" Nothing
 
+-- あとでけす
 isServerNotification :: Sing (m :: ServerMethodK) -> Maybe (Dict (ImplNotification m))
 isServerNotification = \case
-  STextDocumentPublishDiagnostics -> Just Dict
-  SWindowShowMessage              -> Just Dict
-  SWindowLogMessage               -> Just Dict
-  STelemetryEvent                 -> Just Dict
+  --SSNoti STextDocumentPublishDiagnostics -> Just Dict
+  --SSNoti SWindowShowMessage              -> Just Dict
+  --SSNoti SWindowLogMessage               -> Just Dict
+  --SSNoti STelemetryEvent                 -> Just Dict
   _ -> trace "warning: isServerNotification: not implemented"  Nothing
-
-isServerResponse :: Sing (m :: ClientMethodK) -> Maybe (Dict (ImplResponse m))
-isServerResponse = \case
-  SInitialize        -> Just Dict
-  STextDocumentHover -> Just Dict
-  SCancelRequest     -> Nothing -- Requestという名前だが実際はNotification
-  _ -> trace "warning: isServerRequest: not implemented" Nothing
 

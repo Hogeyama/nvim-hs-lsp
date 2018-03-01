@@ -23,13 +23,13 @@ import           Control.Concurrent         (ThreadId, forkIO)
 import           Control.Concurrent.STM     (TVar, atomically, readTVar, writeTVar,
                                              TChan, newTChanIO, readTChan,
                                              writeTChan)
-import           Control.DeepSeq            (NFData)
+import           Control.Concurrent.Async   (async)
 import           Control.Monad              (forM, forM_, forever, when)
 import           Control.Monad.IO.Class     (liftIO, MonadIO)
 import           Data.Bifunctor             (bimap)
 import           Data.ByteString.Lazy.Char8 (ByteString)
 import qualified Data.ByteString.Lazy.Char8 as B
-import           Data.Constraint            (Dict (..))
+import           Data.Constraint            (withDict)
 import           Data.HashMap.Strict        (HashMap)
 import qualified Data.HashMap.Strict        as HM
 import           Data.List                  (isPrefixOf)
@@ -56,12 +56,13 @@ import qualified System.Log.Logger          as L
 import           Neovim
 import           Neovim.Context             (forkNeovim)
 import           Neovim.LSP.Protocol.Type
+import           Control.Monad.Catch        (catch, Exception, MonadCatch)
 
 data Handles = Handles
-  { _hin  :: Handle
-  , _hout :: Handle
-  , _herr :: Handle
-  , _ph   :: ProcessHandle
+  { _hin  :: !Handle
+  , _hout :: !Handle
+  , _herr :: !Handle
+  , _ph   :: !ProcessHandle
   }
 makeLenses ''Handles
 
@@ -69,7 +70,7 @@ makeLenses ''Handles
 data LSPState = LSPState
   { _server     :: !(Maybe Handles)
   , _outChannel :: TChan B.ByteString -- lazy initialization
-  , _inChannel  :: TChan B.ByteString
+  , _inChannel  :: TChan B.ByteString -- lazy initialization
   }
 makeLenses ''LSPState
 
@@ -100,8 +101,8 @@ initializeLSP cmd args = do
 
   inCh  <- liftIO newTChanIO
   outCh <- liftIO newTChanIO
-  void $ liftIO $ forkIO $ sender _hin outCh
-  void $ liftIO $ forkIO $ receiver _hout inCh
+  void $ liftIO $ async $ sender _hin outCh
+  void $ liftIO $ async $ receiver _hout inCh
 
   server     .= Just Handles{..}
   inChannel  .= inCh
@@ -199,7 +200,7 @@ receiver serverOut chan = forever $ do
              | otherwise          -> Prelude.error $ "unknown input: " ++ show x
 
 data Header = Header
-  { contentLength :: Int
+  { contentLength :: Int -- lazy initialization
   , contentType   :: !(Maybe String)
   } deriving (Eq, Show)
 
@@ -209,7 +210,7 @@ data Header = Header
 -------------------------------------------------------------------------------
 
 data Context = Context
-  { _lspIdMap         :: !(HashMap ID ClientMethod)
+  { _lspIdMap         :: !(HashMap ID ClientRequestMethod)
   , _lspUniqueID      :: !Int
   , _lspUniqueVersion :: !Version
   , _lspVersionMap    :: !(Map Uri Version)
@@ -232,15 +233,15 @@ data HandlerConfig = HandlerConfig
 
 type HandlerAction = Neovim HandlerConfig ()
 
-data Handler = forall a. NFData a => Handler
+data Handler = Handler
   { pred  :: !(InMessage -> Bool) -- Maybe (TVar (InMessage -> Bool))にするか
-  , acion :: !(HandlerAction a)
+  , acion :: !(HandlerAction ())
   }
 
 data InMessage where
-  SomeNot :: ImplNotification m => ServerNotification m -> InMessage
-  SomeReq :: ImplRequest      m => ServerRequest      m -> InMessage
-  SomeRes :: ImplResponse     m => ServerResponse     m -> InMessage
+  SomeNot :: ImplNotification m => !(ServerNotification m) -> InMessage
+  SomeReq :: ImplRequest      m => !(ServerRequest      m) -> InMessage
+  SomeRes :: ImplResponse     m => !(ServerResponse     m) -> InMessage
 deriving instance Show InMessage
 
 instance J.ToJSON InMessage where -- FromJSONは難しいかな
@@ -248,22 +249,22 @@ instance J.ToJSON InMessage where -- FromJSONは難しいかな
   toJSON (SomeReq x) = J.toJSON x
   toJSON (SomeRes x) = J.toJSON x
 
+-- TODO 上手くやる
 methodOf :: InMessage -> Either ClientMethod ServerMethod
-methodOf (SomeNot noti) = Right $ fromSing $ singByProxy noti
-methodOf (SomeReq req ) = Right $ fromSing $ singByProxy req
-methodOf (SomeRes res ) = Left  $ fromSing $ singByProxy res
+methodOf (SomeNot noti) = Right . SNoti $ fromSing $ singByProxy noti
+methodOf (SomeReq req ) = Right . SReq  $ fromSing $ singByProxy req
+methodOf (SomeRes res ) = Left  . CReq  $ fromSing $ singByProxy res
 
-toInMessage :: HashMap ID ClientMethod -> J.Value -> Either String InMessage
+toInMessage :: HashMap ID ClientRequestMethod -> J.Value -> Either String InMessage
 toInMessage map' v@(J.Object o) = bimap toSing toSing <$> mmethod >>= \case
-    Right (SomeSing (s :: Sing m))
-      | Just Dict <- isServerRequest s      -> SomeReq @m <$> fromJSONEither v
-      | Just Dict <- isServerNotification s -> SomeNot @m <$> fromJSONEither v
-    Left (SomeSing (s :: Sing m))
-      | Just Dict <- isServerResponse s     -> SomeRes @m <$> fromJSONEither v
-    _ ->
-      Left $ "bug: toInMessage: " ++ show mmethod
+    Right (SomeSing (SSReq (s :: Sing m))) ->
+        withDict (prfServerReq s) $ SomeReq @m <$> fromJSONEither v
+    Right (SomeSing (SSNoti (s :: Sing m))) ->
+        withDict (prfServerNoti s) $ SomeNot @m <$> fromJSONEither v
+    Left (SomeSing (s :: Sing m)) ->
+        withDict (prfServerRes s) $ SomeRes @m <$> fromJSONEither v
   where
-    mmethod :: Either String (Either ClientMethod ServerMethod)
+    mmethod :: Either String (Either ClientRequestMethod ServerMethod)
     mmethod -- TODO error handling
       | Just m <- fromJSONMay =<< HM.lookup "method" o
           = return $ Right m
@@ -275,6 +276,8 @@ toInMessage _ _ = error "そんなバナナ"
 
 -- Handler's action
 ---------------------------------------
+
+-- TODO modifyTVarとか使ったほうが良い
 
 pull :: Neovim HandlerConfig st InMessage
 pull = liftIO . atomically . readTChan =<< asks inChan
@@ -315,7 +318,7 @@ genUniqueVersion = accessContext
   (lspUniqueVersion %~ succ)
   (^. lspUniqueVersion)
 
-addIdMethodMap :: ID -> ClientMethod -> Neovim HandlerConfig st ()
+addIdMethodMap :: ID -> ClientRequestMethod -> Neovim HandlerConfig st ()
 addIdMethodMap id' m = modifyContext (lspIdMap %~ HM.insert id' m)
 
 -------------------------------------------------------------------------------
@@ -326,27 +329,34 @@ dispatcher :: TVar Context
            -> [Handler]
            -> Neovim r LSPState (ThreadId, [ThreadId])
 dispatcher ctx hs = do
-  debugM "this is dispatcher"
-  lspState <- get
-  let inChG = lspState ^. inChannel
-      outCh = lspState ^. outChannel
+    debugM "this is dispatcher"
+    lspState <- get
+    let inChG = lspState ^. inChannel
+        outCh = lspState ^. outChannel
 
-  (handlers,hIDs) <- fmap unzip $ forM hs $ \(Handler p action) -> do
-    inCh <- liftIO newTChanIO
-    let config = HandlerConfig inCh outCh ctx
-    hID <- forkNeovim config () action
-    return ((p,inCh), hID)
+    (handlers,hIDs) <- fmap unzip $ forM hs $ \(Handler p action) -> do
+      inCh <- liftIO newTChanIO
+      let config = HandlerConfig inCh outCh ctx
+      hID <- forkNeovim config () $ withCatchBlah action
+      return ((p,inCh), hID)
 
-  -- run dispatcher
-  dpID <- liftIO $ forkIO $ forever $ do
-    Just v <- J.decode <$> atomically (readTChan inChG)
-    idMap  <- atomically (_lspIdMap <$> readTVar ctx)
-    case toInMessage idMap v of
-      Right msg -> forM_ handlers $ \(p,inCh) ->
-          when (p msg) $ atomically $ writeTChan inCh msg
-      Left e -> putStrLn e -- TODO これでいいのか
+    -- run dispatcher
+    dpID <- liftIO $ forkIO $ withCatchBlah $ forever $ do
+        Just v <- J.decode <$> atomically (readTChan inChG)
+        idMap  <- atomically (_lspIdMap <$> readTVar ctx)
+        case toInMessage idMap v of
+          Right msg -> forM_ handlers $ \(p,inCh) ->
+              when (p msg) $ atomically $ writeTChan inCh msg
+          Left e -> putStrLn e -- TODO これでいいのか
 
-  return (dpID, hIDs)
+    return (dpID, hIDs)
+  where
+    withCatchBlah :: (MonadIO m, MonadCatch m) => m () -> m ()
+    withCatchBlah m = m `catch` \case Blah -> return ()
+
+
+data Blah = Blah deriving Show
+instance Exception Blah
 
 -------------------------------------------------------------------------------
 -- Util

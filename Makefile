@@ -4,7 +4,7 @@ all: setup build test lint
 setup:
 	stack setup
 	stack build --dependencies-only --test --no-run-tests
-	stack install hlint weeder
+	stack build --copy-compiler-tool hlint weeder
 
 .PHONY: build
 build:
@@ -16,5 +16,5 @@ test:
 
 .PHONY: lint
 lint:
-	hlint src app
-	weeder src app
+	stack exec -- hlint src app
+	stack exec -- weeder src app

@@ -9,121 +9,114 @@
 {-# LANGUAGE TypeFamilyDependencies  #-}
 {-# LANGUAGE TypeOperators           #-}
 {-# LANGUAGE FlexibleContexts        #-}
--- the following two are only for `Bottom`
+-- the following two extentions are only for `Bottom`
 {-# LANGUAGE UndecidableInstances    #-}
 {-# LANGUAGE UndecidableSuperClasses #-}
 {-# OPTIONS_GHC -Wall                #-}
 
-module Neovim.LSP.Protocol.Type.Method
-  ( ClientMethod(..)
-  , ClientMethodK(..)
-  , ServerMethod(..)
-  , ServerMethodK(..)
-  , X(..)
-  -- Constraint
-  , IsClientRequest
-  , IsClientNotification
-  , IsServerRequest
-  , IsServerNotification
-  , Sing(..)
+-- TODO
+-- FromJSONでmiscを扱うとき，Requestとして処理するかNotificationとして処理するかはどう決める？
 
-  , Method
-  , Actor
+module Neovim.LSP.Protocol.Type.Method
+  ( ClientMethod (..), ClientRequestMethod (..), ClientNotificationMethod (..)
+  , ClientMethodK(..), ClientRequestMethodK(..), ClientNotificationMethodK(..)
+  , ServerMethod (..), ServerRequestMethod (..), ServerNotificationMethod (..)
+  , ServerMethodK(..), ServerRequestMethodK(..), ServerNotificationMethodK(..)
+
+  , Sing(..)
   , IsMethodKind
-  -- Constraint util
-  , Top, Bottom, bottom
   )
   where
 
 import           Data.Aeson
-import           Data.Constraint          hiding (Bottom, bottom)
 import           Data.Singletons.TH
 import           Data.Singletons.TypeLits
+import           Data.Text                (Text)
 import qualified Data.Text                as T
-import qualified GHC.Exts                 (Any)
 import           Neovim.LSP.Protocol.Type.JSON
+import Control.Applicative ((<|>))
 
 -------------------------------------------------------------------------------
 -- Method
 -------------------------------------------------------------------------------
 
-data ClientMethod -- {{{
-  -- General
-  = Initialize                      -- Req
-  | Initialized                     -- Noti
-  | Shutdown                        -- Req
-  | Exit                            -- Noti
-  | CancelRequest                   -- Noti -- TODO serverも使う
-  -- Workspace
-  | WorkspaceDidChangeConfiguration -- Noti
-  | WorkspaceDidChangeWatchedFiles  -- Noti
-  | WorkspaceSymbol                 -- Req
-  | WorkspaceExecuteCommand         -- Req
-  -- Document
-  | TextDocumentDidOpen             -- Noti
-  | TextDocumentDidChange           -- Noti
-  | TextDocumentWillSave            -- Noti
-  | TextDocumentWillSaveWaitUntil   -- Req
-  | TextDocumentDidSave             -- Noti
-  | TextDocumentDidClose            -- Noti
-  | TextDocumentCompletion          -- Req
-  | CompletionItemResolve           -- Req
-  | TextDocumentHover               -- Req
-  | TextDocumentSignatureHelp       -- Req
-  | TextDocumentReferences          -- Req
-  | TextDocumentDocumentHighlight   -- Req
-  | TextDocumentDocumentSymbol      -- Req
-  | TextDocumentFormatting          -- Req
-  | TextDocumentRangeFormatting     -- Req
-  | TextDocumentOnTypeFormatting    -- Req
-  | TextDocumentDefinition          -- Req
-  | TextDocumentCodeAction          -- Req
-  | TextDocumentCodeLens            -- Req
-  | CodeLensResolve                 -- Req
-  | TextDocumentDocumentLink        -- Req
-  | DocumentLinkResolve             -- Req
-  | TextDocumentRename              -- Req
-  -- Messages of the form $/message
-  -- Implementation Dependent, can be ignored
-  | Misc T.Text                     -- Both
+-- TODO よいなまえ
+data ClientMethod = CReq  ClientRequestMethod --{{{
+                  | CNoti ClientNotificationMethod
   deriving (Eq,Ord,Read,Show)
 -- }}}
-data ServerMethod -- {{{
-  -- Window
-  = WindowShowMessage               -- Noti
-  | WindowShowMessageRequest        -- Req
-  | WindowLogMessage                -- Noti
-  | TelemetryEvent                  -- Noti
-  -- Client
-  | ClientRegisterCapability        -- Req
-  | ClientUnregisterCapability      -- Req
-  -- Workspace
-  | WorkspaceApplyEdit              -- Req
-  -- Document
-  | TextDocumentPublishDiagnostics  -- Noti
-  -- ServerCancelRequest             -- Noti -- TODO
+data ClientRequestMethod-- {{{
+  = Initialize
+  | Shutdown
+  | WorkspaceSymbol
+  | WorkspaceExecuteCommand
+  | TextDocumentWillSaveWaitUntil
+  | TextDocumentCompletion
+  | CompletionItemResolve
+  | TextDocumentHover
+  | TextDocumentSignatureHelp
+  | TextDocumentReferences
+  | TextDocumentDocumentHighlight
+  | TextDocumentDocumentSymbol
+  | TextDocumentFormatting
+  | TextDocumentRangeFormatting
+  | TextDocumentOnTypeFormatting
+  | TextDocumentDefinition
+  | TextDocumentCodeAction
+  | TextDocumentCodeLens
+  | CodeLensResolve
+  | TextDocumentDocumentLink
+  | DocumentLinkResolve
+  | TextDocumentRename
+  | ClientRequestMisc Text
+  deriving (Eq,Ord,Read,Show)
+-- }}}
+data ClientNotificationMethod-- {{{
+  = Initialized
+  | Exit
+  | WorkspaceDidChangeConfiguration
+  | WorkspaceDidChangeWatchedFiles
+  | TextDocumentDidOpen
+  | TextDocumentDidChange
+  | TextDocumentWillSave
+  | TextDocumentDidSave
+  | TextDocumentDidClose
+  | ClientCancel
+  | ClientNotificationMisc Text
   deriving (Eq,Ord,Read,Show)
 -- }}}
 
-instance FromJSON ClientMethod where -- {{{
-  -- General
+data ServerMethod = SReq  ServerRequestMethod -- {{{
+                  | SNoti ServerNotificationMethod
+  deriving (Eq,Ord,Read,Show)
+-- }}}
+data ServerRequestMethod -- {{{
+  = WindowShowMessageRequest
+  | ClientRegisterCapability
+  | ClientUnregisterCapability
+  | WorkspaceApplyEdit
+  | ServerRequestMisc Text
+  deriving (Eq,Ord,Read,Show)
+-- }}}
+data ServerNotificationMethod -- {{{
+  = WindowShowMessage
+  | WindowLogMessage
+  | TelemetryEvent
+  | TextDocumentPublishDiagnostics
+  | ServerCancel
+  | ServerNotificationMisc Text
+  deriving (Eq,Ord,Read,Show)
+-- }}}
+
+instance FromJSON ClientMethod where-- {{{
+  parseJSON v =  CReq <$> parseJSON v <|> CNoti <$> parseJSON v
+-- }}}
+instance FromJSON ClientRequestMethod where -- {{{
   parseJSON (String "initialize")                       = return Initialize
-  parseJSON (String "initialized")                      = return Initialized
   parseJSON (String "shutdown")                         = return Shutdown
-  parseJSON (String "exit")                             = return Exit
-  parseJSON (String "$/cancelRequest")                  = return CancelRequest
- -- Workspace
-  parseJSON (String "workspace/didChangeConfiguration") = return WorkspaceDidChangeConfiguration
-  parseJSON (String "workspace/didChangeWatchedFiles")  = return WorkspaceDidChangeWatchedFiles
   parseJSON (String "workspace/symbol")                 = return WorkspaceSymbol
   parseJSON (String "workspace/executeCommand")         = return WorkspaceExecuteCommand
- -- Document
-  parseJSON (String "textDocument/didOpen")             = return TextDocumentDidOpen
-  parseJSON (String "textDocument/didChange")           = return TextDocumentDidChange
-  parseJSON (String "textDocument/willSave")            = return TextDocumentWillSave
   parseJSON (String "textDocument/willSaveWaitUntil")   = return TextDocumentWillSaveWaitUntil
-  parseJSON (String "textDocument/didSave")             = return TextDocumentDidSave
-  parseJSON (String "textDocument/didClose")            = return TextDocumentDidClose
   parseJSON (String "textDocument/completion")          = return TextDocumentCompletion
   parseJSON (String "completionItem/resolve")           = return CompletionItemResolve
   parseJSON (String "textDocument/hover")               = return TextDocumentHover
@@ -141,28 +134,33 @@ instance FromJSON ClientMethod where -- {{{
   parseJSON (String "textDocument/documentLink")        = return TextDocumentDocumentLink
   parseJSON (String "documentLink/resolve")             = return DocumentLinkResolve
   parseJSON (String "textDocument/rename")              = return TextDocumentRename
-  parseJSON (String x) | "$/" `T.isPrefixOf` x          = return (Misc (T.drop 2 x))
+  parseJSON (String x) | "$/" `T.isPrefixOf` x          = return (ClientRequestMisc (T.drop 2 x))
   parseJSON _                                           = mempty
 -- }}}
-instance ToJSON ClientMethod where -- {{{
-  -- General
+instance FromJSON ClientNotificationMethod where -- {{{
+  parseJSON (String "initialized")                      = return Initialized
+  parseJSON (String "exit")                             = return Exit
+  parseJSON (String "$/cancelRequest")                  = return ClientCancel
+  parseJSON (String "workspace/didChangeConfiguration") = return WorkspaceDidChangeConfiguration
+  parseJSON (String "workspace/didChangeWatchedFiles")  = return WorkspaceDidChangeWatchedFiles
+  parseJSON (String "textDocument/didOpen")             = return TextDocumentDidOpen
+  parseJSON (String "textDocument/didChange")           = return TextDocumentDidChange
+  parseJSON (String "textDocument/willSave")            = return TextDocumentWillSave
+  parseJSON (String "textDocument/didSave")             = return TextDocumentDidSave
+  parseJSON (String "textDocument/didClose")            = return TextDocumentDidClose
+  parseJSON (String x) | "$/" `T.isPrefixOf` x          = return (ClientNotificationMisc (T.drop 2 x))
+  parseJSON _                                           = mempty
+-- }}}
+instance ToJSON ClientMethod where-- {{{
+  toJSON (CReq  m) = toJSON m
+  toJSON (CNoti m) = toJSON m
+-- }}}
+instance ToJSON ClientRequestMethod where -- {{{
   toJSON Initialize                      = String "initialize"
-  toJSON Initialized                     = String "initialized"
   toJSON Shutdown                        = String "shutdown"
-  toJSON Exit                            = String "exit"
-  toJSON CancelRequest                   = String "$/cancelRequest"
-  -- Workspace
-  toJSON WorkspaceDidChangeConfiguration = String "workspace/didChangeConfiguration"
-  toJSON WorkspaceDidChangeWatchedFiles  = String "workspace/didChangeWatchedFiles"
   toJSON WorkspaceSymbol                 = String "workspace/symbol"
   toJSON WorkspaceExecuteCommand         = String "workspace/executeCommand"
-  -- Document
-  toJSON TextDocumentDidOpen             = String "textDocument/didOpen"
-  toJSON TextDocumentDidChange           = String "textDocument/didChange"
-  toJSON TextDocumentWillSave            = String "textDocument/willSave"
   toJSON TextDocumentWillSaveWaitUntil   = String "textDocument/willSaveWaitUntil"
-  toJSON TextDocumentDidSave             = String "textDocument/didSave"
-  toJSON TextDocumentDidClose            = String "textDocument/didClose"
   toJSON TextDocumentCompletion          = String "textDocument/completion"
   toJSON CompletionItemResolve           = String "completionItem/resolve"
   toJSON TextDocumentHover               = String "textDocument/hover"
@@ -180,151 +178,124 @@ instance ToJSON ClientMethod where -- {{{
   toJSON TextDocumentRename              = String "textDocument/rename"
   toJSON TextDocumentDocumentLink        = String "textDocument/documentLink"
   toJSON DocumentLinkResolve             = String "documentLink/resolve"
-  toJSON (Misc x)                        = String ("$/" `T.append` x)
+  toJSON (ClientRequestMisc x)           = String ("$/" `T.append` x)
+-- }}}
+instance ToJSON ClientNotificationMethod where -- {{{
+  toJSON Initialized                     = String "initialized"
+  toJSON Exit                            = String "exit"
+  toJSON ClientCancel                    = String "$/cancelRequest"
+  toJSON WorkspaceDidChangeConfiguration = String "workspace/didChangeConfiguration"
+  toJSON WorkspaceDidChangeWatchedFiles  = String "workspace/didChangeWatchedFiles"
+  toJSON TextDocumentDidOpen             = String "textDocument/didOpen"
+  toJSON TextDocumentWillSave            = String "textDocument/willSave"
+  toJSON TextDocumentDidChange           = String "textDocument/didChange"
+  toJSON TextDocumentDidSave             = String "textDocument/didSave"
+  toJSON TextDocumentDidClose            = String "textDocument/didClose"
+  toJSON (ClientNotificationMisc x)      = String ("$/" `T.append` x)
 -- }}}
 
-instance FromJSON ServerMethod where -- {{{
-  -- Window
-  parseJSON (String "window/showMessage")              = return WindowShowMessage
+instance FromJSON ServerMethod where-- {{{
+  parseJSON v =  SReq <$> parseJSON v <|> SNoti <$> parseJSON v
+-- }}}
+instance FromJSON ServerRequestMethod where -- {{{
   parseJSON (String "window/showMessageRequest")       = return WindowShowMessageRequest
-  parseJSON (String "window/logMessage")               = return WindowLogMessage
-  parseJSON (String "telemetry/event")                 = return TelemetryEvent
-  -- Client
   parseJSON (String "client/registerCapability")       = return ClientRegisterCapability
   parseJSON (String "client/unregisterCapability")     = return ClientUnregisterCapability
-  -- Workspace
   parseJSON (String "workspace/applyEdit")             = return WorkspaceApplyEdit
-  -- Document
-  parseJSON (String "textDocument/publishDiagnostics") = return TextDocumentPublishDiagnostics
+  parseJSON (String x) | "$/" `T.isPrefixOf` x         = return (ServerRequestMisc (T.drop 2 x))
   parseJSON _                                          = mempty
 -- }}}
-instance ToJSON ServerMethod where -- {{{
-  -- Window
-  toJSON WindowShowMessage = String "window/showMessage"
-  toJSON WindowShowMessageRequest = String "window/showMessageRequest"
-  toJSON WindowLogMessage = String "window/logMessage"
-  toJSON TelemetryEvent = String "telemetry/event"
-  -- Client
-  toJSON ClientRegisterCapability = String "client/registerCapability"
-  toJSON ClientUnregisterCapability = String "client/unregisterCapability"
-  -- Workspace
-  toJSON WorkspaceApplyEdit = String "workspace/applyEdit"
-  -- Document
+instance FromJSON ServerNotificationMethod where -- {{{
+  parseJSON (String "window/showMessage")              = return WindowShowMessage
+  parseJSON (String "window/logMessage")               = return WindowLogMessage
+  parseJSON (String "telemetry/event")                 = return TelemetryEvent
+  parseJSON (String "textDocument/publishDiagnostics") = return TextDocumentPublishDiagnostics
+  parseJSON (String x) | "$/" `T.isPrefixOf` x         = return (ServerNotificationMisc (T.drop 2 x))
+  parseJSON _                                          = mempty
+-- }}}
+instance ToJSON ServerMethod where-- {{{
+  toJSON (SReq  m) = toJSON m
+  toJSON (SNoti m) = toJSON m
+-- }}}
+instance ToJSON ServerRequestMethod where -- {{{
+  toJSON WindowShowMessageRequest       = String "window/showMessageRequest"
+  toJSON ClientRegisterCapability       = String "client/registerCapability"
+  toJSON ClientUnregisterCapability     = String "client/unregisterCapability"
+  toJSON WorkspaceApplyEdit             = String "workspace/applyEdit"
+  toJSON (ServerRequestMisc x)          = String ("$/" `T.append` x)
+-- }}}
+instance ToJSON ServerNotificationMethod where -- {{{
+  toJSON WindowShowMessage              = String "window/showMessage"
+  toJSON WindowLogMessage               = String "window/logMessage"
+  toJSON TelemetryEvent                 = String "telemetry/event"
   toJSON TextDocumentPublishDiagnostics = String "textDocument/publishDiagnostics"
+  toJSON ServerCancel                   = String "$/cancel$"
+  toJSON (ServerNotificationMisc x)     = String ("$/" `T.append` x)
 -- }}}
 
 -------------------------------------------------------------------------------
 -- Method Kind
 -------------------------------------------------------------------------------
 
-data ClientMethodK -- {{{
-  -- General
-  = InitializeK                      -- Req
-  | InitializedK                     -- Noti
-  | ShutdownK                        -- Req
-  | ExitK                            -- Noti
-  | CancelRequestK                   -- Req
-  -- Workspace
-  | WorkspaceDidChangeConfigurationK -- Noti
-  | WorkspaceDidChangeWatchedFilesK  -- Noti
-  | WorkspaceSymbolK                 -- Req
-  | WorkspaceExecuteCommandK         -- Req
-  -- Document
-  | TextDocumentDidOpenK             -- Noti
-  | TextDocumentDidChangeK           -- Noti
-  | TextDocumentWillSaveK            -- Noti
-  | TextDocumentWillSaveWaitUntilK   -- Req
-  | TextDocumentDidSaveK             -- Noti
-  | TextDocumentDidCloseK            -- Noti
-  | TextDocumentCompletionK          -- Req
-  | CompletionItemResolveK           -- Req
-  | TextDocumentHoverK               -- Req
-  | TextDocumentSignatureHelpK       -- Req
-  | TextDocumentReferencesK          -- Req
-  | TextDocumentDocumentHighlightK   -- Req
-  | TextDocumentDocumentSymbolK      -- Req
-  | TextDocumentFormattingK          -- Req
-  | TextDocumentRangeFormattingK     -- Req
-  | TextDocumentOnTypeFormattingK    -- Req
-  | TextDocumentDefinitionK          -- Req
-  | TextDocumentCodeActionK          -- Req
-  | TextDocumentCodeLensK            -- Req
-  | CodeLensResolveK                 -- Req
-  | TextDocumentDocumentLinkK        -- Req
-  | DocumentLinkResolveK             -- Req
-  | TextDocumentRenameK              -- Req
-  | MiscK Symbol                     -- Both
+data ClientMethodK = CReqK  ClientRequestMethodK -- {{{
+                   | CNotiK ClientNotificationMethodK
 -- }}}
-data ServerMethodK -- {{{
-  -- Window
-  = WindowShowMessageK              -- Noti
-  | WindowShowMessageRequestK       -- Req
-  | WindowLogMessageK               -- Noti
-  | TelemetryEventK                 -- Noti
-  -- Client
-  | ClientRegisterCapabilityK       -- Req
-  | ClientUnregisterCapabilityK     -- Req
-  -- Workspace
-  | WorkspaceApplyEditK             -- Req
-  -- Document
-  | TextDocumentPublishDiagnosticsK -- Noti
-  -- ServerCancelRequest
-  deriving (Eq,Ord,Read,Show)
+data ClientRequestMethodK --{{{
+  = InitializeK
+  | ShutdownK
+  | WorkspaceSymbolK
+  | WorkspaceExecuteCommandK
+  | TextDocumentWillSaveWaitUntilK
+  | TextDocumentCompletionK
+  | CompletionItemResolveK
+  | TextDocumentHoverK
+  | TextDocumentSignatureHelpK
+  | TextDocumentReferencesK
+  | TextDocumentDocumentHighlightK
+  | TextDocumentDocumentSymbolK
+  | TextDocumentFormattingK
+  | TextDocumentRangeFormattingK
+  | TextDocumentOnTypeFormattingK
+  | TextDocumentDefinitionK
+  | TextDocumentCodeActionK
+  | TextDocumentCodeLensK
+  | CodeLensResolveK
+  | TextDocumentDocumentLinkK
+  | DocumentLinkResolveK
+  | TextDocumentRenameK
+  | ClientRequestMiscK Symbol
+-- }}}
+data ClientNotificationMethodK --{{{
+  = InitializedK
+  | ClientCancelK
+  | ExitK
+  | WorkspaceDidChangeConfigurationK
+  | WorkspaceDidChangeWatchedFilesK
+  | TextDocumentDidOpenK
+  | TextDocumentDidChangeK
+  | TextDocumentWillSaveK
+  | TextDocumentDidSaveK
+  | TextDocumentDidCloseK
+  | ClientNotificationMiscK Symbol
 -- }}}
 
--- type definition
-type family IsClientRequest (m :: ClientMethodK) :: Constraint where-- {{{
-  IsClientRequest 'InitializeK                      = Top
-  IsClientRequest 'ShutdownK                        = Top
-  IsClientRequest 'WorkspaceSymbolK                 = Top
-  IsClientRequest 'WorkspaceExecuteCommandK         = Top
-  IsClientRequest 'TextDocumentWillSaveWaitUntilK   = Top
-  IsClientRequest 'TextDocumentCompletionK          = Top
-  IsClientRequest 'CompletionItemResolveK           = Top
-  IsClientRequest 'TextDocumentHoverK               = Top
-  IsClientRequest 'TextDocumentSignatureHelpK       = Top
-  IsClientRequest 'TextDocumentReferencesK          = Top
-  IsClientRequest 'TextDocumentDocumentHighlightK   = Top
-  IsClientRequest 'TextDocumentDocumentSymbolK      = Top
-  IsClientRequest 'TextDocumentFormattingK          = Top
-  IsClientRequest 'TextDocumentRangeFormattingK     = Top
-  IsClientRequest 'TextDocumentOnTypeFormattingK    = Top
-  IsClientRequest 'TextDocumentDefinitionK          = Top
-  IsClientRequest 'TextDocumentCodeActionK          = Top
-  IsClientRequest 'TextDocumentCodeLensK            = Top
-  IsClientRequest 'CodeLensResolveK                 = Top
-  IsClientRequest 'TextDocumentDocumentLinkK        = Top
-  IsClientRequest 'DocumentLinkResolveK             = Top
-  IsClientRequest 'TextDocumentRenameK              = Top
-  IsClientRequest ('MiscK s)                        = Top
-  IsClientRequest _                                 = Bottom
+data ServerMethodK = SReqK  ServerRequestMethodK -- {{{
+                   | SNotiK ServerNotificationMethodK
 -- }}}
-type family IsClientNotification (m :: ClientMethodK) :: Constraint where-- {{{
-  IsClientNotification 'InitializedK                     = Top
-  IsClientNotification 'CancelRequestK                   = Top
-  IsClientNotification 'ExitK                            = Top
-  IsClientNotification 'WorkspaceDidChangeConfigurationK = Top
-  IsClientNotification 'WorkspaceDidChangeWatchedFilesK  = Top
-  IsClientNotification 'TextDocumentDidOpenK             = Top
-  IsClientNotification 'TextDocumentDidChangeK           = Top
-  IsClientNotification 'TextDocumentWillSaveK            = Top
-  IsClientNotification 'TextDocumentDidSaveK             = Top
-  IsClientNotification 'TextDocumentDidCloseK            = Top
-  IsClientNotification _                                 = Bottom
+data ServerRequestMethodK -- {{{
+  = WindowShowMessageRequestK       -- Req
+  | ClientRegisterCapabilityK       -- Req
+  | ClientUnregisterCapabilityK     -- Req
+  | WorkspaceApplyEditK             -- Req
+  | ServerRequestMiscK Symbol
 -- }}}
-type family IsServerRequest (m :: ServerMethodK) :: Constraint where-- {{{
-  IsServerRequest 'WindowShowMessageRequestK   = Top
-  IsServerRequest 'ClientRegisterCapabilityK   = Top
-  IsServerRequest 'ClientUnregisterCapabilityK = Top
-  IsServerRequest 'WorkspaceApplyEditK         = Top
-  IsServerRequest _                            = Bottom
--- }}}
-type family IsServerNotification (m :: ServerMethodK) :: Constraint where-- {{{
-  IsServerNotification 'WindowShowMessageK              = Top
-  IsServerNotification 'WindowLogMessageK               = Top
-  IsServerNotification 'TelemetryEventK                 = Top
-  IsServerNotification 'TextDocumentPublishDiagnosticsK = Top
-  IsServerNotification _                                = Bottom
+data ServerNotificationMethodK -- {{{
+  = WindowShowMessageK              -- Noti
+  | WindowLogMessageK               -- Noti
+  | TelemetryEventK                 -- Noti
+  | TextDocumentPublishDiagnosticsK -- Noti
+  | ServerCancelK
+  | ServerNotificationMiscK Symbol
 -- }}}
 
 -------------------------------------------------------------------------------
@@ -334,22 +305,17 @@ type family IsServerNotification (m :: ServerMethodK) :: Constraint where-- {{{
 -- Client
 ---------
 
-data instance Sing (m ::ClientMethodK) where -- {{{
+-- data Sing{{{
+data instance Sing (m :: ClientMethodK) where -- TODO これ要る？ --{{{
+  SCReq  :: Sing m -> Sing ('CReqK  m)
+  SCNoti :: Sing m -> Sing ('CNotiK m)
+-- }}}
+data instance Sing (m :: ClientRequestMethodK) where -- {{{
   SInitialize                      :: Sing 'InitializeK
-  SInitialized                     :: Sing 'InitializedK
   SShutdown                        :: Sing 'ShutdownK
-  SExit                            :: Sing 'ExitK
-  SCancelRequest                   :: Sing 'CancelRequestK
-  SWorkspaceDidChangeConfiguration :: Sing 'WorkspaceDidChangeConfigurationK
-  SWorkspaceDidChangeWatchedFiles  :: Sing 'WorkspaceDidChangeWatchedFilesK
   SWorkspaceSymbol                 :: Sing 'WorkspaceSymbolK
   SWorkspaceExecuteCommand         :: Sing 'WorkspaceExecuteCommandK
-  STextDocumentDidOpen             :: Sing 'TextDocumentDidOpenK
-  STextDocumentDidChange           :: Sing 'TextDocumentDidChangeK
-  STextDocumentWillSave            :: Sing 'TextDocumentWillSaveK
   STextDocumentWillSaveWaitUntil   :: Sing 'TextDocumentWillSaveWaitUntilK
-  STextDocumentDidSave             :: Sing 'TextDocumentDidSaveK
-  STextDocumentDidClose            :: Sing 'TextDocumentDidCloseK
   STextDocumentCompletion          :: Sing 'TextDocumentCompletionK
   SCompletionItemResolve           :: Sing 'CompletionItemResolveK
   STextDocumentHover               :: Sing 'TextDocumentHoverK
@@ -367,13 +333,30 @@ data instance Sing (m ::ClientMethodK) where -- {{{
   STextDocumentDocumentLink        :: Sing 'TextDocumentDocumentLinkK
   SDocumentLinkResolve             :: Sing 'DocumentLinkResolveK
   STextDocumentRename              :: Sing 'TextDocumentRenameK
-  SMisc                            :: Sing n -> Sing ('MiscK n)
+  SClientRequestMisc               :: Sing n -> Sing ('ClientRequestMiscK n)
 -- }}}
-instance SingI 'InitializeK                      where sing = SInitialize -- {{{
+data instance Sing (m :: ClientNotificationMethodK) where -- {{{
+  SInitialized                     :: Sing 'InitializedK
+  SExit                            :: Sing 'ExitK
+  SClientCancel                    :: Sing ' ClientCancelK
+  SWorkspaceDidChangeConfiguration :: Sing 'WorkspaceDidChangeConfigurationK
+  SWorkspaceDidChangeWatchedFiles  :: Sing 'WorkspaceDidChangeWatchedFilesK
+  STextDocumentDidOpen             :: Sing 'TextDocumentDidOpenK
+  STextDocumentDidChange           :: Sing 'TextDocumentDidChangeK
+  STextDocumentWillSave            :: Sing 'TextDocumentWillSaveK
+  STextDocumentDidSave             :: Sing 'TextDocumentDidSaveK
+  STextDocumentDidClose            :: Sing 'TextDocumentDidCloseK
+  SClientNotificationMisc          :: Sing n -> Sing ('ClientNotificationMiscK n)
+--}}}
+-- }}}
+-- instance SingI  -- {{{
+instance SingI m => SingI ('CReqK m)  where sing = SCReq  sing
+instance SingI m => SingI ('CNotiK m) where sing = SCNoti sing
+instance SingI 'InitializeK                      where sing = SInitialize
 instance SingI 'InitializedK                     where sing = SInitialized
 instance SingI 'ShutdownK                        where sing = SShutdown
 instance SingI 'ExitK                            where sing = SExit
-instance SingI 'CancelRequestK                   where sing = SCancelRequest
+instance SingI 'ClientCancelK                    where sing = SClientCancel
 instance SingI 'WorkspaceDidChangeConfigurationK where sing = SWorkspaceDidChangeConfiguration
 instance SingI 'WorkspaceDidChangeWatchedFilesK  where sing = SWorkspaceDidChangeWatchedFiles
 instance SingI 'WorkspaceSymbolK                 where sing = SWorkspaceSymbol
@@ -401,26 +384,25 @@ instance SingI 'CodeLensResolveK                 where sing = SCodeLensResolve
 instance SingI 'TextDocumentDocumentLinkK        where sing = STextDocumentDocumentLink
 instance SingI 'DocumentLinkResolveK             where sing = SDocumentLinkResolve
 instance SingI 'TextDocumentRenameK              where sing = STextDocumentRename
-instance KnownSymbol n => SingI ('MiscK n)       where sing = SMisc sing
+instance KnownSymbol n => SingI ('ClientRequestMiscK n) where sing = SClientRequestMisc sing
+instance KnownSymbol n => SingI ('ClientNotificationMiscK n) where sing = SClientNotificationMisc sing
 -- }}}
-instance SingKind ClientMethodK where -- {{{
+-- instance SingKind -- {{{
+instance SingKind ClientMethodK where -- TODO これ要る？ -- {{{
   type Demote ClientMethodK = ClientMethod
+  fromSing (SCReq  s) = CReq  (fromSing s)
+  fromSing (SCNoti s) = CNoti (fromSing s)
+  toSing (CReq  m) = case toSing m of SomeSing s -> SomeSing (SCReq  s)
+  toSing (CNoti m) = case toSing m of SomeSing s -> SomeSing (SCNoti s)
+-- }}}
+instance SingKind ClientRequestMethodK where-- {{{
+  type Demote ClientRequestMethodK = ClientRequestMethod
   fromSing = \case --{{{
     SInitialize                      -> Initialize
-    SInitialized                     -> Initialized
     SShutdown                        -> Shutdown
-    SExit                            -> Exit
-    SCancelRequest                   -> CancelRequest
-    SWorkspaceDidChangeConfiguration -> WorkspaceDidChangeConfiguration
-    SWorkspaceDidChangeWatchedFiles  -> WorkspaceDidChangeWatchedFiles
     SWorkspaceSymbol                 -> WorkspaceSymbol
     SWorkspaceExecuteCommand         -> WorkspaceExecuteCommand
-    STextDocumentDidOpen             -> TextDocumentDidOpen
-    STextDocumentDidChange           -> TextDocumentDidChange
-    STextDocumentWillSave            -> TextDocumentWillSave
     STextDocumentWillSaveWaitUntil   -> TextDocumentWillSaveWaitUntil
-    STextDocumentDidSave             -> TextDocumentDidSave
-    STextDocumentDidClose            -> TextDocumentDidClose
     STextDocumentCompletion          -> TextDocumentCompletion
     SCompletionItemResolve           -> CompletionItemResolve
     STextDocumentHover               -> TextDocumentHover
@@ -438,24 +420,14 @@ instance SingKind ClientMethodK where -- {{{
     STextDocumentDocumentLink        -> TextDocumentDocumentLink
     SDocumentLinkResolve             -> DocumentLinkResolve
     STextDocumentRename              -> TextDocumentRename
-    SMisc s                          -> Misc (fromSing s)
-    --}}}
+    SClientRequestMisc s             -> ClientRequestMisc (fromSing s)
+   --}}}
   toSing = \case --{{{
     Initialize                         -> SomeSing SInitialize
-    Initialized                        -> SomeSing SInitialized
     Shutdown                           -> SomeSing SShutdown
-    Exit                               -> SomeSing SExit
-    CancelRequest                      -> SomeSing SCancelRequest
-    WorkspaceDidChangeConfiguration    -> SomeSing SWorkspaceDidChangeConfiguration
-    WorkspaceDidChangeWatchedFiles     -> SomeSing SWorkspaceDidChangeWatchedFiles
     WorkspaceSymbol                    -> SomeSing SWorkspaceSymbol
     WorkspaceExecuteCommand            -> SomeSing SWorkspaceExecuteCommand
-    TextDocumentDidOpen                -> SomeSing STextDocumentDidOpen
-    TextDocumentDidChange              -> SomeSing STextDocumentDidChange
-    TextDocumentWillSave               -> SomeSing STextDocumentWillSave
     TextDocumentWillSaveWaitUntil      -> SomeSing STextDocumentWillSaveWaitUntil
-    TextDocumentDidSave                -> SomeSing STextDocumentDidSave
-    TextDocumentDidClose               -> SomeSing STextDocumentDidClose
     TextDocumentCompletion             -> SomeSing STextDocumentCompletion
     CompletionItemResolve              -> SomeSing SCompletionItemResolve
     TextDocumentHover                  -> SomeSing STextDocumentHover
@@ -473,24 +445,70 @@ instance SingKind ClientMethodK where -- {{{
     TextDocumentDocumentLink           -> SomeSing STextDocumentDocumentLink
     DocumentLinkResolve                -> SomeSing SDocumentLinkResolve
     TextDocumentRename                 -> SomeSing STextDocumentRename
-    Misc n                             -> case toSing n of SomeSing s -> SomeSing (SMisc s)
-    --}}}
+    ClientRequestMisc n                -> case toSing n of
+                                            SomeSing s -> SomeSing (SClientRequestMisc s)
+    -- }}}
+-- }}}
+instance SingKind ClientNotificationMethodK where -- {{{
+  type Demote ClientNotificationMethodK = ClientNotificationMethod
+  fromSing = \case --{{{
+    SInitialized                     -> Initialized
+    SExit                            -> Exit
+    SClientCancel                    -> ClientCancel
+    SWorkspaceDidChangeConfiguration -> WorkspaceDidChangeConfiguration
+    SWorkspaceDidChangeWatchedFiles  -> WorkspaceDidChangeWatchedFiles
+    STextDocumentDidOpen             -> TextDocumentDidOpen
+    STextDocumentDidChange           -> TextDocumentDidChange
+    STextDocumentWillSave            -> TextDocumentWillSave
+    STextDocumentDidSave             -> TextDocumentDidSave
+    STextDocumentDidClose            -> TextDocumentDidClose
+    SClientNotificationMisc s        -> ClientNotificationMisc (fromSing s)
+    -- }}}
+  toSing = \case --{{{
+    Initialized                        -> SomeSing SInitialized
+    Exit                               -> SomeSing SExit
+    ClientCancel                       -> SomeSing SClientCancel
+    WorkspaceDidChangeConfiguration    -> SomeSing SWorkspaceDidChangeConfiguration
+    WorkspaceDidChangeWatchedFiles     -> SomeSing SWorkspaceDidChangeWatchedFiles
+    TextDocumentDidOpen                -> SomeSing STextDocumentDidOpen
+    TextDocumentDidChange              -> SomeSing STextDocumentDidChange
+    TextDocumentWillSave               -> SomeSing STextDocumentWillSave
+    TextDocumentDidSave                -> SomeSing STextDocumentDidSave
+    TextDocumentDidClose               -> SomeSing STextDocumentDidClose
+    ClientNotificationMisc n           -> case toSing n of
+                                            SomeSing s -> SomeSing (SClientNotificationMisc s)
+    -- }}}
+-- }}}
 -- }}}
 
 -- Server
 ---------
 
-data instance Sing (m ::ServerMethodK) where -- {{{
-  SWindowShowMessage              :: Sing 'WindowShowMessageK
+-- data Sing{{{
+data instance Sing (m :: ServerMethodK) where -- {{{
+  SSReq  :: Sing m -> Sing ('SReqK  m)
+  SSNoti :: Sing m -> Sing ('SNotiK m)
+-- }}}
+data instance Sing (m :: ServerRequestMethodK) where -- {{{
   SWindowShowMessageRequest       :: Sing 'WindowShowMessageRequestK
+  SClientRegisterCapability       :: Sing 'ClientRegisterCapabilityK
+  SWorkspaceApplyEdit             :: Sing 'WorkspaceApplyEditK
+  SClientUnregisterCapability     :: Sing 'ClientUnregisterCapabilityK
+  SServerRequestMisc              :: Sing n -> Sing ('ServerRequestMiscK n)
+-- }}}
+data instance Sing (m :: ServerNotificationMethodK) where -- {{{
+  SWindowShowMessage              :: Sing 'WindowShowMessageK
   SWindowLogMessage               :: Sing 'WindowLogMessageK
   STelemetryEvent                 :: Sing 'TelemetryEventK
-  SClientRegisterCapability       :: Sing 'ClientRegisterCapabilityK
-  SClientUnregisterCapability     :: Sing 'ClientUnregisterCapabilityK
-  SWorkspaceApplyEdit             :: Sing 'WorkspaceApplyEditK
   STextDocumentPublishDiagnostics :: Sing 'TextDocumentPublishDiagnosticsK
+  SServerCancel                   :: Sing 'ServerCancelK
+  SServerNotificationMisc         :: Sing n -> Sing ('ServerNotificationMiscK n)
 -- }}}
-instance SingI 'WindowShowMessageK              where sing = SWindowShowMessage --{{{
+-- }}}
+-- instance SingI  --{{{
+instance SingI m => SingI ('SReqK m)  where sing = SSReq  sing
+instance SingI m => SingI ('SNotiK m) where sing = SSNoti sing
+instance SingI 'WindowShowMessageK              where sing = SWindowShowMessage
 instance SingI 'WindowShowMessageRequestK       where sing = SWindowShowMessageRequest
 instance SingI 'WindowLogMessageK               where sing = SWindowLogMessage
 instance SingI 'TelemetryEventK                 where sing = STelemetryEvent
@@ -498,58 +516,68 @@ instance SingI 'ClientRegisterCapabilityK       where sing = SClientRegisterCapa
 instance SingI 'ClientUnregisterCapabilityK     where sing = SClientUnregisterCapability
 instance SingI 'WorkspaceApplyEditK             where sing = SWorkspaceApplyEdit
 instance SingI 'TextDocumentPublishDiagnosticsK where sing = STextDocumentPublishDiagnostics
+instance KnownSymbol n => SingI ('ServerRequestMiscK n) where sing = SServerRequestMisc sing
+instance KnownSymbol n => SingI ('ServerNotificationMiscK n) where sing = SServerNotificationMisc sing
 -- }}}
+-- instance SingKind {{{
 instance SingKind ServerMethodK where -- {{{
   type Demote ServerMethodK = ServerMethod
+  fromSing (SSReq  s) = SReq  (fromSing s)
+  fromSing (SSNoti s) = SNoti (fromSing s)
+  toSing (SReq  m) = case toSing m of SomeSing s -> SomeSing (SSReq  s)
+  toSing (SNoti m) = case toSing m of SomeSing s -> SomeSing (SSNoti s)
+-- }}}
+instance SingKind ServerRequestMethodK where -- {{{
+  type Demote ServerRequestMethodK = ServerRequestMethod
   fromSing = \case --{{{
-    SWindowShowMessage              -> WindowShowMessage
     SWindowShowMessageRequest       -> WindowShowMessageRequest
-    SWindowLogMessage               -> WindowLogMessage
-    STelemetryEvent                 -> TelemetryEvent
     SClientRegisterCapability       -> ClientRegisterCapability
     SClientUnregisterCapability     -> ClientUnregisterCapability
     SWorkspaceApplyEdit             -> WorkspaceApplyEdit
-    STextDocumentPublishDiagnostics -> TextDocumentPublishDiagnostics
-  --}}}
+    SServerRequestMisc s            -> ServerRequestMisc (fromSing s)
+  -- }}}
   toSing = \case --{{{
-    WindowShowMessage              -> SomeSing SWindowShowMessage
     WindowShowMessageRequest       -> SomeSing SWindowShowMessageRequest
-    WindowLogMessage               -> SomeSing SWindowLogMessage
-    TelemetryEvent                 -> SomeSing STelemetryEvent
     ClientRegisterCapability       -> SomeSing SClientRegisterCapability
     ClientUnregisterCapability     -> SomeSing SClientUnregisterCapability
     WorkspaceApplyEdit             -> SomeSing SWorkspaceApplyEdit
+    ServerRequestMisc n            -> case toSing n of
+                                        SomeSing s -> SomeSing (SServerRequestMisc s)
+  -- }}}
+  -- }}}
+instance SingKind ServerNotificationMethodK where -- {{{
+  type Demote ServerNotificationMethodK = ServerNotificationMethod
+  fromSing = \case --{{{
+    SWindowShowMessage              -> WindowShowMessage
+    SWindowLogMessage               -> WindowLogMessage
+    STelemetryEvent                 -> TelemetryEvent
+    STextDocumentPublishDiagnostics -> TextDocumentPublishDiagnostics
+    SServerCancel                   -> ServerCancel
+    SServerNotificationMisc s       -> ServerNotificationMisc (fromSing s)
+  -- }}}
+  toSing = \case --{{{
+    WindowShowMessage              -> SomeSing SWindowShowMessage
+    WindowLogMessage               -> SomeSing SWindowLogMessage
+    TelemetryEvent                 -> SomeSing STelemetryEvent
     TextDocumentPublishDiagnostics -> SomeSing STextDocumentPublishDiagnostics
-  --}}}
-  --}}}
+    ServerCancel                   -> SomeSing SServerCancel
+    ServerNotificationMisc n       -> case toSing n of
+                                        SomeSing s -> SomeSing (SServerNotificationMisc s)
+  -- }}}
+  -- }}}
+-- }}}
 
 -------------------------------------------------------------------------------
--- Foo
+-- Class
 -------------------------------------------------------------------------------
 
-data X = Client | Server
+class (SingKind k, Show (Demote k), FieldJSON (Demote k)) => IsMethodKind k
+instance IsMethodKind ClientRequestMethodK
+instance IsMethodKind ClientNotificationMethodK
+instance IsMethodKind ServerRequestMethodK
+instance IsMethodKind ServerNotificationMethodK
 
-type family Method (x :: X) = p | p -> x where
-  Method 'Client = ClientMethod
-  Method 'Server = ServerMethod
-
-type family Actor m :: X where
-  Actor ClientMethodK = 'Client
-  Actor ServerMethodK = 'Server
-
--- なんだかなあ
-class (SingKind k, Method (Actor k) ~ Demote k
-      ,Show (Method (Actor k)), FieldJSON (Method (Actor k))) => IsMethodKind k
+-- あとでけす
 instance IsMethodKind ClientMethodK
 instance IsMethodKind ServerMethodK
-
--------------------------------------------------------------------------------
--- Constraint Util
--------------------------------------------------------------------------------
-
-type Top = (() :: Constraint)
-class GHC.Exts.Any => Bottom where no :: a
-
-bottom :: Bottom :- a
-bottom = Sub no
 

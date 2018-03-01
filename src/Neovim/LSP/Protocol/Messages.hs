@@ -4,7 +4,6 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE PolyKinds             #-}
 {-# LANGUAGE OverloadedLabels      #-}
@@ -36,7 +35,7 @@ import           Neovim.LSP.Protocol.Type.JSON (Option (..))
 {-notification :: forall (m :: ClientMethod). IsNotification 'Client m
   TODO exitNotificationのNone VoidがJSONを実装してないのでダメ
 -}
-notification :: forall (m :: ClientMethodK). ImplNotification m
+notification :: forall (m :: ClientNotificationMethodK). ImplNotification m
              => NotificationParam m -> Notification m
 notification a = Notification $ #jsonrpc @= "2.0"
                              <: #method  @= fromSing (sing :: Sing m)
@@ -44,7 +43,7 @@ notification a = Notification $ #jsonrpc @= "2.0"
                              <: nil
 
 -- | Build 'ClientRequest'
-request :: forall (m :: ClientMethodK). ImplRequest m
+request :: forall (m :: ClientRequestMethodK). ImplRequest m
         => ID
         -> RequestParam m
         -> ClientRequest m
@@ -55,9 +54,9 @@ request id' a = Request $ #jsonrpc @= "2.0"
                        <: nil
 
 -- | Build 'ClientResponse'
-response :: forall (m :: ServerMethodK). SingI m
+response :: forall (m :: ServerRequestMethodK). SingI m
          => Nullable ID
-         -> ResResult m
+         -> Option (ResResult m)
          -> Option (ResponseError (ResError m))
          -> ClientResponse m
 response id' res err = Response $ #jsonrpc @= "2.0"
@@ -87,7 +86,7 @@ initializeParam processId rootUri
 -- Exit
 -------------------------------------------------------------------------------
 
-exitNotification :: ClientNotification 'ExitK
+exitNotification :: Notification 'ExitK
 exitNotification = notification exitParam
 
 exitParam :: NotificationParam 'ExitK

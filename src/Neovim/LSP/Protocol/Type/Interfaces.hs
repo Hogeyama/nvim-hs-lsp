@@ -57,8 +57,8 @@ module Neovim.LSP.Protocol.Type.Interfaces
   , DocumentSelector
 
   -- type familyとか
-  , X(..)
-  , Method
+  --, X(..)
+  --, Method
   --
   , RequestParam
   , NotificationParam
@@ -103,7 +103,7 @@ import           Data.Aeson                      hiding (Error)
 import           Data.Char                       (digitToInt, toLower)
 import           Data.Extensible                 hiding (Nullable)
 import           Data.Hashable                   (Hashable)
-import           Data.Singletons                 (SingI)
+import           Data.Singletons                 (SingI, SingKind(..))
 import           Data.Text                       (Text)
 import qualified Data.Text                       as T
 import           Data.Map                        (Map)
@@ -149,11 +149,11 @@ type MessageF = '[ "jsonrpc" >: String ]
 
 -- RequestMessage
 -----------------
-type RequestMessage  (x :: X) a = Record (RequestMessageF (x :: X) a)
-type RequestMessageF (x :: X) a =
+type RequestMessage  m a = Record (RequestMessageF m a)
+type RequestMessageF m a =
   MessageF ++
   '[ "id"      >: ID
-   , "method"  >: Method x
+   , "method"  >: m
    , "params"  >: a -- NOTE 本来はOption a
                     -- ただmethodによってはomitされると困るので
                     -- それを表現するためにはRequestParamでOptionを付ける方が良い
@@ -163,11 +163,11 @@ type RequestMessageF (x :: X) a =
 
 -- ResponseMessage
 -----------------
-type ResponseMessage  (x :: X) a e = Record (ResponseMessageF x a e)
-type ResponseMessageF (x :: X) a e =
+type ResponseMessage  a e = Record (ResponseMessageF a e)
+type ResponseMessageF a e =
   MessageF ++
   '[ "id"      >: Nullable ID
-   , "result"  >: a -- NOTE 本来はOption a
+   , "result"  >: Option a -- TODO
    , "error"   >: Option (ResponseError e) -- 同上
    ]
 
@@ -180,10 +180,10 @@ type ResponseErrorF e =
 
 -- Notification Message
 -----------------------
-type NotificationMessage  (x :: X) a = Record (NotificationMessageF x a)
-type NotificationMessageF (x :: X) a =
+type NotificationMessage  m a = Record (NotificationMessageF m a)
+type NotificationMessageF m a =
   MessageF ++
-  '[ "method"  >: Method x
+  '[ "method"  >: m
    , "params"  >: a  -- NOTE 本来はOption a
    ]
 
@@ -438,19 +438,19 @@ type family NotificationParam (m :: k)
 type family ResResult         (m :: k)
 type family ResError          (m :: k)
 
-type RequestSyn      (m :: k) = RequestMessage      (Actor k) (RequestParam m)
-type NotificationSyn (m :: k) = NotificationMessage (Actor k) (NotificationParam m)
-type ResponseSyn     (m :: k) = ResponseMessage     (Actor k) (ResResult m) (ResError m)
+type RequestSyn      (m :: k) = RequestMessage      (Demote k) (RequestParam m)
+type NotificationSyn (m :: k) = NotificationMessage (Demote k) (NotificationParam m)
+type ResponseSyn     (m :: k) = ResponseMessage     (ResResult m) (ResError m)
 newtype Request      (m :: k) = Request      (RequestSyn m)      deriving Generic
 newtype Notification (m :: k) = Notification (NotificationSyn m) deriving Generic
 newtype Response     (m :: k) = Response     (ResponseSyn m)     deriving Generic
 
-type ClientResponse     (m :: ServerMethodK) = Response     m
-type ClientRequest      (m :: ClientMethodK) = Request      m
-type ClientNotification (m :: ClientMethodK) = Notification m
-type ServerResponse     (m :: ClientMethodK) = Response     m
-type ServerRequest      (m :: ServerMethodK) = Request      m
-type ServerNotification (m :: ServerMethodK) = Notification m
+type ClientResponse     (m :: ServerRequestMethodK)      = Response     m
+type ClientRequest      (m :: ClientRequestMethodK)      = Request      m
+type ClientNotification (m :: ClientNotificationMethodK) = Notification m
+type ServerResponse     (m :: ClientRequestMethodK)      = Response     m
+type ServerRequest      (m :: ServerRequestMethodK)      = Request      m
+type ServerNotification (m :: ServerNotificationMethodK) = Notification m
 
 type ImplRequest (m :: k) =
   (SingI m
@@ -462,7 +462,8 @@ type ImplResponse (m :: k) =
   (SingI m
   ,IsMethodKind k
   ,Show      (ResResult m)
-  ,FieldJSON (ResResult m)
+  ,ToJSON    (ResResult m) -- NOTE FieldJSONは使えない (TODO)
+  ,FromJSON  (ResResult m)
   ,Show      (ResError m)
   ,FieldJSON (ResError m)
   )
@@ -619,7 +620,7 @@ instance ToJSON TextDocumentSync where
 
 -- Cancel
 ---------------------------------------
-type instance NotificationParam 'CancelRequestK = Record '[ "id" >: ID ]
+type instance NotificationParam 'ClientCancelK = Record '[ "id" >: ID ]
 
 
 -------------------------------------------------------------------------------
@@ -750,9 +751,15 @@ type SignatureHelp = Value
 -- Misc
 -------
 
-type instance RequestParam ('MiscK s) = Value
-type instance ResResult    ('MiscK s) = Value
-type instance ResError     ('MiscK s) = Value
+type instance RequestParam      ('ClientRequestMiscK      s) = Value
+type instance ResResult         ('ClientRequestMiscK      s) = Value
+type instance ResError          ('ClientRequestMiscK      s) = Value
+type instance NotificationParam ('ClientNotificationMiscK s) = Value
+
+type instance RequestParam      ('ServerRequestMiscK      s) = Value
+type instance ResResult         ('ServerRequestMiscK      s) = Value
+type instance ResError          ('ServerRequestMiscK      s) = Value
+type instance NotificationParam ('ServerNotificationMiscK s) = Value
 
 ------------
 -- Server --

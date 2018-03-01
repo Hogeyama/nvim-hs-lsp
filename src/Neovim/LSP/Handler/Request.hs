@@ -23,10 +23,10 @@ requestHandler = Handler requestPred requestHandlerAction
 
 requestPred :: InMessage -> Bool
 requestPred x = case methodOf x of
-  Right WindowShowMessageRequest   -> True
-  Right ClientRegisterCapability   -> True
-  Right ClientUnregisterCapability -> True
-  Right WorkspaceApplyEdit         -> True
+  Right (SReq WindowShowMessageRequest  ) -> True
+  Right (SReq ClientRegisterCapability  ) -> True
+  Right (SReq ClientUnregisterCapability) -> True
+  Right (SReq WorkspaceApplyEdit        ) -> True
   _ -> False
 
 requestHandlerAction :: HandlerAction ()
@@ -46,5 +46,6 @@ requestHandlerAction = forever @_ @() @() $ do
     SWorkspaceApplyEdit         -> do
       -- これはとても面倒
       errorM "requestHandler: not implemented"
-    _ -> error "impossible"
+    SServerRequestMisc _ -> do
+      errorM "requestHandler: Misc: not implemented"
 

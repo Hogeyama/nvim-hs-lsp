@@ -70,7 +70,7 @@ getTextDocumentPositionParams b p = do
 -- "OK"
 --
 -- TODO これをユーザーに見せるのはどうなのか．でもtype checkはして欲しいしなあ
-pushRequest :: forall (m :: ClientMethodK) st. ImplRequest m
+pushRequest :: forall (m :: ClientRequestMethodK) st. ImplRequest m
             => RequestParam m
             -> Neovim HandlerConfig st ()
 pushRequest param = do
@@ -79,7 +79,7 @@ pushRequest param = do
     addIdMethodMap id' method
     push $ request @m id' param
 
-pushNotification :: forall (m :: ClientMethodK) st. ImplNotification m
+pushNotification :: forall (m :: ClientNotificationMethodK) st. ImplNotification m
                  => NotificationParam m
                  -> Neovim HandlerConfig st ()
 pushNotification param = push $ notification @m param
