@@ -21,7 +21,6 @@ import           Neovim
 import           Neovim.LSP.Base
 import           Neovim.LSP.Protocol.Messages
 import           Neovim.LSP.Protocol.Type
-import qualified Neovim.LSP.Protocol.Type.Key as K
 
 --  testWithEmbeddedNeovimを使うとb:current_syntaxが存在しないことになっててダメ
 --  (filetypeは存在するのになんでだろう)
@@ -85,7 +84,7 @@ type NvimPos = (Int,Int)
 
 nvimPosToPosition :: NvimPos -> Position
 nvimPosToPosition (line,char) =
-    K.line      @= fromIntegral (line - 1)
- <: K.character @= fromIntegral (char - 1)
+    #line      @= fromIntegral (line - 1)
+ <: #character @= fromIntegral (char - 1)
  <: nil
 
