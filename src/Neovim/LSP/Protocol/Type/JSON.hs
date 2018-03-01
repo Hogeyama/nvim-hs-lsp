@@ -18,7 +18,7 @@
 
 module Neovim.LSP.Protocol.Type.JSON
   ( Option(..)
-  , JSONField
+  , FieldJSON
   ) where
 
 import           Data.Aeson            hiding (KeyValue)
@@ -79,7 +79,7 @@ type family Flag a :: Bool where
 -------------------------------------------------------------------------------
 
 -- | TODO 説明
-type JSONField a = (FieldToJSON a, FieldFromJSON a)
+type FieldJSON a = (FieldToJSON a, FieldFromJSON a)
 
 -- From JSON
 ------------

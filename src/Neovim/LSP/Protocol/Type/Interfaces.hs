@@ -109,8 +109,7 @@ import           Data.Text                       (Text)
 import qualified Data.Text                       as T
 import           Data.Map                        (Map)
 import           GHC.Generics                    (Generic)
-import           Neovim.LSP.Protocol.Type.JSON   (JSONField, Option (..))
-import qualified Neovim.LSP.Protocol.Type.Key    as K
+import           Neovim.LSP.Protocol.Type.JSON   (FieldJSON, Option (..))
 import           Neovim.LSP.Protocol.Type.Method
 import           Safe                            (lookupJust)
 
@@ -464,21 +463,21 @@ type ImplRequest (m :: k) =
   (SingI m
   ,IsMethodKind k
   ,Show      (RequestParam m)
-  ,JSONField (RequestParam m)
+  ,FieldJSON (RequestParam m)
   )
 type ImplResponse (m :: k) =
   (SingI m
   ,IsMethodKind k
   ,Show      (ResResult m)
-  ,JSONField (ResResult m)
+  ,FieldJSON (ResResult m)
   ,Show      (ResError m)
-  ,JSONField (ResError m)
+  ,FieldJSON (ResError m)
   )
 type ImplNotification (m :: k) =
   (SingI m
   ,IsMethodKind k
   ,Show      (NotificationParam m)
-  ,JSONField (NotificationParam m)
+  ,FieldJSON (NotificationParam m)
   )
 
 -- instances

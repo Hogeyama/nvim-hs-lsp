@@ -539,7 +539,7 @@ type family Actor m :: X where
 
 -- なんだかなあ
 class (SingKind k, Method (Actor k) ~ Demote k
-      ,Show (Method (Actor k)), JSONField (Method (Actor k))) => IsMethodKind k
+      ,Show (Method (Actor k)), FieldJSON (Method (Actor k))) => IsMethodKind k
 instance IsMethodKind ClientMethodK
 instance IsMethodKind ServerMethodK
 
