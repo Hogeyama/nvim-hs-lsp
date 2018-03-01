@@ -7,6 +7,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications    #-}
 {-# LANGUAGE TypeFamilies        #-}
+{-# LANGUAGE OverloadedLabels    #-}
 {-# OPTIONS_GHC -Wall            #-}
 
 module Neovim.LSP.Util where
@@ -46,8 +47,8 @@ getTextDocumentPositionParams :: Buffer -> NvimPos
                               -> Neovim HandlerConfig st TextDocumentPositionParams
 getTextDocumentPositionParams b p = do
   uri <- getBufUri b
-  let pos = K.textDocument @= textDocumentIdentifier uri
-         <: K.position     @= nvimPosToPosition p
+  let pos = #textDocument @= textDocumentIdentifier uri
+         <: #position     @= nvimPosToPosition p
          <: nil
   return pos
 

@@ -42,11 +42,10 @@ import           GHC.TypeLits          (KnownSymbol, symbolVal)
 -- If a value of type @Record xs@ has 'None' in a field
 -- it will be omit with its key when converted by 'toJSON':
 --
--- >>> :set -XDataKinds -XTypeOperators -XOverloadedStrings
+-- >>> :set -XDataKinds -XTypeOperators -XOverloadedStrings -XOverloadedLabels
 -- >>> import qualified Data.ByteString.Lazy.Char8 as B
--- >>> import qualified Neovim.LSP.Protocol.Type.Key as K
--- >>> let recordMay = K.id @= Nothing <: nil :: Record '["id" >: Maybe  Char]
--- >>> let recordOpt = K.id @= None    <: nil :: Record '["id" >: Option Char]
+-- >>> let recordMay = #id @= Nothing <: nil :: Record '["id" >: Maybe  Char]
+-- >>> let recordOpt = #id @= None    <: nil :: Record '["id" >: Option Char]
 -- >>> B.putStrLn $ encode $ toJSON recordMay
 -- {"id":null}
 -- >>> B.putStrLn $ encode $ toJSON recordOpt

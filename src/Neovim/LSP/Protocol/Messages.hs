@@ -7,6 +7,7 @@
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE PolyKinds             #-}
+{-# LANGUAGE OverloadedLabels      #-}
 {-# OPTIONS_GHC -Wall #-}
 
 -- BuildMessageとかのほうがいいかしら
@@ -17,7 +18,6 @@ import           Data.Singletons
 
 import           Neovim.LSP.Protocol.Type
 import           Neovim.LSP.Protocol.Type.JSON (Option (..))
-import qualified Neovim.LSP.Protocol.Type.Key  as K
 
 -------------------------------------------------------------------------------
 -- General
@@ -38,9 +38,9 @@ import qualified Neovim.LSP.Protocol.Type.Key  as K
 -}
 notification :: forall (m :: ClientMethodK). ImplNotification m
              => NotificationParam m -> Notification m
-notification a = Notification $ K.jsonrpc @= "2.0"
-                             <: K.method  @= fromSing (sing :: Sing m)
-                             <: K.params  @= a
+notification a = Notification $ #jsonrpc @= "2.0"
+                             <: #method  @= fromSing (sing :: Sing m)
+                             <: #params  @= a
                              <: nil
 
 -- | Build 'ClientRequest'
@@ -48,10 +48,10 @@ request :: forall (m :: ClientMethodK). ImplRequest m
         => ID
         -> RequestParam m
         -> ClientRequest m
-request id' a = Request $ K.jsonrpc @= "2.0"
-                       <: K.id      @= id'
-                       <: K.method  @= fromSing (sing :: Sing m)
-                       <: K.params  @= a
+request id' a = Request $ #jsonrpc @= "2.0"
+                       <: #id      @= id'
+                       <: #method  @= fromSing (sing :: Sing m)
+                       <: #params  @= a
                        <: nil
 
 -- | Build 'ClientResponse'
@@ -60,10 +60,10 @@ response :: forall (m :: ServerMethodK). SingI m
          -> ResResult m
          -> Option (ResponseError (ResError m))
          -> ClientResponse m
-response id' res err = Response $ K.jsonrpc @= "2.0"
-                               <: K.id      @= id'
-                               <: K.result  @= res
-                               <: K.error   @= err
+response id' res err = Response $ #jsonrpc @= "2.0"
+                               <: #id      @= id'
+                               <: #result  @= res
+                               <: #error   @= err
                                <: nil
 
 -------------------------------------------------------------------------------
@@ -72,15 +72,15 @@ response id' res err = Response $ K.jsonrpc @= "2.0"
 
 initializeParam :: Nullable Number -> Nullable Uri -> RequestParam 'InitializeK
 initializeParam processId rootUri
-   = K.processId             @= processId
-  <: K.rootPath              @= None
-  <: K.rootUri               @= rootUri
-  <: K.initializationOptions @= None
-  <: K.capabilities          @=  ( K.workspace    @= None
-                                <: K.textDocument @= None
-                                <: K.experimental @= None
-                                <: nil )
-  <: K.trace                 @= None
+   = #processId             @= processId
+  <: #rootPath              @= None
+  <: #rootUri               @= rootUri
+  <: #initializationOptions @= None
+  <: #capabilities          @=  ( #workspace    @= None
+                               <: #textDocument @= None
+                               <: #experimental @= None
+                               <: nil )
+  <: #trace                 @= None
   <: nil
 
 -------------------------------------------------------------------------------
@@ -99,5 +99,5 @@ exitParam = None
 
 didOpenTextDocumentParam :: TextDocumentItem
                          -> NotificationParam 'TextDocumentDidOpenK
-didOpenTextDocumentParam textDocument = K.textDocument @= textDocument <: nil
+didOpenTextDocumentParam textDocument = #textDocument @= textDocument <: nil
 

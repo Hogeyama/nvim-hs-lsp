@@ -8,6 +8,10 @@ module Neovim.LSP.Protocol.Type.Key where
 
 import           Data.Extensible (mkField)
 
+-- OverloadedLabelsはチェインさせると型推論に失敗するので
+-- 一応mkFieldして使えるようにしておく．
+-- 今の所使わずに済んでいる．
+
 $(concat <$> mapM mkField
   [ "jsonrpc"
   , "id"
@@ -15,7 +19,6 @@ $(concat <$> mapM mkField
   , "params"
   , "code"
   , "message"
-  , "data_" -- "data" is preserved...
   , "result"
   , "error"
   , "line"

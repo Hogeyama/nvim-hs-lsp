@@ -16,6 +16,7 @@
 {-# LANGUAGE TypeFamilies           #-}
 {-# LANGUAGE TypeFamilyDependencies #-}
 {-# LANGUAGE TypeOperators          #-}
+{-# LANGUAGE OverloadedLabels       #-}
 {-# LANGUAGE UndecidableInstances   #-}
   -- (++)とJSONのderivingに必要．JSONの方はどうにかなるかも？
 {-# OPTIONS_GHC -Wall               #-}
@@ -177,7 +178,7 @@ type ResponseError  e = Record (ResponseErrorF e)
 type ResponseErrorF e =
   '[ "code"    >: ErrorCode
    , "message" >: Text
-   , "data_"   >: e
+   , "data"    >: e
    ]
 
 -- Notification Message
@@ -317,11 +318,11 @@ type VersionedTextDocmentIdentifierF =
 -- Extend VersionedTextDocmentIdentifierF TextDocumentIdentifier
 
 textDocumentIdentifier :: Uri -> TextDocumentIdentifier
-textDocumentIdentifier uri = K.uri @= uri <: nil
+textDocumentIdentifier uri = #uri @= uri <: nil
 
 versionedTextDocmentIdentifier :: Uri -> Version -> VersionedTextDocmentIdentifier
-versionedTextDocmentIdentifier uri version = K.uri @= uri
-                                          <: K.version @= version
+versionedTextDocmentIdentifier uri version = #uri @= uri
+                                          <: #version @= version
                                           <: nil
 
 -- TextDocumentItem
