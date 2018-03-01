@@ -1,4 +1,3 @@
-
 {-# LANGUAGE ConstraintKinds        #-}
 {-# LANGUAGE DataKinds              #-}
 {-# LANGUAGE DeriveAnyClass         #-}
@@ -169,7 +168,6 @@ type ResponseMessageF (x :: X) a e =
   MessageF ++
   '[ "id"      >: Nullable ID
    , "result"  >: a -- NOTE 本来はOption a
-                    -- TODO 整合性とれてるか見直す
    , "error"   >: Option (ResponseError e) -- 同上
    ]
 
@@ -314,7 +312,6 @@ type VersionedTextDocmentIdentifierF =
   TextDocumentIdentifierF ++
   '[ "version" >: Version
    ]
--- Extend VersionedTextDocmentIdentifierF TextDocumentIdentifier
 
 textDocumentIdentifier :: Uri -> TextDocumentIdentifier
 textDocumentIdentifier uri = #uri @= uri <: nil
@@ -338,11 +335,7 @@ type TextDocumentItem = Record
 ----------------------------------------
 type TextDocumentPositionParams = Record
   '[ "textDocument" >: TextDocumentIdentifier
-      -- TODO
-      -- ここにVersionedTextDocmentIdentifierが来てもいいはず
-      -- shrinkという関数があるが，明示的に呼ばないといけない
-      -- やっぱり型クラスでほげほげしないとダメか？
-   , "position" >: Position
+   , "position"     >: Position
    ]
 
 -- DocumentFilter
@@ -372,8 +365,8 @@ data ErrorCode
   deriving (Show, Eq, Ord)
 
 errorCodeTable :: [(ErrorCode, Int)]
-errorCodeTable = [
-    (ParseError            , -32700)
+errorCodeTable =
+  [ (ParseError            , -32700)
   , (InvalidRequest        , -32600)
   , (MethodNotFound        , -32601)
   , (InvalidParams         , -32602)
@@ -541,26 +534,26 @@ type WorkspaceClientCapabilities = Value
 
 type TextDocumentClientCapabilities = Value
 
-type ServerCapabilities = Record [
-    "textDocumentSync"                 >: Option TextDocumentSync
-  , "hoverProvider"                    >: Option Bool
-  , "completionProvider"               >: Option CompletionOptions
-  , "signatureHelpProvider"            >: Option SignatureHelpOptions
-  , "definitionProvider"               >: Option Bool
-  , "referencesProvider"               >: Option Bool
-  , "documentHighlightProvider"        >: Option Bool
-  , "documentSymbolProvider"           >: Option Bool
-  , "workspaceSymbolProvider"          >: Option Bool
-  , "codeActionProvider"               >: Option Bool
-  , "codeLensProvider"                 >: Option CodeLensOptions
-  , "documentFormattingProvider"       >: Option Bool
-  , "documentRangeFormattingProvider"  >: Option Bool
-  , "documentOnTypeFormattingProvider" >: Option DocumentOnTypeFormattingOptions
-  , "renameProvider"                   >: Option Bool
-  , "documentLinkProvider"             >: Option DocumentLinkOptions
-  , "executeCommandProvider"           >: Option ExecuteCommandOptions
-  , "experimental"                     >: Option Value
-  ]
+type ServerCapabilities = Record
+  '[ "textDocumentSync"                 >: Option TextDocumentSync
+   , "hoverProvider"                    >: Option Bool
+   , "completionProvider"               >: Option CompletionOptions
+   , "signatureHelpProvider"            >: Option SignatureHelpOptions
+   , "definitionProvider"               >: Option Bool
+   , "referencesProvider"               >: Option Bool
+   , "documentHighlightProvider"        >: Option Bool
+   , "documentSymbolProvider"           >: Option Bool
+   , "workspaceSymbolProvider"          >: Option Bool
+   , "codeActionProvider"               >: Option Bool
+   , "codeLensProvider"                 >: Option CodeLensOptions
+   , "documentFormattingProvider"       >: Option Bool
+   , "documentRangeFormattingProvider"  >: Option Bool
+   , "documentOnTypeFormattingProvider" >: Option DocumentOnTypeFormattingOptions
+   , "renameProvider"                   >: Option Bool
+   , "documentLinkProvider"             >: Option DocumentLinkOptions
+   , "executeCommandProvider"           >: Option ExecuteCommandOptions
+   , "experimental"                     >: Option Value
+   ]
 
 data TextDocumentSync = SyncOption TextDocumentSyncOptions
                       | SyncKind   TextDocumentSyncKind
@@ -757,10 +750,9 @@ type SignatureHelp = Value
 -- Misc
 -------
 
--- s毎に分けるのはさすがに厳しそう
-type instance RequestParam      ('MiscK s) = Value
-type instance ResResult         ('MiscK s) = Value
-type instance ResError          ('MiscK s) = Value
+type instance RequestParam ('MiscK s) = Value
+type instance ResResult    ('MiscK s) = Value
+type instance ResError     ('MiscK s) = Value
 
 ------------
 -- Server --

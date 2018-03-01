@@ -79,6 +79,11 @@ pushRequest param = do
     addIdMethodMap id' method
     push $ request @m id' param
 
+pushNotification :: forall (m :: ClientMethodK) st. ImplNotification m
+                 => NotificationParam m
+                 -> Neovim HandlerConfig st ()
+pushNotification param = push $ notification @m param
+
 -- TODO NeovimのPos,RangeとLSPのPos,Rangeを上手く変換する
 type NvimPos = (Int,Int)
 
