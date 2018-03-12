@@ -50,7 +50,7 @@ prfClientReq = \case -- {{{
 prfClientNoti :: forall (m :: ClientNotificationMethodK). Sing m -> Dict (ImplNotification m)
 prfClientNoti = \case-- {{{
     SInitialized                     -> notImplemented
-    SExit                            -> notImplemented -- TODO
+    SExit                            -> notImplemented
     SWorkspaceDidChangeConfiguration -> notImplemented
     SWorkspaceDidChangeWatchedFiles  -> notImplemented
     STextDocumentDidOpen             -> Dict

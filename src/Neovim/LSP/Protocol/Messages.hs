@@ -32,9 +32,6 @@ import           Neovim.LSP.Protocol.Type.JSON (Option (..))
 -- > notification \@\'Initialize someInitializeParam
 --
 -- -}
-{-notification :: forall (m :: ClientMethod). IsNotification 'Client m
-  TODO exitNotificationのNone VoidがJSONを実装してないのでダメ
--}
 notification :: forall (m :: ClientNotificationMethodK). ImplNotification m
              => NotificationParam m -> Notification m
 notification a = Notification $ #jsonrpc @= "2.0"

@@ -21,9 +21,8 @@ responseHandler :: Handler
 responseHandler = Handler responsePred responseHandlerAction
 
 responsePred :: InMessage -> Bool
-responsePred x = case methodOf x of
-  Left _ -> True
-  _ -> False
+responsePred SomeReq{} = True
+responsePred _ = False
 
 responseHandlerAction :: HandlerAction ()
 responseHandlerAction = forever @_ @() @() $ do

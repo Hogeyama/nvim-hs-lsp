@@ -14,7 +14,7 @@ library:
   source-dirs: src
   ghc-options:
   - -Wall
-  - -fprint-explicit-kinds
+    #- -fprint-explicit-kinds
   dependencies:
   - nvim-hs >= 0.2.5
     # 0.2.4の testWithEmbeddedNeovim は壊れている模様
@@ -49,6 +49,8 @@ executables:
     - nvim-hs >= 0.2.2
     - nvim-hs-lsp
     - stm
+    - process
+    - lens
 
 tests:
   doctests:

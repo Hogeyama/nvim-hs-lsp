@@ -22,12 +22,8 @@ requestHandler :: Handler
 requestHandler = Handler requestPred requestHandlerAction
 
 requestPred :: InMessage -> Bool
-requestPred x = case methodOf x of
-  Right (SReq WindowShowMessageRequest  ) -> True
-  Right (SReq ClientRegisterCapability  ) -> True
-  Right (SReq ClientUnregisterCapability) -> True
-  Right (SReq WorkspaceApplyEdit        ) -> True
-  _ -> False
+requestPred SomeReq{} = True
+requestPred _ = False
 
 requestHandlerAction :: HandlerAction ()
 requestHandlerAction = forever @_ @() @() $ do

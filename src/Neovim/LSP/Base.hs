@@ -14,6 +14,7 @@
 {-# LANGUAGE TupleSections       #-}
 {-# LANGUAGE TypeApplications    #-}
 {-# LANGUAGE TypeOperators       #-}
+{-# LANGUAGE ViewPatterns        #-}
 {-# OPTIONS_GHC -Wall            #-}
 
 
@@ -26,7 +27,7 @@ import           Control.Concurrent.STM     (TVar, atomically, readTVar, writeTV
 import           Control.Concurrent.Async   (async)
 import           Control.Monad              (forM, forM_, forever, when)
 import           Control.Monad.IO.Class     (liftIO, MonadIO)
-import           Data.Bifunctor             (bimap)
+--import           Data.Bifunctor             (bimap)
 import           Data.ByteString.Lazy.Char8 (ByteString)
 import qualified Data.ByteString.Lazy.Char8 as B
 import           Data.Constraint            (withDict)
@@ -41,7 +42,7 @@ import           Data.Singletons            (Sing, SomeSing (..), fromSing,
 import           System.Exit                (exitSuccess)
 import           System.IO                  (BufferMode (..), Handle, hGetLine,
                                              hSetBuffering)
-import           System.Process             (CreateProcess (..), ProcessHandle,
+import           System.Process             (CreateProcess(..), ProcessHandle,
                                              StdStream (..), createProcess,
                                              proc)
 
@@ -130,7 +131,7 @@ uninitializedError = error "not initialized (TODO: fabulous message)"
 setupLogger :: IO ()
 setupLogger = do
   -- stderrには書き込みたくないときuncomment
-  --L.updateGlobalLogger L.rootLoggerName L.removeHandler
+  L.updateGlobalLogger L.rootLoggerName L.removeHandler
   L.updateGlobalLogger "nvim-hs-lsp" (L.setLevel L.DEBUG)
   h <- do lh <- fileHandler "/tmp/nvim-hs-lsp.log" L.DEBUG
           return $ setFormatter
@@ -249,35 +250,49 @@ instance J.ToJSON InMessage where -- FromJSONは難しいかな
   toJSON (SomeReq x) = J.toJSON x
   toJSON (SomeRes x) = J.toJSON x
 
--- TODO 上手くやる
-methodOf :: InMessage -> Either ClientMethod ServerMethod
-methodOf (SomeNot noti) = Right . SNoti $ fromSing $ singByProxy noti
-methodOf (SomeReq req ) = Right . SReq  $ fromSing $ singByProxy req
-methodOf (SomeRes res ) = Left  . CReq  $ fromSing $ singByProxy res
+data InMessageMethod
+  = IMReq  ServerRequestMethod
+  | IMNoti ServerNotificationMethod
+  | IMRes  ClientRequestMethod
+
+methodOf :: InMessage -> InMessageMethod
+methodOf (SomeNot noti) =  IMNoti $ fromSing $ singByProxy noti
+methodOf (SomeReq req ) =  IMReq  $ fromSing $ singByProxy req
+methodOf (SomeRes res ) =  IMRes  $ fromSing $ singByProxy res
 
 toInMessage :: HashMap ID ClientRequestMethod -> J.Value -> Either String InMessage
-toInMessage map' v@(J.Object o) = bimap toSing toSing <$> mmethod >>= \case
-    Right (SomeSing (SSReq (s :: Sing m))) ->
-        withDict (prfServerReq s) $ SomeReq @m <$> fromJSONEither v
-    Right (SomeSing (SSNoti (s :: Sing m))) ->
-        withDict (prfServerNoti s) $ SomeNot @m <$> fromJSONEither v
-    Left (SomeSing (s :: Sing m)) ->
-        withDict (prfServerRes s) $ SomeRes @m <$> fromJSONEither v
+toInMessage map' v@(J.Object o) = mmethod >>= \case
+    IMNoti (toSing -> SomeSing (s :: Sing m))
+      -> withDict (prfServerNoti s) $ SomeNot @m <$> fromJSONEither v
+    IMReq (toSing -> SomeSing (s :: Sing m))
+      -> withDict (prfServerReq s) $ SomeReq @m <$> fromJSONEither v
+    IMRes (toSing -> SomeSing (s :: Sing m))
+      -> withDict (prfServerRes s) $ SomeRes @m <$> fromJSONEither v
   where
-    mmethod :: Either String (Either ClientRequestMethod ServerMethod)
-    mmethod -- TODO error handling
+    -- TODO
+    -- + error handling
+    -- + Miscが来たときに必ずNotiになってしまう
+    --   多分globalな状態で持ってどっちかを指定するのが良いのだと思う
+    --   `cancel`はNotificationとか
+    mmethod :: Either String InMessageMethod
+    mmethod
       | Just m <- fromJSONMay =<< HM.lookup "method" o
-          = return $ Right m
+          = return $ IMNoti m
+      | Just m <- fromJSONMay =<< HM.lookup "method" o
+          = return $ IMReq m
       | Just m <- (`HM.lookup` map') =<< fromJSONMay =<< HM.lookup "id" o
-          = return $ Left m
+          = return $ IMRes m
       | otherwise
-          = Left "hoge"
-toInMessage _ _ = error "そんなバナナ"
+          = Left "そんなバナナ1"
+toInMessage _ _ = error "そんなバナナ2"
 
 -- Handler's action
 ---------------------------------------
 
--- TODO modifyTVarとか使ったほうが良い
+-- TODO
+-- + modifyTVarとか使ったほうが良い
+--    + STMはどう使えばsafeなんだろうな
+--    + MVarよりも安全っぽい？ <= YES!
 
 pull :: Neovim HandlerConfig st InMessage
 pull = liftIO . atomically . readTChan =<< asks inChan
@@ -342,12 +357,15 @@ dispatcher ctx hs = do
 
     -- run dispatcher
     dpID <- liftIO $ forkIO $ withCatchBlah $ forever $ do
-        Just v <- J.decode <$> atomically (readTChan inChG)
+        rawInput <- atomically (readTChan inChG)
+        let Just v = J.decode rawInput
         idMap  <- atomically (_lspIdMap <$> readTVar ctx)
         case toInMessage idMap v of
           Right msg -> forM_ handlers $ \(p,inCh) ->
               when (p msg) $ atomically $ writeTChan inCh msg
-          Left e -> putStrLn e -- TODO これでいいのか
+          Left e -> do
+              putStrLn $ "dispatcher: could not parse input with error " ++ show e
+              B.putStrLn rawInput
 
     return (dpID, hIDs)
   where

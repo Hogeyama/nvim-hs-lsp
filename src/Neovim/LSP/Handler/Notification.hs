@@ -32,12 +32,8 @@ notificationHandler :: Handler
 notificationHandler = Handler notificationPred notificationHandlerAction
 
 notificationPred :: InMessage -> Bool
-notificationPred x = case methodOf x of
-  Right (SNoti TextDocumentPublishDiagnostics) -> True
-  Right (SNoti WindowLogMessage              ) -> True
-  Right (SNoti WindowShowMessage             ) -> True
-  Right (SNoti TelemetryEvent                ) -> True
-  _ -> False
+notificationPred SomeNot{} = True
+notificationPred _ = False
 
 notificationHandlerAction :: HandlerAction ()
 notificationHandlerAction = forever @_ @() @() $ do
@@ -72,6 +68,7 @@ showDiagnotics (Notification noti) = do
     forM_ diagnostics $ \d -> liftIO $ do
       putStrLn ""
       print $ diagnosticToQFItems uri d
+      -- putStrLn $ T.unpack $ d^. #message -- readale message for debug
       putStrLn ""
     return ()
 

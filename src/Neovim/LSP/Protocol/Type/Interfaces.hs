@@ -32,8 +32,8 @@ module Neovim.LSP.Protocol.Type.Interfaces
   , TextDocumentSync(..)
   , TextDocumentSyncKind(..)
   , TextDocumentSyncOptions
-  , ClientMethod(..)
-  , ServerMethod(..)
+  --, ClientMethod(..)
+  --, ServerMethod(..)
 
   , Message
   , RequestMessage
@@ -167,7 +167,7 @@ type ResponseMessage  a e = Record (ResponseMessageF a e)
 type ResponseMessageF a e =
   MessageF ++
   '[ "id"      >: Nullable ID
-   , "result"  >: Option a -- TODO
+   , "result"  >: Option a
    , "error"   >: Option (ResponseError e) -- 同上
    ]
 
@@ -175,7 +175,7 @@ type ResponseError  e = Record (ResponseErrorF e)
 type ResponseErrorF e =
   '[ "code"    >: ErrorCode
    , "message" >: Text
-   , "data"    >: e
+   , "data"    >: Option e
    ]
 
 -- Notification Message
@@ -462,10 +462,11 @@ type ImplResponse (m :: k) =
   (SingI m
   ,IsMethodKind k
   ,Show      (ResResult m)
-  ,ToJSON    (ResResult m) -- NOTE FieldJSONは使えない (TODO)
-  ,FromJSON  (ResResult m)
+  ,ToJSON    (ResResult m) -- TOOD: ResultはOptionで包むのでFieldJSONではダメ
+  ,FromJSON  (ResResult m) --       綺麗に書けないかなあ
   ,Show      (ResError m)
-  ,FieldJSON (ResError m)
+  ,ToJSON    (ResError m)
+  ,FromJSON  (ResError m)
   )
 type ImplNotification (m :: k) =
   (SingI m
@@ -504,7 +505,7 @@ type instance RequestParam 'InitializeK = Record
   '[ "processId"             >: Nullable Number
    , "rootPath"              >: Option (Nullable String)
    , "rootUri"               >: Nullable Uri  -- rootPathよりこっち推奨
-   , "initializationOptions" >: Option ()  -- TODO
+   , "initializationOptions" >: Option Value
    , "capabilities"          >: ClientCapabilities
    , "trace"                 >: Option Trace
    ]
