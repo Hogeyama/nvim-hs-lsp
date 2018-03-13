@@ -90,6 +90,10 @@ data LspState = LspState
   { _server     :: !(Maybe ServerHandles)
   }
 makeLenses ''LspState
+instance Show LspState where
+  show (LspState Nothing) = "Nothing"
+  show (LspState Just{}) = "Just _"
+
 
 data LspEnv = LspEnv
   { serverInChan  :: TChan B.ByteString -- lazy initialization

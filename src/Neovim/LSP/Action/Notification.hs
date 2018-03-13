@@ -45,9 +45,9 @@ didOpenBuffer b = do
 didSaveBuffer :: (HasOutChannel r) => Buffer -> Neovim r st ()
 didSaveBuffer b = do
     tid      <- textDocumentIdentifier <$> getBufUri b
-    contents <- getBufContents b
+    --contents <- getBufContents b
     let param = #textDocument @= tid
-             <: #text         @= Some contents
+             <: #text         @= None --Some contents
              <: nil
     push $ notification @'TextDocumentDidSaveK param
 

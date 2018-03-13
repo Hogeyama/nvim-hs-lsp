@@ -15,20 +15,21 @@ module Neovim.LSP.LspPlugin.Notification
   where
 
 import           Control.Lens
-import           Control.Monad                       (forever)
+import           Control.Monad                       (forever, when)
 import           Data.Text                           (Text)
 import qualified Data.Text                           as T
+import           Data.List                           (sortBy)
+import           Data.Function                       (on)
 import           Data.Extensible                     (FieldOptic)
-import           Data.Aeson                          as J hiding (Error)
-import qualified Data.ByteString.Lazy.Char8          as B
+--import           Data.Aeson                          as J hiding (Error)
+--import qualified Data.ByteString.Lazy.Char8          as B
 
-import           Neovim                              hiding (Plugin)
+--import           Neovim                              hiding (Plugin)
 import qualified Neovim.Quickfix                     as Q
 import           Neovim.Quickfix                     (QuickfixListItem)
 import           Neovim.LSP.Base
+import           Neovim.LSP.Util
 import           Neovim.LSP.Protocol.Type
-import Data.List (sortBy)
-import Data.Function (on)
 
 notificationHandler :: Plugin
 notificationHandler = Plugin notificationPred notificationPluginAction
@@ -70,6 +71,7 @@ showDiagnotics (Notification noti) = do
         qfItems     = concatMap (diagnosticToQFItems uri)
                         $ sortBy (compare `on` (^. #severity)) diagnostics
     Q.setqflist qfItems Q.Replace
+    when (null qfItems) $ nvimEcho "Diagnostics: no error"
 
 -------------------------------------------------------------------------------
 

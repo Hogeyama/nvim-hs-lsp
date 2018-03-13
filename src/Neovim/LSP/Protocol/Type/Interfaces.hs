@@ -312,7 +312,7 @@ type TextDocumentIdentifierF = '[ "uri" >: Uri ]
 type VersionedTextDocmentIdentifier  = Record VersionedTextDocmentIdentifierF
 type VersionedTextDocmentIdentifierF =
   TextDocumentIdentifierF ++
-  '[ "version" >: Version
+  '[ "version" >: Option Version
    ]
 
 textDocumentIdentifier :: Uri -> TextDocumentIdentifier
@@ -320,7 +320,7 @@ textDocumentIdentifier uri = #uri @= uri <: nil
 
 versionedTextDocmentIdentifier :: Uri -> Version -> VersionedTextDocmentIdentifier
 versionedTextDocmentIdentifier uri version = #uri @= uri
-                                          <: #version @= version
+                                          <: #version @= Some version
                                           <: nil
 
 -- TextDocumentItem
