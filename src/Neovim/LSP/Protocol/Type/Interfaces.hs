@@ -86,6 +86,7 @@ module Neovim.LSP.Protocol.Type.Interfaces
 
   -- 他のdata型
   , Hover
+  , MarkedString
 
   -- function
   , filePathToUri
@@ -111,6 +112,7 @@ import           GHC.Generics                    (Generic)
 import           Neovim.LSP.Protocol.Type.JSON   (FieldJSON, Option (..))
 import           Neovim.LSP.Protocol.Type.Method
 import           Safe                            (lookupJust)
+import Data.Function (on)
 
 -- Interfaces defined in
 -- https://github.com/Microsoft/language-server-protocol/blob/master/protocol.md
@@ -397,7 +399,22 @@ data DiagnosticSeverity
   | Information
   | Hint
   | OtherSeverity Int
-  deriving (Show, Eq, Ord)
+  deriving (Show, Eq)
+
+toInt :: DiagnosticSeverity -> Int
+toInt = \case
+  Error           -> 1
+  Warning         -> 2
+  Information     -> 3
+  Hint            -> 4
+  OtherSeverity m -> m
+
+-- |
+-- >>> :m Data.List Neovim.LSP.Protocol.Type.Interfaces
+-- >>> sort [Error, Warning, Hint]
+-- [Error,Warning,Hint]
+instance Ord DiagnosticSeverity where
+  compare = compare `on` toInt
 
 instance FromJSON DiagnosticSeverity where
   parseJSON (Number n) = return $ case round n of

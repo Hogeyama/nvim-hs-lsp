@@ -9,38 +9,40 @@
 {-# LANGUAGE FlexibleContexts          #-}
 {-# OPTIONS_GHC -Wall                  #-}
 
-module Neovim.LSP.Handler.Notification
+module Neovim.LSP.LspPlugin.Notification
   --( notificationHandler
   --)
   where
 
 import           Control.Lens
-import           Control.Monad                       (forM_, forever)
+import           Control.Monad                       (forever)
 import           Data.Text                           (Text)
 import qualified Data.Text                           as T
 import           Data.Extensible                     (FieldOptic)
 import           Data.Aeson                          as J hiding (Error)
 import qualified Data.ByteString.Lazy.Char8          as B
 
-import           Neovim
+import           Neovim                              hiding (Plugin)
 import qualified Neovim.Quickfix                     as Q
 import           Neovim.Quickfix                     (QuickfixListItem)
 import           Neovim.LSP.Base
 import           Neovim.LSP.Protocol.Type
+import Data.List (sortBy)
+import Data.Function (on)
 
-notificationHandler :: Handler
-notificationHandler = Handler notificationPred notificationHandlerAction
+notificationHandler :: Plugin
+notificationHandler = Plugin notificationPred notificationPluginAction
 
 notificationPred :: InMessage -> Bool
-notificationPred SomeNot{} = True
+notificationPred SomeNoti{} = True
 notificationPred _ = False
 
-notificationHandlerAction :: HandlerAction ()
-notificationHandlerAction = forever @_ @() @() $ do
+notificationPluginAction :: PluginAction ()
+notificationPluginAction = forever @_ @() @() $ do
     msg <- pull
-    debugM $ "notificationHandler got " ++ B.unpack (encode msg)
+    --debugM $ "notificationHandler got " ++ B.unpack (encode msg)
     case msg of
-      SomeNot (noti :: ServerNotification m) -> case singByProxy noti of
+      SomeNoti (noti :: ServerNotification m) -> case singByProxy noti of
         STextDocumentPublishDiagnostics -> do
           showDiagnotics noti
         SWindowShowMessage -> do
@@ -60,17 +62,14 @@ notificationHandlerAction = forever @_ @() @() $ do
 -------------------------------------------------------------------------------
 
 showDiagnotics :: ServerNotification 'TextDocumentPublishDiagnosticsK
-               -> HandlerAction ()
+               -> PluginAction ()
 showDiagnotics (Notification noti) = do
     let params      = noti^. #params
         uri         = params^. #uri
         diagnostics = params^. #diagnostics
-    forM_ diagnostics $ \d -> liftIO $ do
-      putStrLn ""
-      print $ diagnosticToQFItems uri d
-      -- putStrLn $ T.unpack $ d^. #message -- readale message for debug
-      putStrLn ""
-    return ()
+        qfItems     = concatMap (diagnosticToQFItems uri)
+                        $ sortBy (compare `on` (^. #severity)) diagnostics
+    Q.setqflist qfItems Q.Replace
 
 -------------------------------------------------------------------------------
 

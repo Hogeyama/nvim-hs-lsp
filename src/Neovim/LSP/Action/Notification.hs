@@ -5,7 +5,7 @@
 {-# LANGUAGE OverloadedLabels          #-}
 {-# OPTIONS_GHC -Wall                  #-}
 
-module Neovim.LSP.Hoge.Notification
+module Neovim.LSP.Action.Notification
   --(
   --)
   where
@@ -26,7 +26,7 @@ import           Neovim.LSP.Protocol.Type
 
 -- TextDocumentDidOpen Notification
 ---------------------------------------
-didOpenBuffer :: Buffer -> Neovim HandlerConfig st ()
+didOpenBuffer :: (HasOutChannel r, HasContext r) => Buffer -> Neovim r st ()
 didOpenBuffer b = do
     contents <- getBufContents b
     language <- getBufLanguage b
@@ -42,7 +42,7 @@ didOpenBuffer b = do
 
 -- TextDocumentDidSave Notification
 ---------------------------------------
-didSaveBuffer :: Buffer -> Neovim HandlerConfig st ()
+didSaveBuffer :: (HasOutChannel r) => Buffer -> Neovim r st ()
 didSaveBuffer b = do
     tid      <- textDocumentIdentifier <$> getBufUri b
     contents <- getBufContents b
@@ -53,7 +53,7 @@ didSaveBuffer b = do
 
 -- TextDocumentDidChange Notification
 ---------------------------------------
-didChangeBuffer :: Buffer -> Neovim HandlerConfig st ()
+didChangeBuffer :: (HasOutChannel r, HasContext r) => Buffer -> Neovim r st ()
 didChangeBuffer b = do
     contents <- getBufContents b
     vtid <- versionedTextDocmentIdentifier <$> getBufUri b <*> genUniqueVersion

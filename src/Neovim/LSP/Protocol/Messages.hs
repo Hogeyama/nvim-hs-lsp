@@ -22,16 +22,6 @@ import           Neovim.LSP.Protocol.Type.JSON (Option (..))
 -- General
 -------------------------------------------------------------------------------
 
--- {-
--- | Build 'ClientNotification'
---
--- Because @m@ is not uniquely determined by type @NotificationParam 'Client m@,
--- type annotation is always required when you use this function.
--- The GHC extension @-XTypeApplication@ is useful to do this. e.g.:
---
--- > notification \@\'Initialize someInitializeParam
---
--- -}
 notification :: forall (m :: ClientNotificationMethodK). ImplNotification m
              => NotificationParam m -> Notification m
 notification a = Notification $ #jsonrpc @= "2.0"
@@ -56,11 +46,11 @@ response :: forall (m :: ServerRequestMethodK). SingI m
          -> Option (ResResult m)
          -> Option (ResponseError (ResError m))
          -> ClientResponse m
-response id' res err = Response $ #jsonrpc @= "2.0"
-                               <: #id      @= id'
-                               <: #result  @= res
-                               <: #error   @= err
-                               <: nil
+response id' resp err = Response $ #jsonrpc @= "2.0"
+                                <: #id      @= id'
+                                <: #result  @= resp
+                                <: #error   @= err
+                                <: nil
 
 -------------------------------------------------------------------------------
 -- Initialize

@@ -6,29 +6,29 @@
 {-# LANGUAGE GADTs                     #-}
 {-# OPTIONS_GHC -Wall                  #-}
 
-module Neovim.LSP.Handler.Request
+module Neovim.LSP.LspPlugin.Request
   ( requestHandler
   )
   where
 
 import           Control.Monad                       (forever)
-import           Data.Aeson                          as J
-import qualified Data.ByteString.Lazy.Char8          as B
+--import           Data.Aeson                          as J
+--import qualified Data.ByteString.Lazy.Char8          as B
 
 import           Neovim.LSP.Base
 import           Neovim.LSP.Protocol.Type
 
-requestHandler :: Handler
-requestHandler = Handler requestPred requestHandlerAction
+requestHandler :: Plugin
+requestHandler = Plugin requestPred requestPluginAction
 
 requestPred :: InMessage -> Bool
 requestPred SomeReq{} = True
 requestPred _ = False
 
-requestHandlerAction :: HandlerAction ()
-requestHandlerAction = forever @_ @() @() $ do
+requestPluginAction :: PluginAction ()
+requestPluginAction = forever @_ @() @() $ do
   SomeReq req <- pull
-  debugM $ "requestHandler got " ++ B.unpack (encode req)
+  --debugM $ "requestHandler got " ++ B.unpack (encode req)
   case singByProxy req of
     SWindowShowMessageRequest   -> do
       -- これ大変そう

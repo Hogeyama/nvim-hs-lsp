@@ -43,7 +43,7 @@ getBufContents :: Buffer -> Neovim r st Text
 getBufContents b = T.pack.unlines <$> nvim_buf_get_lines' b 0 maxBound False
 
 getTextDocumentPositionParams :: Buffer -> NvimPos
-                              -> Neovim HandlerConfig st TextDocumentPositionParams
+                              -> Neovim r st TextDocumentPositionParams
 getTextDocumentPositionParams b p = do
   uri <- getBufUri b
   let pos = #textDocument @= textDocumentIdentifier uri
@@ -66,22 +66,22 @@ getTextDocumentPositionParams b p = do
 --
 -- >>> :set -XTypeApplications -XDataKinds
 -- >>> let wellTyped _ = "OK"
--- >>> wellTyped $ pushRequest @'InitializeK (initializeParam Nothing Nothing)
+-- >>> wellTyped $ pushRequest @'InitializeK @LspEnv (initializeParam Nothing Nothing)
 -- "OK"
 --
 -- TODO これをユーザーに見せるのはどうなのか．でもtype checkはして欲しいしなあ
-pushRequest :: forall (m :: ClientRequestMethodK) st. ImplRequest m
-            => RequestParam m
-            -> Neovim HandlerConfig st ()
+pushRequest :: forall (m :: ClientRequestMethodK) r st
+            .  (ImplRequest m, HasOutChannel r, HasContext r)
+            => RequestParam m -> Neovim r st ()
 pushRequest param = do
     let method = fromSing (sing :: Sing m)
     id' <- genUniqueID
     addIdMethodMap id' method
     push $ request @m id' param
 
-pushNotification :: forall (m :: ClientNotificationMethodK) st. ImplNotification m
-                 => NotificationParam m
-                 -> Neovim HandlerConfig st ()
+pushNotification :: forall (m :: ClientNotificationMethodK) r st
+                 .  (ImplNotification m, HasOutChannel r)
+                 => NotificationParam m -> Neovim PluginEnv st ()
 pushNotification param = push $ notification @m param
 
 -- TODO NeovimのPos,RangeとLSPのPos,Rangeを上手く変換する
@@ -92,4 +92,9 @@ nvimPosToPosition (line,char) =
     #line      @= fromIntegral (line - 1)
  <: #character @= fromIntegral (char - 1)
  <: nil
+
+
+nvimEcho :: String -> Neovim r st ()
+nvimEcho s = vim_command' $ "echo " ++ show s
+
 

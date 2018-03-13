@@ -3,7 +3,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# OPTIONS_GHC -Wall         #-}
 
-module Neovim.LSP.Hoge.Request
+module Neovim.LSP.Action.Request
   --(
   --)
   where
@@ -15,13 +15,13 @@ import           Neovim.LSP.Util
 
 -- TextDocumentHover Request
 ---------------------------------------
-hoverRequest :: Buffer -> NvimPos -> Neovim HandlerConfig st ()
+hoverRequest :: (HasOutChannel r, HasContext r) => Buffer -> NvimPos -> Neovim r st ()
 hoverRequest b p = pushRequest @'TextDocumentHoverK
   =<< getTextDocumentPositionParams b p
 
 -- TextDocumentSignatureHelp Request
 ---------------------------------------
-signatureHelpRequest :: Buffer -> NvimPos -> Neovim HandlerConfig st ()
+signatureHelpRequest :: (HasOutChannel r, HasContext r) => Buffer -> NvimPos -> Neovim r st ()
 signatureHelpRequest b p = pushRequest @'TextDocumentSignatureHelpK
   =<< getTextDocumentPositionParams b p
 

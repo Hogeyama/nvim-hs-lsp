@@ -9,10 +9,10 @@
 module Neovim.LSP.Protocol.Type.Proof
   ( prfClientReq
   , prfClientNoti
-  , prfClientRes
+  , prfClientResp
   , prfServerReq
   , prfServerNoti
-  , prfServerRes
+  , prfServerResp
   ) where
 
 import           Data.Constraint
@@ -62,8 +62,8 @@ prfClientNoti = \case-- {{{
     SClientNotificationMisc SSym     -> Dict
   -- }}}
 
-prfServerRes :: forall (m :: ClientRequestMethodK). Sing m -> Dict (ImplResponse m)
-prfServerRes = \case  -- {{{
+prfServerResp :: forall (m :: ClientRequestMethodK). Sing m -> Dict (ImplResponse m)
+prfServerResp = \case  -- {{{
     SInitialize                      -> Dict
     SShutdown                        -> notImplemented
     SWorkspaceSymbol                 -> notImplemented
@@ -108,8 +108,8 @@ prfServerNoti = \case -- {{{
   SServerNotificationMisc SSym    -> Dict
 -- }}}
 
-prfClientRes :: forall (m :: ServerRequestMethodK). Sing m -> Dict (ImplResponse m)
-prfClientRes = \case -- {{{
+prfClientResp :: forall (m :: ServerRequestMethodK). Sing m -> Dict (ImplResponse m)
+prfClientResp = \case -- {{{
   SWindowShowMessageRequest       -> notImplemented
   SClientRegisterCapability       -> notImplemented
   SClientUnregisterCapability     -> notImplemented
