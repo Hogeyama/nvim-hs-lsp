@@ -1,0 +1,16 @@
+
+- [ ] appropriately classify input with method `$/...` into Request/Notification.
+      (Currently, all messages are parsed as Notification.)
+
+- [ ] add plugin handlers to `LspState`
+
+- [ ] aboid open the same file more than once
+
+- [ ] implement `Initialize` response handler
+
+- [ ] implement `WindowLogMessage` request handler
+
+- [ ] implement completion request
+
+- [ ] implement jump to definition request
+
