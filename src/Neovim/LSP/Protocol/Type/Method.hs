@@ -39,10 +39,6 @@ import           Control.Applicative ((<|>))
 -- Method
 -------------------------------------------------------------------------------
 
---data ClientMethod = CReq  ClientRequestMethod --{{{
---                  | CNoti ClientNotificationMethod
---  deriving (Eq,Ord,Read,Show)
--- }}}
 data ClientRequestMethod-- {{{
   = Initialize
   | Shutdown
@@ -84,10 +80,6 @@ data ClientNotificationMethod-- {{{
   deriving (Eq,Ord,Read,Show)
 -- }}}
 
-data ServerMethod = SReq  ServerRequestMethod -- {{{
-                  | SNoti ServerNotificationMethod
-  deriving (Eq,Ord,Read,Show)
--- }}}
 data ServerRequestMethod -- {{{
   = WindowShowMessageRequest
   | ClientRegisterCapability
@@ -106,9 +98,6 @@ data ServerNotificationMethod -- {{{
   deriving (Eq,Ord,Read,Show)
 -- }}}
 
---instance FromJSON ClientMethod where-- {{{
---  parseJSON v =  CReq <$> parseJSON v <|> CNoti <$> parseJSON v
----- }}}
 instance FromJSON ClientRequestMethod where -- {{{
   parseJSON (String "initialize")                       = return Initialize
   parseJSON (String "shutdown")                         = return Shutdown
@@ -149,10 +138,6 @@ instance FromJSON ClientNotificationMethod where -- {{{
   parseJSON (String x) | "$/" `T.isPrefixOf` x          = return (ClientNotificationMisc (T.drop 2 x))
   parseJSON _                                           = mempty
 -- }}}
---instance ToJSON ClientMethod where-- {{{
---  toJSON (CReq  m) = toJSON m
---  toJSON (CNoti m) = toJSON m
--- }}}
 instance ToJSON ClientRequestMethod where -- {{{
   toJSON Initialize                      = String "initialize"
   toJSON Shutdown                        = String "shutdown"
@@ -192,9 +177,6 @@ instance ToJSON ClientNotificationMethod where -- {{{
   toJSON (ClientNotificationMisc x)      = String ("$/" `T.append` x)
 -- }}}
 
-instance FromJSON ServerMethod where-- {{{
-  parseJSON v =  SReq <$> parseJSON v <|> SNoti <$> parseJSON v
--- }}}
 instance FromJSON ServerRequestMethod where -- {{{
   parseJSON (String "window/showMessageRequest")       = return WindowShowMessageRequest
   parseJSON (String "client/registerCapability")       = return ClientRegisterCapability
@@ -210,10 +192,6 @@ instance FromJSON ServerNotificationMethod where -- {{{
   parseJSON (String "textDocument/publishDiagnostics") = return TextDocumentPublishDiagnostics
   parseJSON (String x) | "$/" `T.isPrefixOf` x         = return (ServerNotificationMisc (T.drop 2 x))
   parseJSON _                                          = mempty
--- }}}
-instance ToJSON ServerMethod where-- {{{
-  toJSON (SReq  m) = toJSON m
-  toJSON (SNoti m) = toJSON m
 -- }}}
 instance ToJSON ServerRequestMethod where -- {{{
   toJSON WindowShowMessageRequest       = String "window/showMessageRequest"
@@ -235,9 +213,6 @@ instance ToJSON ServerNotificationMethod where -- {{{
 -- Method Kind
 -------------------------------------------------------------------------------
 
---data ClientMethodK = CReqK  ClientRequestMethodK -- {{{
---                   | CNotiK ClientNotificationMethodK
----- }}}
 data ClientRequestMethodK --{{{
   = InitializeK
   | ShutdownK
@@ -277,9 +252,6 @@ data ClientNotificationMethodK --{{{
   | ClientNotificationMiscK Symbol
 -- }}}
 
---data ServerMethodK = SReqK  ServerRequestMethodK -- {{{
---                   | SNotiK ServerNotificationMethodK
----- }}}
 data ServerRequestMethodK -- {{{
   = WindowShowMessageRequestK       -- Req
   | ClientRegisterCapabilityK       -- Req
@@ -304,10 +276,6 @@ data ServerNotificationMethodK -- {{{
 ---------
 
 -- data Sing{{{
---data instance Sing (m :: ClientMethodK) where -- TODO これ要る？ --{{{
---  SCReq  :: Sing m -> Sing ('CReqK  m)
---  SCNoti :: Sing m -> Sing ('CNotiK m)
----- }}}
 data instance Sing (m :: ClientRequestMethodK) where -- {{{
   SInitialize                      :: Sing 'InitializeK
   SShutdown                        :: Sing 'ShutdownK
@@ -348,8 +316,6 @@ data instance Sing (m :: ClientNotificationMethodK) where -- {{{
 --}}}
 -- }}}
 -- instance SingI  -- {{{
---instance SingI m => SingI ('CReqK m)  where sing = SCReq  sing
---instance SingI m => SingI ('CNotiK m) where sing = SCNoti sing
 instance SingI 'InitializeK                      where sing = SInitialize
 instance SingI 'InitializedK                     where sing = SInitialized
 instance SingI 'ShutdownK                        where sing = SShutdown
@@ -386,13 +352,6 @@ instance KnownSymbol n => SingI ('ClientRequestMiscK n) where sing = SClientRequ
 instance KnownSymbol n => SingI ('ClientNotificationMiscK n) where sing = SClientNotificationMisc sing
 -- }}}
 -- instance SingKind -- {{{
---instance SingKind ClientMethodK where -- TODO これ要る？ -- {{{
---  type Demote ClientMethodK = ClientMethod
---  fromSing (SCReq  s) = CReq  (fromSing s)
---  fromSing (SCNoti s) = CNoti (fromSing s)
---  toSing (CReq  m) = case toSing m of SomeSing s -> SomeSing (SCReq  s)
---  toSing (CNoti m) = case toSing m of SomeSing s -> SomeSing (SCNoti s)
----- }}}
 instance SingKind ClientRequestMethodK where-- {{{
   type Demote ClientRequestMethodK = ClientRequestMethod
   fromSing = \case --{{{
@@ -483,10 +442,6 @@ instance SingKind ClientNotificationMethodK where -- {{{
 ---------
 
 -- data Sing{{{
---data instance Sing (m :: ServerMethodK) where -- {{{
---  SSReq  :: Sing m -> Sing ('SReqK  m)
---  SSNoti :: Sing m -> Sing ('SNotiK m)
----- }}}
 data instance Sing (m :: ServerRequestMethodK) where -- {{{
   SWindowShowMessageRequest       :: Sing 'WindowShowMessageRequestK
   SClientRegisterCapability       :: Sing 'ClientRegisterCapabilityK
@@ -504,8 +459,6 @@ data instance Sing (m :: ServerNotificationMethodK) where -- {{{
 -- }}}
 -- }}}
 -- instance SingI  --{{{
---instance SingI m => SingI ('SReqK m)  where sing = SSReq  sing
---instance SingI m => SingI ('SNotiK m) where sing = SSNoti sing
 instance SingI 'WindowShowMessageK              where sing = SWindowShowMessage
 instance SingI 'WindowShowMessageRequestK       where sing = SWindowShowMessageRequest
 instance SingI 'WindowLogMessageK               where sing = SWindowLogMessage
@@ -518,13 +471,6 @@ instance KnownSymbol n => SingI ('ServerRequestMiscK n) where sing = SServerRequ
 instance KnownSymbol n => SingI ('ServerNotificationMiscK n) where sing = SServerNotificationMisc sing
 -- }}}
 -- instance SingKind {{{
---instance SingKind ServerMethodK where -- {{{
---  type Demote ServerMethodK = ServerMethod
---  fromSing (SSReq  s) = SReq  (fromSing s)
---  fromSing (SSNoti s) = SNoti (fromSing s)
---  toSing (SReq  m) = case toSing m of SomeSing s -> SomeSing (SSReq  s)
---  toSing (SNoti m) = case toSing m of SomeSing s -> SomeSing (SSNoti s)
----- }}}
 instance SingKind ServerRequestMethodK where -- {{{
   type Demote ServerRequestMethodK = ServerRequestMethod
   fromSing = \case --{{{
