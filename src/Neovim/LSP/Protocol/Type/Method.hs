@@ -9,9 +9,6 @@
 {-# LANGUAGE TypeFamilyDependencies  #-}
 {-# LANGUAGE TypeOperators           #-}
 {-# LANGUAGE FlexibleContexts        #-}
--- the following two extentions are only for `Bottom`
-{-# LANGUAGE UndecidableInstances    #-}
-{-# LANGUAGE UndecidableSuperClasses #-}
 {-# OPTIONS_GHC -Wall                #-}
 
 -- TODO
@@ -33,7 +30,6 @@ import           Data.Singletons.TypeLits
 import           Data.Text                (Text)
 import qualified Data.Text                as T
 import           Neovim.LSP.Protocol.Type.JSON
-import           Control.Applicative ((<|>))
 
 -------------------------------------------------------------------------------
 -- Method

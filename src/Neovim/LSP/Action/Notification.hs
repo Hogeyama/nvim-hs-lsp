@@ -3,6 +3,7 @@
 {-# LANGUAGE TypeApplications          #-}
 {-# LANGUAGE DataKinds                 #-}
 {-# LANGUAGE OverloadedLabels          #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wall                  #-}
 
 module Neovim.LSP.Action.Notification
@@ -32,13 +33,22 @@ didOpenBuffer b = do
     language <- getBufLanguage b
     uri      <- getBufUri b
     version  <- genUniqueVersion
-    let textDocumentItem = #uri        @= uri
+    let textDocumentItem :: TextDocumentItem
+                         = #uri        @= uri
                         <: #languageId @= language
                         <: #version    @= version
                         <: #text       @= contents
                         <: nil
     push $ notification @'TextDocumentDidOpenK
          $ didOpenTextDocumentParam textDocumentItem
+
+-- TextDocumentDidClose Notification
+---------------------------------------
+didCloseBuffer :: (HasOutChannel r, HasContext r) => Buffer -> Neovim r st ()
+didCloseBuffer b = do
+    tid      <- textDocumentIdentifier <$> getBufUri b
+    let param = #textDocument @= tid <: nil
+    push $ notification @'TextDocumentDidCloseK param
 
 -- TextDocumentDidSave Notification
 ---------------------------------------

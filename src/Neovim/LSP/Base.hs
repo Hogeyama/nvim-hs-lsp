@@ -87,13 +87,13 @@ initialContext = Context
 
 -- TODO SenderやPluginとかのHandleを追加する
 data LspState = LspState
-  { _server     :: !(Maybe ServerHandles)
+  { _server      :: !(Maybe ServerHandles)
+  , _openedFiles :: Map Uri ()
   }
 makeLenses ''LspState
 instance Show LspState where
-  show (LspState Nothing) = "Nothing"
-  show (LspState Just{}) = "Just _"
-
+  show (LspState Nothing _) = "Nothing"
+  show (LspState Just{} _) = "Just _"
 
 data LspEnv = LspEnv
   { serverInChan  :: TChan B.ByteString -- lazy initialization
@@ -107,7 +107,8 @@ initialEnvIO = LspEnv <$> newTChanIO <*> newTChanIO <*> newTVarIO initialContext
 
 initialState :: LspState
 initialState = LspState
-  { _server     = Nothing
+  { _server      = Nothing
+  , _openedFiles = M.empty
   }
 
 type NeovimLsp = Neovim LspEnv LspState
@@ -314,11 +315,6 @@ toInMessage _ _ = error "そんなバナナ2"
 
 -- Plugin's action
 ---------------------------------------
-
--- TODO
--- + modifyTVarとか使ったほうが良い
---    + STMはどう使えばsafeなんだろうな
---    + MVarよりも安全っぽい？ <= YES!
 
 pull :: (HasInChannel r) => Neovim r st InMessage
 pull = liftIO . atomically . readTChan =<< view inChanL

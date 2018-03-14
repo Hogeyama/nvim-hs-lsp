@@ -4,7 +4,7 @@
 
 - [ ] add plugin handlers to `LspState`
 
-- [ ] aboid open the same file more than once
+- [x] aboid open the same file more than once
 
 - [ ] implement `Initialize` response handler
 
@@ -13,4 +13,6 @@
 - [ ] implement completion request
 
 - [ ] implement jump to definition request
+
+- [ ] implement applyRefact for hie
 

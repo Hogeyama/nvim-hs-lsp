@@ -97,4 +97,7 @@ nvimPosToPosition (line,char) =
 nvimEcho :: String -> Neovim r st ()
 nvimEcho s = vim_command' $ "echo " ++ show s
 
+nvimEchom :: String -> Neovim r st ()
+nvimEchom s = vim_command' $ "echom " ++ show s
+
 

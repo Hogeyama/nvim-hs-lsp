@@ -56,6 +56,8 @@ response id' resp err = Response $ #jsonrpc @= "2.0"
 -- Initialize
 -------------------------------------------------------------------------------
 
+--{"textDocument":{"completion":{"completionItem":{"commitCharactersSupport":null,"documentationFormat":null,"snippetSupport":true},"dynamicRegistration":null}}}
+
 initializeParam :: Nullable Number -> Nullable Uri -> RequestParam 'InitializeK
 initializeParam processId rootUri
    = #processId             @= processId
@@ -66,7 +68,7 @@ initializeParam processId rootUri
                                <: #textDocument @= None
                                <: #experimental @= None
                                <: nil )
-  <: #trace                 @= None
+  <: #trace                 @= Some TraceOff
   <: nil
 
 -------------------------------------------------------------------------------

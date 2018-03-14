@@ -55,6 +55,7 @@ module Neovim.LSP.Protocol.Type.Interfaces
   , TextDocumentPositionParams
   , DocumentFilter
   , DocumentSelector
+  , Trace(..)
 
   -- type familyとか
   --, X(..)
@@ -662,6 +663,12 @@ type instance NotificationParam 'ExitK = Option Void
 ---------------------------------------
 type instance NotificationParam 'TextDocumentDidOpenK = Record
   '[ "textDocument" >: TextDocumentItem
+   ]
+
+-- TextDocumentDidClose
+---------------------------------------
+type instance NotificationParam 'TextDocumentDidCloseK = Record
+  '[ "textDocument" >: TextDocumentIdentifier
    ]
 
 -- TextDocumentDidChange

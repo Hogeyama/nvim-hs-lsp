@@ -19,8 +19,9 @@ plugin = do
           { readOnly = initialEnv
           , writable = initialState
           , functionalities =
-            [ $(command' ' nvimHsLspInitialize)   ["async"]
+            [ $(command' 'nvimHsLspInitialize)   ["async"]
             , $(command' 'nvimHsLspOpenBuffer)   ["async"]
+            , $(command' 'nvimHsLspCloseBuffer)  ["async"]
             , $(command' 'nvimHsLspChangeBuffer) ["async"]
             , $(command' 'nvimHsLspSaveBuffer)   ["async"]
             , $(command' 'nvimHsLspHoverRequest) ["async"]
