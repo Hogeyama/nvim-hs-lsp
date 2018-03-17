@@ -1,23 +1,23 @@
 
-{-# LANGUAGE BangPatterns        #-}
-{-# LANGUAGE DataKinds           #-}
-{-# LANGUAGE ExplicitForAll      #-}
-{-# LANGUAGE FlexibleContexts    #-}
-{-# LANGUAGE GADTs               #-}
-{-# LANGUAGE LambdaCase          #-}
-{-# LANGUAGE MultiWayIf          #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE PolyKinds           #-}
-{-# LANGUAGE RecordWildCards     #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE StandaloneDeriving  #-}
-{-# LANGUAGE TemplateHaskell     #-}
-{-# LANGUAGE TupleSections       #-}
-{-# LANGUAGE TypeApplications    #-}
-{-# LANGUAGE TypeOperators       #-}
+{-# LANGUAGE BangPatterns          #-}
+{-# LANGUAGE DataKinds             #-}
+{-# LANGUAGE ExplicitForAll        #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE FlexibleInstances     #-}
+{-# LANGUAGE GADTs                 #-}
+{-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE ViewPatterns        #-}
+{-# LANGUAGE MultiWayIf            #-}
+{-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE PolyKinds             #-}
+{-# LANGUAGE RecordWildCards       #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE StandaloneDeriving    #-}
+{-# LANGUAGE TemplateHaskell       #-}
+{-# LANGUAGE TupleSections         #-}
+{-# LANGUAGE TypeApplications      #-}
+{-# LANGUAGE TypeOperators         #-}
+{-# LANGUAGE ViewPatterns          #-}
 {-# OPTIONS_GHC -Wall            #-}
 
 
@@ -49,18 +49,21 @@ import           System.Process             (CreateProcess (..), ProcessHandle,
                                              StdStream (..), createProcess,
                                              proc)
 
-import           Control.Lens               hiding (Context)--(makeLenses, uses)
+import           Control.Lens               hiding (Context)
 import qualified Data.Aeson                 as J
 import           System.Log.Formatter       (simpleLogFormatter)
 import           System.Log.Handler         (setFormatter)
 import           System.Log.Handler.Simple  (fileHandler)
 import qualified System.Log.Logger          as L
 
-import           Control.Monad.Catch        (Exception, MonadCatch, catch)
+import           Control.Exception          (IOException, SomeException)
+import           Control.Monad.Catch        (Exception, MonadCatch, catch,
+                                             handle, throwM)
+import           GHC.Conc.Sync              (newTVarIO)
 import           Neovim                     hiding (Plugin)
 import           Neovim.Context             (forkNeovim)
+
 import           Neovim.LSP.Protocol.Type
-import           GHC.Conc.Sync (newTVarIO)
 
 data ServerHandles = ServerHandles
   { serverIn  :: !Handle
@@ -91,9 +94,6 @@ data LspState = LspState
   , _openedFiles :: Map Uri ()
   }
 makeLenses ''LspState
-instance Show LspState where
-  show (LspState Nothing _) = "Nothing"
-  show (LspState Just{} _) = "Just _"
 
 data LspEnv = LspEnv
   { serverInChan  :: TChan B.ByteString -- lazy initialization
@@ -142,7 +142,12 @@ initializeLsp cmd args = do
         , std_out = CreatePipe
         , std_err = CreatePipe
         }
-  server .= Just (ServerHandles hin hout herr ph)
+  server .= Just ServerHandles
+              { serverIn  = hin
+              , serverOut = hout
+              , serverErr = herr
+              , serverPH  = ph
+              }
   inCh <- asks serverInChan
   outCh <- asks serverOutChan
   liftIO $ do
@@ -151,7 +156,12 @@ initializeLsp cmd args = do
     hSetBuffering herr NoBuffering
     void $ async $ sender hin outCh
     void $ async $ receiver hout inCh
+    _ <- forkIO $ forever $ logger herr
     setupLogger
+  where
+    logger herr = handle
+          (\(_e :: IOException) -> return ())
+          (hGetLine herr >>= (errorM . ("STDERR: "++)))
 
 isInitialized :: Neovim r LspState Bool
 isInitialized = uses server isJust
@@ -311,7 +321,7 @@ toInMessage map' v@(J.Object o) = mmethod >>= \case
           = return $ IMResp m
       | otherwise
           = Left "そんなバナナ1"
-toInMessage _ _ = error "そんなバナナ2"
+toInMessage _ _ = Left "そんなバナナ2"
 
 -- Plugin's action
 ---------------------------------------
@@ -371,11 +381,11 @@ dispatcher hs = do
     (handlers,hIDs) <- fmap unzip $ forM hs $ \(Plugin p action) -> do
       inCh <- liftIO newTChanIO
       let config = PluginEnv inCh outCh ctx
-      hID <- forkNeovim config () $ withCatchBlah action
+      hID <- forkNeovim config () $ loggingError $ withCatchBlah action
       return ((p,inCh), hID)
 
     -- TODO handlersを動的に追加できるように
-    dpID <- liftIO $ forkIO $ withCatchBlah $ forever $ do
+    dpID <- liftIO $ forkIO $ loggingError $ withCatchBlah $ forever $ do
         rawInput <- atomically (readTChan inChG)
         let Just !v = J.decode rawInput
         idMap <- atomically (_lspIdMap <$> readTVar ctx)
@@ -413,4 +423,7 @@ resultMaybe _             = Nothing
 resultEither :: J.Result a -> Either String a
 resultEither (J.Success x) = Right x
 resultEither (J.Error e)   = Left e
+
+loggingError :: (MonadIO m, MonadCatch m) => m a -> m a
+loggingError = handle (\(e :: SomeException) -> errorM (show e) >> throwM e)
 
