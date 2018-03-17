@@ -21,6 +21,7 @@ module Neovim.LSP.Protocol.Type.JSON
   , FieldJSON
   ) where
 
+import           Control.Applicative   ((<|>))
 import           Data.Aeson            hiding (KeyValue)
 import           Data.Aeson.Types      hiding (KeyValue)
 import           Data.Constraint
@@ -51,20 +52,21 @@ import           GHC.TypeLits          (KnownSymbol, symbolVal)
 -- >>> B.putStrLn $ encode $ toJSON recordOpt
 -- {}
 --
--- Inversely, TODO 説明
+-- TODO 説明.
 --
 -- >>> decode "{\"id\":null}" :: Maybe (Record '["id" >: Maybe  Int])
 -- Just (id @= Nothing <: nil)
 -- >>> decode "{\"id\":null}" :: Maybe (Record '["id" >: Option Int])
--- Nothing
+-- Just (id @= None <: nil)
 -- >>> decode "{}" :: Maybe (Record '["id" >: Option Int])
 -- Just (id @= None <: nil)
 --
 -- If you want a both nullable and ommitable field, use '(Option (Maybe a))':
 --
--- >>> decode "{\"id\":null}" :: Maybe (Record '["id" >: Option (Maybe Int)])
+-- >>> type Rec = Record '["id" >: Option (Maybe Int)]
+-- >>> decode "{\"id\":null}" :: Maybe Rec
 -- Just (id @= Some Nothing <: nil)
--- >>> decode "{}" :: Maybe (Record '["id" >: Option (Maybe Int)])
+-- >>> decode "{}" :: Maybe Rec
 -- Just (id @= None <: nil)
 --
 data Option a = Some a | None
@@ -88,6 +90,12 @@ class FieldFromJSON' (b :: Bool) (a :: *) where
   lookupD :: Proxy b -> String -> Object -> Parser a
 instance FromJSON a => FieldFromJSON' 'True (Option a) where
   lookupD _ k v = case HM.lookup (fromString k) v of
+    Just Null -> Some <$> parseJSON Null <|> return None
+    -- We does not need this case in fact, but some language servers are wrongly
+    -- implemented around this case. e.g., rls returns something like this
+    -- in response to a hover request:
+    --   '{"result":{"contents":[{"language":"rust","value":"&str"}],"range":null}}'
+    -- However, 'range' cannot be 'null' here in the LSP specification.
     Just x  -> Some <$> parseJSON x
     Nothing -> return None
 instance FromJSON a => FieldFromJSON' 'False a where
