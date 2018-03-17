@@ -2,23 +2,28 @@
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE GADTs                     #-}
 {-# LANGUAGE OverloadedLabels          #-}
-{-# LANGUAGE OverloadedStrings         #-}
 {-# LANGUAGE TypeApplications          #-}
 {-# LANGUAGE TypeOperators             #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wall                  #-}
 
 module Neovim.LSP.LspPlugin.Response
-  ( responseHandler
-  )
+--  ( responseHandler
+--  )
   where
 
 import           Control.Lens
 import           Control.Monad              (forever)
+import           Data.List                  (intercalate)
 import           Data.Aeson                 as J
 import qualified Data.ByteString.Lazy.Char8 as B
 
 import qualified Data.Text                  as T
-import           Neovim                     hiding (Plugin)
+
+import           Text.XFormat.Show          (showf, (%))
+import qualified Text.XFormat.Show          as X
+
+import           Neovim                     hiding (Plugin, range)
 import           Neovim.LSP.Base
 import           Neovim.LSP.Util
 import           Neovim.LSP.Protocol.Type
@@ -60,7 +65,7 @@ responsePluginAction = forever @_ @() @() $ do
         STextDocumentFormatting          -> notImplemented
         STextDocumentRangeFormatting     -> notImplemented
         STextDocumentOnTypeFormatting    -> notImplemented
-        STextDocumentDefinition          -> notImplemented
+        STextDocumentDefinition          -> responseDefinition resp
         STextDocumentCodeAction          -> notImplemented
         STextDocumentCodeLens            -> notImplemented
         SCodeLensResolve                 -> notImplemented
@@ -73,6 +78,10 @@ responsePluginAction = forever @_ @() @() $ do
     notImplemented :: PluginAction ()
     notImplemented = errorM "responseHandler: not implemented"
 
+-------------------------------------------------------------------------------
+-- Hover
+-------------------------------------------------------------------------------
+
 responseHover :: ServerResponse 'TextDocumentHoverK -> Neovim PluginEnv () ()
 responseHover (Response resp) = do
   debugM $ "responseHover: " ++ show resp
@@ -81,7 +90,9 @@ responseHover (Response resp) = do
     None -> case resp^. #result of
       None -> errorM "responseHover: OMG"
       -- TODO highlight #range?
-      Some r -> nvimEcho $ pprHoverContents (r^. #contents) ++ "\n"
+      Some Nothing -> nvimEcho "hover: no info"
+      Some (Just r) -> nvimEcho $ removeLastNewlines $
+                          pprHoverContents (r^. #contents) ++ "\n"
 
 pprHoverContents :: MarkedString :|: [MarkedString] -> String
 pprHoverContents (L ms) = pprMarkedString ms
@@ -92,4 +103,44 @@ pprMarkedString :: MarkedString -> String
 pprMarkedString (L s) = s
 pprMarkedString (R x) = x^. #value
 -- TODO markdownをどう表示するか
+
+removeLastNewlines :: String -> String
+removeLastNewlines = reverse . dropWhile (=='\n') .reverse
+
+-------------------------------------------------------------------------------
+-- Definitions
+-------------------------------------------------------------------------------
+
+responseDefinition :: ServerResponse 'TextDocumentDefinitionK -> Neovim r st ()
+responseDefinition (Response resp) = do
+  debugM $ "responseDefinition: " ++ show resp
+  case resp^. #error of
+    Some e -> vim_report_error' (T.unpack (e^. #message))
+    None -> case resp^. #result of
+      None -> errorM "responseDefinition: OMG"
+      Some Nothing -> nvimEcho "textDocument/definition: no info"
+      Some (Just []) -> nvimEcho "textDocument/definition: no info"
+      Some (Just r) -> jumpToLocation $ head r
+    --                      pprHoverContents (r^. #contents) ++ "\n"
+
+jumpToLocation :: Location -> Neovim r st ()
+jumpToLocation loc = do
+  let uri   = loc^. #uri
+      range = loc^. #range
+      start = range^. #start
+      cmd   = jumpCommand (uriToFilePath uri) (positionToNvimPos start)
+  debugM $ "jumpToLocation: " ++ cmd
+  Right{} <- vim_command cmd
+  return ()
+
+-- |
+-- >>> jumpCommand "/tmp/foo.hs" (15,3)
+-- "execute 'normal! m`' | execute 'edit +:call\\ cursor(15,3) /tmp/foo.hs'"
+jumpCommand :: FilePath -> NvimPos -> String
+jumpCommand file (lnum, col) =
+  intercalate " | "
+     [ "execute 'normal! m`'"
+     , showf ("execute 'edit +:call\\ cursor("%d%","%d%") "%s%"'") lnum col file
+     ]
+  where d = X.Int; s = X.String
 

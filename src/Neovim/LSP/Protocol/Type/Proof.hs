@@ -79,7 +79,7 @@ prfServerResp = \case  -- {{{
     STextDocumentFormatting          -> notImplemented
     STextDocumentRangeFormatting     -> notImplemented
     STextDocumentOnTypeFormatting    -> notImplemented
-    STextDocumentDefinition          -> notImplemented
+    STextDocumentDefinition          -> Dict
     STextDocumentCodeAction          -> notImplemented
     STextDocumentCodeLens            -> notImplemented
     SCodeLensResolve                 -> notImplemented

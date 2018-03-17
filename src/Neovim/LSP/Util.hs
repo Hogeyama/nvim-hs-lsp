@@ -7,11 +7,13 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications    #-}
 {-# LANGUAGE TypeFamilies        #-}
+{-# LANGUAGE ViewPatterns        #-}
 {-# LANGUAGE OverloadedLabels    #-}
 {-# OPTIONS_GHC -Wall            #-}
 
 module Neovim.LSP.Util where
 
+import           Control.Lens.Operators
 import           Data.Extensible
 import           Data.Singletons
 import           Data.Text                    (Text)
@@ -38,6 +40,11 @@ getBufLanguage b = nvim_buf_get_var b "current_syntax" >>= \case
 
 getBufUri :: Buffer -> Neovim r st Uri
 getBufUri b = filePathToUri <$> nvim_buf_get_name' b
+
+getNvimPos :: Neovim r st NvimPos
+getNvimPos = vim_call_function "getpos" [ObjectString "."] >>= \case
+  Right (fromObject -> Right [_bufnum, lnum, col, _off]) -> return (lnum,col)
+  e -> errorM (show e) >> error "getNvimPos"
 
 getBufContents :: Buffer -> Neovim r st Text
 getBufContents b = T.pack.unlines <$> nvim_buf_get_lines' b 0 maxBound False

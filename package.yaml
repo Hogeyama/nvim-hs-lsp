@@ -36,6 +36,7 @@ library:
   - async
   - exceptions
   - extra
+  - xformat
 
     #executables:
     #  tmp:

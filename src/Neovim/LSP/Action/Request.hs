@@ -15,13 +15,23 @@ import           Neovim.LSP.Util
 
 -- TextDocumentHover Request
 ---------------------------------------
-hoverRequest :: (HasOutChannel r, HasContext r) => Buffer -> NvimPos -> Neovim r st ()
+hoverRequest :: (HasOutChannel r, HasContext r)
+             => Buffer -> NvimPos -> Neovim r st ()
 hoverRequest b p = pushRequest @'TextDocumentHoverK
   =<< getTextDocumentPositionParams b p
 
 -- TextDocumentSignatureHelp Request
 ---------------------------------------
-signatureHelpRequest :: (HasOutChannel r, HasContext r) => Buffer -> NvimPos -> Neovim r st ()
+signatureHelpRequest :: (HasOutChannel r, HasContext r)
+                     => Buffer -> NvimPos -> Neovim r st ()
 signatureHelpRequest b p = pushRequest @'TextDocumentSignatureHelpK
   =<< getTextDocumentPositionParams b p
+
+-- TextDocumentDefinition Request
+---------------------------------------
+definitionRequest :: (HasOutChannel r, HasContext r)
+                  => Buffer -> NvimPos -> Neovim r st ()
+definitionRequest b p = pushRequest @'TextDocumentDefinitionK
+  =<< getTextDocumentPositionParams b p
+
 

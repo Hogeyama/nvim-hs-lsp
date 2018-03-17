@@ -751,7 +751,7 @@ type instance NotificationParam 'TelemetryEventK = Value
 -- TextDocumentHover
 ---------------------------------------
 type instance RequestParam 'TextDocumentHoverK = TextDocumentPositionParams
-type instance ResResult    'TextDocumentHoverK = Hover
+type instance ResResult    'TextDocumentHoverK = Nullable Hover
 type instance ResError     'TextDocumentHoverK = Value
   --  "error: code and message set in case an exception happens during the hover request."
 
@@ -773,8 +773,15 @@ type instance ResError     'TextDocumentSignatureHelpK = Value
 type SignatureHelp = Value
 -- HIEが対応していないので後回しで良い
 
+-- TextDocumentHover
+---------------------------------------
+type instance RequestParam 'TextDocumentDefinitionK = TextDocumentPositionParams
+type instance ResResult    'TextDocumentDefinitionK = Nullable [Location]
+type instance ResError     'TextDocumentDefinitionK = String
+
+-------------------------------------------------------------------------------
 -- Misc
--------
+-------------------------------------------------------------------------------
 
 type instance RequestParam      ('ClientRequestMiscK      s) = Value
 type instance ResResult         ('ClientRequestMiscK      s) = Value

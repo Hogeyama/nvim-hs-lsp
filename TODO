@@ -12,7 +12,7 @@
 
 - [ ] implement completion request
 
-- [ ] implement jump to definition request
+- [x] implement jump to definition request
 
 - [ ] implement applyRefact for hie
 

@@ -25,7 +25,10 @@ import           Neovim.LSP.LspPlugin.Request      (requestHandler)
 import           Neovim.LSP.LspPlugin.Response     (responseHandler)
 import           Neovim.LSP.Protocol.Messages
 import           Neovim.LSP.Protocol.Type
-import Control.Concurrent (threadDelay)
+
+-------------------------------------------------------------------------------
+-- Initialize
+-------------------------------------------------------------------------------
 
 nvimHsLspInitialize :: CommandArguments -> NeovimLsp ()
 nvimHsLspInitialize _ = do
@@ -33,23 +36,31 @@ nvimHsLspInitialize _ = do
   if initialized then do
     vim_out_write' $ "nvim-hs-lsp: Already initialized" ++ "\n"
   else do
-    initializeLsp "hie" ["--lsp", "--vomit", "--ekg", "-d", "-l", "/tmp/LanguageServer.log"]
+    --initializeLsp "hie" ["--lsp", "--vomit", "--ekg", "-d", "-l", "/tmp/LanguageServer.log"]
+    b <- getBufLanguage =<< vim_get_current_buffer'
+    if b /= "haskell"
+      then initializeLsp "rustup" ["run", "nightly", "rls"]
+      else initializeLsp "hie" ["--lsp", "-d", "-l", "/tmp/LanguageServer.log"]
     void $ dispatcher [notificationHandler, requestHandler, responseHandler]
     cwd <- filePathToUri <$> errOnInvalidResult (vim_call_function "getcwd" [])
     pushRequest @'InitializeK (initializeParam Nothing (Just cwd))
     debugM . show =<< vim_command_output "au BufRead,BufNewFile *.hs NvimHsLspOpenBuffer"
     debugM . show =<< vim_command_output "au TextChanged,TextChangedI *.hs NvimHsLspChangeBuffer"
-    --debugM . show =<< vim_command_output "au BufWrite *.hs NvimHsLspChangeBuffer"
+    debugM . show =<< vim_command_output "au BufRead,BufNewFile *.rs NvimHsLspOpenBuffer"
+    debugM . show =<< vim_command_output "au TextChanged,TextChangedI *.rs NvimHsLspChangeBuffer"
     --debugM . show =<< vim_command_output "au BufWrite *.hs NvimHsLspSaveBuffer"
-
     vim_out_write' $ "nvim-hs-lsp: Initialized" ++ "\n"
     nvimHsLspOpenBuffer undefined
-    debugM . show =<< vim_command_output "botright copen"
+    void $ vim_command_output "botright copen"
 
 whenInitialized :: NeovimLsp () -> NeovimLsp ()
 whenInitialized m = isInitialized >>= \case
   True  -> m
   False -> vim_out_write' $ "nvim-hs-lsp: Not initialized!" ++ "\n"
+
+-------------------------------------------------------------------------------
+-- Notification
+-------------------------------------------------------------------------------
 
 whenAlreadyOpened :: NeovimLsp () -> NeovimLsp ()
 whenAlreadyOpened m = do
@@ -85,15 +96,24 @@ nvimHsLspSaveBuffer :: CommandArguments -> NeovimLsp ()
 nvimHsLspSaveBuffer _ = whenInitialized $ whenAlreadyOpened $
   didSaveBuffer =<< vim_get_current_buffer'
 
-nvimHsLspHoverRequest :: CommandArguments -> NeovimLsp ()
-nvimHsLspHoverRequest _ = whenInitialized $ whenAlreadyOpened $ do
-  b <- vim_get_current_buffer'
-  [_bufnum, lnum, col, _off] <-
-      errOnInvalidResult $ vim_call_function "getpos" [ObjectString "."]
-  hoverRequest b (lnum,col)
-
 nvimHsLspExit :: CommandArguments -> NeovimLsp ()
 nvimHsLspExit _ = whenInitialized $ do
   push $ notification @'ExitK exitParam
   restart
+
+-------------------------------------------------------------------------------
+-- Request
+-------------------------------------------------------------------------------
+
+nvimHsLspHoverRequest :: CommandArguments -> NeovimLsp ()
+nvimHsLspHoverRequest _ = whenInitialized $ whenAlreadyOpened $ do
+  b <- vim_get_current_buffer'
+  pos <- getNvimPos
+  hoverRequest b pos
+
+nvimHsLspDefinitionRequest :: CommandArguments -> NeovimLsp ()
+nvimHsLspDefinitionRequest _ = whenInitialized $ whenAlreadyOpened $ do
+  b <- vim_get_current_buffer'
+  pos <- getNvimPos
+  definitionRequest b pos
 

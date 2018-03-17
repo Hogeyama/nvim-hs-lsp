@@ -19,13 +19,17 @@ plugin = do
           { readOnly = initialEnv
           , writable = initialState
           , functionalities =
-            [ $(command' 'nvimHsLspInitialize)   ["async"]
-            , $(command' 'nvimHsLspOpenBuffer)   ["async"]
-            , $(command' 'nvimHsLspCloseBuffer)  ["async"]
-            , $(command' 'nvimHsLspChangeBuffer) ["async"]
-            , $(command' 'nvimHsLspSaveBuffer)   ["async"]
-            , $(command' 'nvimHsLspHoverRequest) ["async"]
-            , $(command' 'nvimHsLspExit)         ["async"]
+            [
+            -- Notification
+              $(command' 'nvimHsLspInitialize)        ["async"]
+            , $(command' 'nvimHsLspOpenBuffer)        ["async"]
+            , $(command' 'nvimHsLspCloseBuffer)       ["async"]
+            , $(command' 'nvimHsLspChangeBuffer)      ["async"]
+            , $(command' 'nvimHsLspSaveBuffer)        ["async"]
+            , $(command' 'nvimHsLspExit)              ["async"]
+            -- Request
+            , $(command' 'nvimHsLspHoverRequest)      ["async"]
+            , $(command' 'nvimHsLspDefinitionRequest) ["async"]
             ]
         }
       ]
