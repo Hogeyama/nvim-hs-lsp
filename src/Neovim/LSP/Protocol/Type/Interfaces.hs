@@ -250,8 +250,8 @@ filePathToUri file = Uri $ T.pack $ "file://" ++ file
 -- Position
 ----------------------------------------
 type Position = Record
-  '[ "line"      >: Number
-   , "character" >: Number
+  '[ "line"      >: Int
+   , "character" >: Int
    ]
 
 -- Range

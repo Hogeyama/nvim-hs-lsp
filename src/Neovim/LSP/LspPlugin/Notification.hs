@@ -105,8 +105,8 @@ diagnosticToQFItems uri d = header : rest
       }
       where
         start = d^. (#range :: FieldOptic "range") . #start
-        lnum = 1 + round (start^. #line)
-        col  = 1 + round (start^. #character)
+        lnum = 1 + start^. #line
+        col  = 1 + start^. #character
         errorType = case d^. #severity of
             Some Error -> Q.Error
             _ -> Q.Warning

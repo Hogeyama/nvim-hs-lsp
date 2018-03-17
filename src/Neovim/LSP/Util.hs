@@ -89,10 +89,12 @@ type NvimPos = (Int,Int)
 
 nvimPosToPosition :: NvimPos -> Position
 nvimPosToPosition (line,char) =
-    #line      @= fromIntegral (line - 1)
- <: #character @= fromIntegral (char - 1)
+    #line      @= line - 1
+ <: #character @= char - 1
  <: nil
 
+positionToNvimPos :: Position -> NvimPos
+positionToNvimPos pos = (1 + pos^. #line, 1 + pos^. #character)
 
 nvimEcho :: String -> Neovim r st ()
 nvimEcho s = vim_command' $ "echo " ++ show s
