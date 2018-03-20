@@ -18,7 +18,7 @@
 
 - [ ] complete applyRefact for hie
 
-      + partialiy implemented
+     + partialiy implemented
 
 - [ ] implement completion
 
