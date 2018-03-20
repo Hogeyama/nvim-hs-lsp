@@ -32,12 +32,11 @@ import           Neovim.LSP.Protocol.Type
 -------------------------------------------------------------------------------
 
 nvimHsLspInitialize :: CommandArguments -> NeovimLsp ()
-nvimHsLspInitialize _ = do
+nvimHsLspInitialize ca = loggingError $ do
   initialized <- isInitialized
   if initialized then do
     vim_out_write' $ "nvim-hs-lsp: Already initialized" ++ "\n"
   else do
-    --initializeLsp "hie" ["--lsp", "--vomit", "--ekg", "-d", "-l", "/tmp/LanguageServer.log"]
     b <- getBufLanguage =<< vim_get_current_buffer'
     if b /= "haskell"
       then initializeLsp "rustup" ["run", "nightly", "rls"]
@@ -45,13 +44,12 @@ nvimHsLspInitialize _ = do
     void $ dispatcher [notificationHandler, requestHandler, responseHandler]
     cwd <- filePathToUri <$> errOnInvalidResult (vim_call_function "getcwd" [])
     pushRequest @'InitializeK (initializeParam Nothing (Just cwd))
-    debugM . show =<< vim_command_output "au BufRead,BufNewFile *.hs NvimHsLspOpenBuffer"
-    debugM . show =<< vim_command_output "au TextChanged,TextChangedI *.hs NvimHsLspChangeBuffer"
-    debugM . show =<< vim_command_output "au BufRead,BufNewFile *.rs NvimHsLspOpenBuffer"
-    debugM . show =<< vim_command_output "au TextChanged,TextChangedI *.rs NvimHsLspChangeBuffer"
-    --debugM . show =<< vim_command_output "au BufWrite *.hs NvimHsLspSaveBuffer"
+    let hsPattern = def { acmdPattern = "*.hs" }
+    Just Right{} <- addAutocmd "BufRead,BufNewFile"       hsPattern (nvimHsLspOpenBuffer ca)
+    Just Right{} <- addAutocmd "TextChanged,TextChangedI" hsPattern (nvimHsLspChangeBuffer ca)
+    Just Right{} <- addAutocmd "BufWrite"                 hsPattern (nvimHsLspSaveBuffer ca)
     vim_out_write' $ "nvim-hs-lsp: Initialized" ++ "\n"
-    nvimHsLspOpenBuffer undefined
+    nvimHsLspOpenBuffer ca
     void $ vim_command_output "botright copen"
 
 whenInitialized :: NeovimLsp () -> NeovimLsp ()
