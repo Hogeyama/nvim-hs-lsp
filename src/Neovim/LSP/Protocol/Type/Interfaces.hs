@@ -102,6 +102,7 @@ module Neovim.LSP.Protocol.Type.Interfaces
 import           Control.Applicative             ((<|>))
 import           Control.Monad                   (mzero)
 import           Data.Aeson                      hiding (Error)
+import           Data.Aeson.Types                (toJSONKeyText)
 import           Data.Char                       (digitToInt, toLower)
 import           Data.Extensible                 hiding (Nullable)
 import           Data.Hashable                   (Hashable)
@@ -216,11 +217,14 @@ instance ToJSON ID where
 
 newtype Uri = Uri { getUri :: Text }
   deriving (Eq,Ord,Read,Show,Generic,Hashable)
-
 instance ToJSON Uri where
   toJSON = toJSON . getUri
 instance FromJSON Uri where
   parseJSON o = Uri <$> parseJSON o
+instance ToJSONKey Uri where
+  toJSONKey = toJSONKeyText getUri
+instance FromJSONKey Uri where
+  fromJSONKey = FromJSONKeyText Uri
 
 -- TODO test
 uriToFilePath :: Uri -> FilePath
@@ -300,8 +304,7 @@ type TextDocumentEdit = Record
 -- WorkspaceEdit
 ----------------------------------------
 type WorkspaceEdit = Record
-  '[ "changes"         >: Option (Map String [TextEdit])
-      -- changes?: { [uri: string]: TextEdit[]; };
+  '[ "changes"         >: Option (Map Uri [TextEdit])
    , "documentChanges" >: Option [TextDocumentEdit]
    ]
 
@@ -336,7 +339,8 @@ type TextDocumentItem = Record
 
 -- TextDocumentPositionParams
 ----------------------------------------
-type TextDocumentPositionParams = Record
+type TextDocumentPositionParams  = Record TextDocumentPositionParamsF
+type TextDocumentPositionParamsF =
   '[ "textDocument" >: TextDocumentIdentifier
    , "position"     >: Position
    ]
@@ -646,9 +650,9 @@ type instance NotificationParam 'ClientCancelK = Record '[ "id" >: ID ]
 -- Notification
 -------------------------------------------------------------------------------
 
-------------
--- Client --
-------------
+---------------------------------------
+-- Client                            --
+---------------------------------------
 
 -- Exit
 ---------------------------------------
@@ -683,6 +687,7 @@ type TextDocumentContentChangeEvent = Record
    , "text"        >: Text
    ]
   -- None,None,FullTextにすればよい
+
 -- TextDocumentDidSave
 ---------------------------------------
 type instance NotificationParam 'TextDocumentDidSaveK = Record
@@ -690,9 +695,13 @@ type instance NotificationParam 'TextDocumentDidSaveK = Record
    , "text"         >: Option Text
    ]
 
-------------
--- Server --
-------------
+-- Misc
+---------------------------------------
+type instance NotificationParam ('ClientNotificationMiscK s) = Value
+
+---------------------------------------
+-- Server                            --
+---------------------------------------
 
 -- TextDocumentPublishDiagnostics
 ---------------------------------------
@@ -740,13 +749,17 @@ type instance NotificationParam 'WindowLogMessageK = Record
 ---------------------------------------
 type instance NotificationParam 'TelemetryEventK = Value
 
+-- Misc
+---------------------------------------
+type instance NotificationParam ('ServerNotificationMiscK s) = Value
+
 -------------------------------------------------------------------------------
 -- Request
 -------------------------------------------------------------------------------
 
-------------
--- Client --
-------------
+---------------------------------------
+-- Client                            --
+---------------------------------------
 
 -- TextDocumentHover
 ---------------------------------------
@@ -773,29 +786,66 @@ type instance ResError     'TextDocumentSignatureHelpK = Value
 type SignatureHelp = Value
 -- HIEが対応していないので後回しで良い
 
--- TextDocumentHover
+-- TextDocumentDefinition
 ---------------------------------------
 type instance RequestParam 'TextDocumentDefinitionK = TextDocumentPositionParams
 type instance ResResult    'TextDocumentDefinitionK = Nullable [Location]
 type instance ResError     'TextDocumentDefinitionK = String
 
--------------------------------------------------------------------------------
+-- WorkspaceExecuteCommand
+---------------------------------------
+type instance RequestParam 'WorkspaceExecuteCommandK = ExecuteCommandParams
+type instance ResResult    'WorkspaceExecuteCommandK = Nullable Value
+type instance ResError     'WorkspaceExecuteCommandK = String
+
+type ExecuteCommandParams = Record
+  '[ "command"   >: String
+   , "arguments" >: Option [Value]
+   ]
+
+-- TextDocumentCompletion
+---------------------------------------
+type instance RequestParam 'TextDocumentCompletionK = CompletionParams
+type instance ResResult    'TextDocumentCompletionK = Value
+type instance ResError     'TextDocumentCompletionK = String
+
+type CompletionParams  = Record CompletionParamsF
+type CompletionParamsF =
+  TextDocumentPositionParamsF ++
+  '[ "context" >: Option CompletionContext
+   ]
+type CompletionContext = Value
+
 -- Misc
--------------------------------------------------------------------------------
+---------------------------------------
 
 type instance RequestParam      ('ClientRequestMiscK      s) = Value
 type instance ResResult         ('ClientRequestMiscK      s) = Value
 type instance ResError          ('ClientRequestMiscK      s) = Value
-type instance NotificationParam ('ClientNotificationMiscK s) = Value
 
+---------------------------------------
+-- Server                            --
+---------------------------------------
+
+-- WorkspaceApplyEdit
+---------------------------------------
+type instance RequestParam 'WorkspaceApplyEditK = ApplyWorkspaceEditParams
+type instance ResResult    'WorkspaceApplyEditK = ApplyWorkspaceEditResponse
+type instance ResError     'WorkspaceApplyEditK = String
+
+type ApplyWorkspaceEditParams = Record
+  '[ "label" >: Option String
+   , "edit"  >: WorkspaceEdit
+   ]
+type ApplyWorkspaceEditResponse = Record
+  '[ "applied" >: Bool
+   ]
+
+-- Misc
+---------------------------------------
 type instance RequestParam      ('ServerRequestMiscK      s) = Value
 type instance ResResult         ('ServerRequestMiscK      s) = Value
 type instance ResError          ('ServerRequestMiscK      s) = Value
-type instance NotificationParam ('ServerNotificationMiscK s) = Value
-
-------------
--- Server --
-------------
 
 
 -------------------------------------------------------------------------------

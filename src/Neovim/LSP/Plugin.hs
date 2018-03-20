@@ -1,5 +1,5 @@
-
 {-# LANGUAGE DataKinds         #-}
+{-# LANGUAGE OverloadedLabels  #-}
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications  #-}
@@ -8,9 +8,10 @@
 module Neovim.LSP.Plugin where
 
 import           Control.Lens                      (use)
-import           Control.Lens.Operators
+import           Control.Lens.Operators            ((%=))
 import           Control.Monad                     (void)
 import           Control.Monad.Extra               (ifM)
+import           Data.Aeson
 import qualified Data.Map                          as M
 
 import           Neovim
@@ -105,15 +106,26 @@ nvimHsLspExit _ = whenInitialized $ do
 -- Request
 -------------------------------------------------------------------------------
 
-nvimHsLspHoverRequest :: CommandArguments -> NeovimLsp ()
-nvimHsLspHoverRequest _ = whenInitialized $ whenAlreadyOpened $ do
+nvimHsLspHover :: CommandArguments -> NeovimLsp ()
+nvimHsLspHover _ = whenInitialized $ whenAlreadyOpened $ do
   b <- vim_get_current_buffer'
   pos <- getNvimPos
   hoverRequest b pos
 
-nvimHsLspDefinitionRequest :: CommandArguments -> NeovimLsp ()
-nvimHsLspDefinitionRequest _ = whenInitialized $ whenAlreadyOpened $ do
+nvimHsLspDefinition :: CommandArguments -> NeovimLsp ()
+nvimHsLspDefinition _ = whenInitialized $ whenAlreadyOpened $ do
   b <- vim_get_current_buffer'
   pos <- getNvimPos
   definitionRequest b pos
+
+-- argument: {file: Uri, start_pos: Position}
+nvimHsLspApplyRefactOne :: CommandArguments -> NeovimLsp ()
+nvimHsLspApplyRefactOne _ = whenInitialized $ whenAlreadyOpened $ do
+  b <- vim_get_current_buffer'
+  uri <- getBufUri b
+  pos <- getNvimPos
+  let  arg = toJSON $ object [ "file" .= uri
+                             , "start_pos" .= nvimPosToPosition pos
+                             ]
+  executeCommandRequest "applyrefact:applyOne" (Some [arg])
 

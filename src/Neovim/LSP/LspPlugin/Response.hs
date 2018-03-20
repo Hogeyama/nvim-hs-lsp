@@ -51,7 +51,7 @@ responsePluginAction = forever @_ @() @() $ do
 
         -- Workspace
         SWorkspaceSymbol                 -> notImplemented
-        SWorkspaceExecuteCommand         -> notImplemented
+        SWorkspaceExecuteCommand         -> infoM "responseHandler: ignore workspace/executeCommand"
 
         -- Document
         STextDocumentWillSaveWaitUntil   -> notImplemented

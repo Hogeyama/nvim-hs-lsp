@@ -25,9 +25,9 @@ prfClientReq = \case -- {{{
     SInitialize                      -> Dict
     SShutdown                        -> notImplemented
     SWorkspaceSymbol                 -> notImplemented
-    SWorkspaceExecuteCommand         -> notImplemented
+    SWorkspaceExecuteCommand         -> Dict
     STextDocumentWillSaveWaitUntil   -> notImplemented
-    STextDocumentCompletion          -> notImplemented
+    STextDocumentCompletion          -> Dict
     SCompletionItemResolve           -> notImplemented
     STextDocumentHover               -> Dict
     STextDocumentSignatureHelp       -> Dict
@@ -67,9 +67,9 @@ prfServerResp = \case  -- {{{
     SInitialize                      -> Dict
     SShutdown                        -> notImplemented
     SWorkspaceSymbol                 -> notImplemented
-    SWorkspaceExecuteCommand         -> notImplemented
+    SWorkspaceExecuteCommand         -> Dict
     STextDocumentWillSaveWaitUntil   -> notImplemented
-    STextDocumentCompletion          -> notImplemented
+    STextDocumentCompletion          -> Dict
     SCompletionItemResolve           -> notImplemented
     STextDocumentHover               -> Dict
     STextDocumentSignatureHelp       -> Dict
@@ -94,7 +94,7 @@ prfServerReq = \case -- {{{
   SWindowShowMessageRequest       -> notImplemented
   SClientRegisterCapability       -> notImplemented
   SClientUnregisterCapability     -> notImplemented
-  SWorkspaceApplyEdit             -> notImplemented
+  SWorkspaceApplyEdit             -> Dict
   SServerRequestMisc SSym         -> Dict
 -- }}}
 
@@ -113,7 +113,7 @@ prfClientResp = \case -- {{{
   SWindowShowMessageRequest       -> notImplemented
   SClientRegisterCapability       -> notImplemented
   SClientUnregisterCapability     -> notImplemented
-  SWorkspaceApplyEdit             -> notImplemented
+  SWorkspaceApplyEdit             -> Dict
   SServerRequestMisc SSym         -> Dict
 -- }}}
 
