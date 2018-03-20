@@ -32,8 +32,6 @@ module Neovim.LSP.Protocol.Type.Interfaces
   , TextDocumentSync(..)
   , TextDocumentSyncKind(..)
   , TextDocumentSyncOptions
-  --, ClientMethod(..)
-  --, ServerMethod(..)
 
   , Message
   , RequestMessage
@@ -88,6 +86,10 @@ module Neovim.LSP.Protocol.Type.Interfaces
   -- 他のdata型
   , Hover
   , MarkedString
+  , ApplyWorkspaceEditResponse
+  , MarkupKind(..)
+  , WorkspaceClientCapabilities
+  , TextDocumentClientCapabilities
 
   -- function
   , filePathToUri
@@ -141,6 +143,8 @@ instance (FromJSON a, FromJSON b) => FromJSON (a :|: b) where
 instance (ToJSON a, ToJSON b) => ToJSON (a :|: b) where
   toJSON (L o) = toJSON o
   toJSON (R o) = toJSON o
+
+type OptionRecord xs = Option (Record xs)
 
 -------------------------------------------------------------------------------
 -- Base Protocol
@@ -554,9 +558,121 @@ type ClientCapabilities = Record
    , "experimental" >: Option Value
    ]
 
-type WorkspaceClientCapabilities = Value
+type WorkspaceClientCapabilities = Record
+  '[ "applyEdit" >: Option Bool
+   , "workspaceEdit" >: OptionRecord
+        '[ "documentChanges" >: Option Bool
+         ]
+   , "didChangeConfiguration" >: OptionRecord
+        '[ "dynamicRegistration" >: Option Bool
+         ]
+   , "didChangeWatchedFiles" >: OptionRecord
+        '[ "dynamicRegistration" >: Option Bool
+         ]
+   , "symbol" >: OptionRecord
+        '[ "dynamicRegistration" >: Option Bool
+         , "symbolKind" >: OptionRecord
+              '[ "valueSet" >: Option [SymbolKind]
+               ]
+         ]
+   , "executeCommand" >: OptionRecord
+        '[ "dynamicRegistration" >: Option Bool
+         ]
+   , "workspaceFolders" >: Option Bool
+   , "configuration" >: Option Bool
+   ]
 
-type TextDocumentClientCapabilities = Value
+type TextDocumentClientCapabilities = Record
+  -- {{{
+  '[ "synchronization" >: OptionRecord
+        '[ "dynamicRegistration" >: Option Bool
+         , "willSave" >: Option Bool
+         , "willSaveUntil" >: Option Bool
+         , "didSave" >: Option Bool
+         ]
+   , "completion" >: OptionRecord
+        '[ "dynamicRegistration" >: Option Bool
+         , "completionItem" >: OptionRecord
+              '[ "snippetSupport" >: Option Bool
+               , "commitCharactersSupport" >: Option Bool
+               , "documentationFormat" >: Option [MarkupKind]
+               ]
+         , "completionItemKind" >: OptionRecord
+              '[ "valueSet" >: Option [CompletionItemKind]
+               ]
+         , "contextSupport" >: Option Bool
+         ]
+   , "hover" >: OptionRecord
+        '[ "dynamicRegistration" >: Option Bool
+         , "contentFormat" >: Option [MarkupKind]
+         ]
+   , "signatureHelp" >: OptionRecord
+        '[ "dynamicRegistration" >: Option Bool
+         , "signatureInformation" >: OptionRecord
+              '[ "documentationFormat" >: Option [MarkupKind]
+               ]
+         ]
+   , "references" >: OptionRecord
+        '[ "dynamicRegistration" >: Option Bool
+         ]
+   , "documentHightlight" >: OptionRecord
+        '[ "dynamicRegistration" >: Option Bool
+         ]
+   , "documentSymbol" >: OptionRecord
+        '[ "dynamicRegistration" >: Option Bool
+         , "symbolKind" >: OptionRecord
+              '[ "valueSet" >: Option [SymbolKind]
+               ]
+         ]
+   , "formatting" >: OptionRecord
+        '[ "dynamicRegistration" >: Option Bool
+         ]
+   , "rangeFormatting" >: OptionRecord
+        '[ "dynamicRegistration" >: Option Bool
+         ]
+   , "onTypeFormatting" >: OptionRecord
+        '[ "dynamicRegistration" >: Option Bool
+         ]
+   , "definition" >: OptionRecord
+        '[ "dynamicRegistration" >: Option Bool
+         ]
+   , "typeDefinition" >: OptionRecord
+        '[ "dynamicRegistration" >: Option Bool
+         ]
+   , "implementation" >: OptionRecord
+        '[ "dynamicRegistration" >: Option Bool
+         ]
+   , "codeAction" >: OptionRecord
+        '[ "dynamicRegistration" >: Option Bool
+         ]
+   , "codeLens" >: OptionRecord
+        '[ "dynamicRegistration" >: Option Bool
+         ]
+   , "documentLink" >: OptionRecord
+        '[ "dynamicRegistration" >: Option Bool
+         ]
+   , "colorProvider" >: OptionRecord
+        '[ "dynamicRegistration" >: Option Bool
+         ]
+   , "rename" >: OptionRecord
+        '[ "dynamicRegistration" >: Option Bool
+         ]
+   ]
+-- }}}
+
+data MarkupKind = PlainText | Markdown
+  deriving (Show, Eq, Ord)
+instance FromJSON MarkupKind where
+  parseJSON (String "plaintext") = return PlainText
+  parseJSON (String "markdown") = return Markdown
+  parseJSON _ = mempty
+instance ToJSON MarkupKind where
+  toJSON PlainText = String "plaintext"
+  toJSON Markdown = String "markdown"
+
+-- 後回し
+type SymbolKind = Value
+type CompletionItemKind = Value
 
 type ServerCapabilities = Record
   '[ "textDocumentSync"                 >: Option TextDocumentSync
