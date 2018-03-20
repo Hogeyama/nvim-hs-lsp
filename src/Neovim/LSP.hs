@@ -21,15 +21,16 @@ plugin = do
           , functionalities =
             [
             -- Notification
-              $(command' 'nvimHsLspInitialize)        ["async"]
-            , $(command' 'nvimHsLspOpenBuffer)        ["async"]
-            , $(command' 'nvimHsLspCloseBuffer)       ["async"]
-            , $(command' 'nvimHsLspChangeBuffer)      ["async"]
-            , $(command' 'nvimHsLspSaveBuffer)        ["async"]
-            , $(command' 'nvimHsLspExit)              ["async"]
+              $(command' 'nvimHsLspInitialize)     ["async"]
+            , $(command' 'nvimHsLspOpenBuffer)     ["async"]
+            , $(command' 'nvimHsLspCloseBuffer)    ["async"]
+            , $(command' 'nvimHsLspChangeBuffer)   ["async"]
+            , $(command' 'nvimHsLspSaveBuffer)     ["async"]
+            , $(command' 'nvimHsLspExit)           ["async"]
             -- Request
-            , $(command' 'nvimHsLspHoverRequest)      ["async"]
-            , $(command' 'nvimHsLspDefinitionRequest) ["async"]
+            , $(command' 'nvimHsLspHover)          ["async"]
+            , $(command' 'nvimHsLspDefinition)     ["async"]
+            , $(command' 'nvimHsLspApplyRefactOne) ["async"]
             ]
         }
       ]
