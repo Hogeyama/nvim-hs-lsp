@@ -71,7 +71,7 @@ showDiagnotics (Notification noti) = do
         qfItems     = concatMap (diagnosticToQFItems uri)
                         $ sortBy (compare `on` (^. #severity)) diagnostics
     Q.setqflist qfItems Q.Replace
-    when (null qfItems) $ nvimEcho "Diagnostics: no error"
+    when (null qfItems) $ nvimEcho "textDocument/publishDiagnostics: no error"
 
 -------------------------------------------------------------------------------
 

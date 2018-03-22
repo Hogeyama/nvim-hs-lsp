@@ -89,14 +89,13 @@ responseHover (Response resp) = do
     Some e -> vim_report_error' (T.unpack (e^. #message))
     None -> case resp^. #result of
       None -> errorM "responseHover: OMG"
-      -- TODO highlight #range?
-      Some Nothing -> nvimEcho "hover: no info"
+      Some Nothing -> nvimEcho textDocumentHoverNoInfo
       Some (Just r) -> nvimEcho $ removeLastNewlines $
                           pprHoverContents (r^. #contents) ++ "\n"
 
 pprHoverContents :: MarkedString :|: [MarkedString] -> String
 pprHoverContents (L ms) = pprMarkedString ms
-pprHoverContents (R []) = "hover: no info"
+pprHoverContents (R []) = textDocumentHoverNoInfo
 pprHoverContents (R xs) = unlines $ map pprMarkedString xs
 
 pprMarkedString :: MarkedString -> String
@@ -106,6 +105,9 @@ pprMarkedString (R x) = x^. #value
 
 removeLastNewlines :: String -> String
 removeLastNewlines = reverse . dropWhile (=='\n') .reverse
+
+textDocumentHoverNoInfo ::  String
+textDocumentHoverNoInfo = "textDocument/hover: no info"
 
 -------------------------------------------------------------------------------
 -- Definitions
@@ -118,8 +120,8 @@ responseDefinition (Response resp) = do
     Some e -> vim_report_error' (T.unpack (e^. #message))
     None -> case resp^. #result of
       None -> errorM "responseDefinition: OMG"
-      Some Nothing -> nvimEcho "textDocument/definition: no info"
-      Some (Just []) -> nvimEcho "textDocument/definition: no info"
+      Some Nothing -> nvimEcho textDocumentDefinitionNoInfo
+      Some (Just []) -> nvimEcho textDocumentDefinitionNoInfo
       Some (Just r) -> jumpToLocation $ head r
     --                      pprHoverContents (r^. #contents) ++ "\n"
 
@@ -143,4 +145,7 @@ jumpCommand file (lnum, col) =
      , showf ("execute 'edit +:call\\ cursor("%d%","%d%") "%s%"'") lnum col file
      ]
   where d = X.Int; s = X.String
+
+textDocumentDefinitionNoInfo ::  String
+textDocumentDefinitionNoInfo = "textDocument/definition: no info"
 
