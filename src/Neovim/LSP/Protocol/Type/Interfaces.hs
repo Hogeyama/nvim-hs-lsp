@@ -86,8 +86,9 @@ module Neovim.LSP.Protocol.Type.Interfaces
   -- 他のdata型
   , Hover
   , MarkedString
-  , ApplyWorkspaceEditResponse
   , MarkupKind(..)
+  , MarkupContent
+  , ApplyWorkspaceEditResponse
   , WorkspaceClientCapabilities
   , TextDocumentClientCapabilities
 
@@ -143,6 +144,7 @@ instance (FromJSON a, FromJSON b) => FromJSON (a :|: b) where
 instance (ToJSON a, ToJSON b) => ToJSON (a :|: b) where
   toJSON (L o) = toJSON o
   toJSON (R o) = toJSON o
+infixr 4 :|:
 
 type OptionRecord xs = Option (Record xs)
 
@@ -660,6 +662,14 @@ type TextDocumentClientCapabilities = Record
    ]
 -- }}}
 
+type MarkedString = String :|: Record
+  '[ "language" >: String
+   , "value"    >: String
+   ]
+type MarkupContent = Record
+  '[ "kind"  >: MarkupKind
+   , "value" >: String
+   ]
 data MarkupKind = PlainText | Markdown
   deriving (Show, Eq, Ord)
 instance FromJSON MarkupKind where
@@ -885,12 +895,8 @@ type instance ResError     'TextDocumentHoverK = Value
   --  "error: code and message set in case an exception happens during the hover request."
 
 type Hover = Record
-  '[ "contents" >: (MarkedString :|: [MarkedString])
+  '[ "contents" >: (MarkedString :|: [MarkedString] :|: MarkupContent)
    , "range"    >: Option Range
-   ]
-type MarkedString = String :|: Record
-  '[ "language" >: String
-   , "value"    >: String
    ]
 
 -- TextDocumentSignatureHelp
