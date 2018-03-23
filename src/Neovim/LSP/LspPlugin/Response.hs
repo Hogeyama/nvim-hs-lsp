@@ -4,7 +4,8 @@
 {-# LANGUAGE OverloadedLabels          #-}
 {-# LANGUAGE TypeApplications          #-}
 {-# LANGUAGE TypeOperators             #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE LambdaCase                #-}
+{-# LANGUAGE ScopedTypeVariables       #-}
 {-# OPTIONS_GHC -Wall                  #-}
 
 module Neovim.LSP.LspPlugin.Response
@@ -55,7 +56,7 @@ responsePluginAction = forever @_ @() @() $ do
 
         -- Document
         STextDocumentWillSaveWaitUntil   -> notImplemented
-        STextDocumentCompletion          -> notImplemented
+        STextDocumentCompletion          -> complete resp
         SCompletionItemResolve           -> notImplemented
         STextDocumentHover               -> responseHover resp
         STextDocumentSignatureHelp       -> notImplemented
@@ -85,23 +86,21 @@ responsePluginAction = forever @_ @() @() $ do
 responseHover :: ServerResponse 'TextDocumentHoverK -> Neovim PluginEnv () ()
 responseHover (Response resp) = do
   debugM $ "responseHover: " ++ show resp
-  case resp^. #error of
-    Some e -> vim_report_error' (T.unpack (e^. #message))
-    None -> case resp^. #result of
-      None -> errorM "responseHover: OMG"
-      Some Nothing -> nvimEcho textDocumentHoverNoInfo
-      Some (Just r) -> nvimEcho $ removeLastNewlines $
-                          pprHoverContents (r^. #contents) ++ "\n"
+  withResult resp $ \case
+    Nothing -> nvimEcho textDocumentHoverNoInfo
+    Just r  -> nvimEcho $ removeLastNewlines $
+                 pprHoverContents (r^. #contents) ++ "\n"
 
-pprHoverContents :: MarkedString :|: [MarkedString] -> String
+pprHoverContents :: MarkedString :|: [MarkedString] :|: MarkupContent -> String
 pprHoverContents (L ms) = pprMarkedString ms
-pprHoverContents (R []) = textDocumentHoverNoInfo
-pprHoverContents (R xs) = unlines $ map pprMarkedString xs
+pprHoverContents (R (L [])) = textDocumentHoverNoInfo
+pprHoverContents (R (L xs)) = unlines $ map pprMarkedString xs
+pprHoverContents (R (R x))  = x^. #value
 
+-- TODO markdownをどう表示するか
 pprMarkedString :: MarkedString -> String
 pprMarkedString (L s) = s
 pprMarkedString (R x) = x^. #value
--- TODO markdownをどう表示するか
 
 removeLastNewlines :: String -> String
 removeLastNewlines = reverse . dropWhile (=='\n') .reverse
@@ -116,14 +115,10 @@ textDocumentHoverNoInfo = "textDocument/hover: no info"
 responseDefinition :: ServerResponse 'TextDocumentDefinitionK -> Neovim r st ()
 responseDefinition (Response resp) = do
   debugM $ "responseDefinition: " ++ show resp
-  case resp^. #error of
-    Some e -> vim_report_error' (T.unpack (e^. #message))
-    None -> case resp^. #result of
-      None -> errorM "responseDefinition: OMG"
-      Some Nothing -> nvimEcho textDocumentDefinitionNoInfo
-      Some (Just []) -> nvimEcho textDocumentDefinitionNoInfo
-      Some (Just r) -> jumpToLocation $ head r
-    --                      pprHoverContents (r^. #contents) ++ "\n"
+  withResult resp $ \case
+    Nothing -> nvimEcho textDocumentDefinitionNoInfo
+    Just [] -> nvimEcho textDocumentDefinitionNoInfo
+    Just r  -> jumpToLocation $ head r
 
 jumpToLocation :: Location -> Neovim r st ()
 jumpToLocation loc = do
@@ -148,4 +143,26 @@ jumpCommand file (lnum, col) =
 
 textDocumentDefinitionNoInfo ::  String
 textDocumentDefinitionNoInfo = "textDocument/definition: no info"
+
+-------------------------------------------------------------------------------
+-- Complete
+-------------------------------------------------------------------------------
+
+complete :: ServerResponse 'TextDocumentCompletionK -> Neovim r st ()
+complete (Response resp) = withResult resp $ \result -> do
+  undefined result
+
+
+
+-------------------------------------------------------------------------------
+-- Util
+-------------------------------------------------------------------------------
+
+withResult :: ResponseMessage a e -> (a -> Neovim r st ()) -> Neovim r st ()
+withResult resp k =
+  case resp^. #error of
+    Some e -> vim_report_error' (T.unpack (e^. #message))
+    None -> case resp^. #result of
+      None -> errorM "withResult: wrong input"
+      Some x -> k x
 

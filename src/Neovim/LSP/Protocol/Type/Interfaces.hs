@@ -178,7 +178,7 @@ type ResponseMessageF a e =
   MessageF ++
   '[ "id"      >: Nullable ID
    , "result"  >: Option a
-   , "error"   >: Option (ResponseError e) -- 同上
+   , "error"   >: Option (ResponseError e)
    ]
 
 type ResponseError  e = Record (ResponseErrorF e)
@@ -930,8 +930,30 @@ type ExecuteCommandParams = Record
 -- TextDocumentCompletion
 ---------------------------------------
 type instance RequestParam 'TextDocumentCompletionK = CompletionParams
-type instance ResResult    'TextDocumentCompletionK = Value
+type instance ResResult    'TextDocumentCompletionK = Nullable ([CompletionItem] :|: CompletionList)
 type instance ResError     'TextDocumentCompletionK = String
+
+type CompletionList = Record
+  '[ "isIncomplete" >: Bool
+   , "items"        >: [CompletionItem]
+   ]
+type CompletionItem = Record
+  '[ "label"               >: String
+   , "kind"                >: Option Int
+   , "detail"              >: Option String
+   , "documentation"       >: Option (String :|: MarkupContent)
+   , "sortText"            >: Option String
+   , "filterText"          >: Option String
+   , "insertText"          >: Option String
+   , "insertTextFormat"    >: InsertTextFormat
+   , "textEdit"            >: Option TextEdit
+   , "additionalTextEdits" >: Option [TextEdit]
+   , "commitCharacters"    >: Option [String]
+   , "command"             >: Option Command
+   , "data"                >: Option Value
+   ]
+
+type InsertTextFormat = Value
 
 type CompletionParams  = Record CompletionParamsF
 type CompletionParamsF =
