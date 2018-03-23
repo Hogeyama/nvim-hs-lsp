@@ -561,6 +561,7 @@ type ClientCapabilities = Record
    ]
 
 type WorkspaceClientCapabilities = Record
+  -- {{{
   '[ "applyEdit" >: Option Bool
    , "workspaceEdit" >: OptionRecord
         '[ "documentChanges" >: Option Bool
@@ -583,80 +584,81 @@ type WorkspaceClientCapabilities = Record
    , "workspaceFolders" >: Option Bool
    , "configuration" >: Option Bool
    ]
+  -- }}}
 
 type TextDocumentClientCapabilities = Record
   -- {{{
-  '[ "synchronization" >: OptionRecord
-        '[ "dynamicRegistration" >: Option Bool
-         , "willSave" >: Option Bool
-         , "willSaveUntil" >: Option Bool
-         , "didSave" >: Option Bool
+  '[ "synchronization"    >: OptionRecord
+        '[ "dynamicRegistration"  >: Option Bool
+         , "willSave"             >: Option Bool
+         , "willSaveUntil"        >: Option Bool
+         , "didSave"              >: Option Bool
          ]
-   , "completion" >: OptionRecord
-        '[ "dynamicRegistration" >: Option Bool
-         , "completionItem" >: OptionRecord
-              '[ "snippetSupport" >: Option Bool
+   , "completion"         >: OptionRecord
+        '[ "dynamicRegistration"  >: Option Bool
+         , "completionItem"       >: OptionRecord
+              '[ "snippetSupport"          >: Option Bool
                , "commitCharactersSupport" >: Option Bool
-               , "documentationFormat" >: Option [MarkupKind]
+               , "documentationFormat"     >: Option [MarkupKind]
                ]
-         , "completionItemKind" >: OptionRecord
+         , "completionItemKind"   >: OptionRecord
               '[ "valueSet" >: Option [CompletionItemKind]
                ]
-         , "contextSupport" >: Option Bool
+         , "contextSupport"       >: Option Bool
          ]
-   , "hover" >: OptionRecord
-        '[ "dynamicRegistration" >: Option Bool
-         , "contentFormat" >: Option [MarkupKind]
+   , "hover"              >: OptionRecord
+        '[ "dynamicRegistration"  >: Option Bool
+         , "contentFormat"        >: Option [MarkupKind]
          ]
-   , "signatureHelp" >: OptionRecord
-        '[ "dynamicRegistration" >: Option Bool
+   , "signatureHelp"      >: OptionRecord
+        '[ "dynamicRegistration"  >: Option Bool
          , "signatureInformation" >: OptionRecord
               '[ "documentationFormat" >: Option [MarkupKind]
                ]
          ]
-   , "references" >: OptionRecord
+   , "references"         >: OptionRecord
         '[ "dynamicRegistration" >: Option Bool
          ]
    , "documentHightlight" >: OptionRecord
         '[ "dynamicRegistration" >: Option Bool
          ]
-   , "documentSymbol" >: OptionRecord
+   , "documentSymbol"     >: OptionRecord
         '[ "dynamicRegistration" >: Option Bool
-         , "symbolKind" >: OptionRecord
+         , "symbolKind"          >: OptionRecord
               '[ "valueSet" >: Option [SymbolKind]
                ]
          ]
-   , "formatting" >: OptionRecord
+   , "formatting"         >: OptionRecord
         '[ "dynamicRegistration" >: Option Bool
          ]
-   , "rangeFormatting" >: OptionRecord
+   , "rangeFormatting"    >: OptionRecord
         '[ "dynamicRegistration" >: Option Bool
          ]
-   , "onTypeFormatting" >: OptionRecord
+   , "onTypeFormatting"   >: OptionRecord
         '[ "dynamicRegistration" >: Option Bool
          ]
-   , "definition" >: OptionRecord
+   , "definition"         >: OptionRecord
         '[ "dynamicRegistration" >: Option Bool
          ]
-   , "typeDefinition" >: OptionRecord
+   , "typeDefinition"     >: OptionRecord
         '[ "dynamicRegistration" >: Option Bool
          ]
-   , "implementation" >: OptionRecord
+   , "implementation"     >: OptionRecord
         '[ "dynamicRegistration" >: Option Bool
          ]
-   , "codeAction" >: OptionRecord
+   , "codeAction"         >: OptionRecord
         '[ "dynamicRegistration" >: Option Bool
          ]
-   , "codeLens" >: OptionRecord
+   , "codeLens"           >: OptionRecord
         '[ "dynamicRegistration" >: Option Bool
          ]
-   , "documentLink" >: OptionRecord
+   , "documentLink"       >: OptionRecord
         '[ "dynamicRegistration" >: Option Bool
          ]
-   , "colorProvider" >: OptionRecord
+   , "colorProvider"      >: OptionRecord
         '[ "dynamicRegistration" >: Option Bool
          ]
-   , "rename" >: OptionRecord
+   , "rename"             >: OptionRecord
         '[ "dynamicRegistration" >: Option Bool
          ]
    ]
