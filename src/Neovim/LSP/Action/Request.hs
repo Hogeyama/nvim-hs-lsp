@@ -4,10 +4,7 @@
 {-# LANGUAGE TypeApplications #-}
 {-# OPTIONS_GHC -Wall         #-}
 
-module Neovim.LSP.Action.Request
-  --(
-  --)
-  where
+module Neovim.LSP.Action.Request where
 
 import           Data.Aeson
 import           Data.Extensible
@@ -17,21 +14,21 @@ import           Neovim.LSP.Base
 import           Neovim.LSP.Protocol.Type
 import           Neovim.LSP.Util
 
--- TextDocumentHover Request
+-- TextDocumentHover
 ---------------------------------------
 hoverRequest :: (HasOutChannel r, HasContext r)
              => Buffer -> NvimPos -> Neovim r st ()
 hoverRequest b p = pushRequest @'TextDocumentHoverK
   =<< getTextDocumentPositionParams b p
 
--- TextDocumentSignatureHelp Request
+-- TextDocumentSignatureHelp
 ---------------------------------------
 signatureHelpRequest :: (HasOutChannel r, HasContext r)
                      => Buffer -> NvimPos -> Neovim r st ()
 signatureHelpRequest b p = pushRequest @'TextDocumentSignatureHelpK
   =<< getTextDocumentPositionParams b p
 
--- TextDocumentDefinition Request
+-- TextDocumentDefinition
 ---------------------------------------
 definitionRequest :: (HasOutChannel r, HasContext r)
                   => Buffer -> NvimPos -> Neovim r st ()
@@ -39,7 +36,7 @@ definitionRequest b p = pushRequest @'TextDocumentDefinitionK
   =<< getTextDocumentPositionParams b p
 
 
--- WorkspaceExecuteCommand Request
+-- WorkspaceExecuteCommand
 ---------------------------------------
 executeCommandRequest :: (HasOutChannel r, HasContext r)
                       => String -> Option [Value] -> Neovim r st ()
@@ -48,11 +45,8 @@ executeCommandRequest cmd margs = pushRequest @'WorkspaceExecuteCommandK $
   <: #arguments @= margs
   <: nil
 
-
--------------------------------------------------------------------------------
--- Completion
--------------------------------------------------------------------------------
-
+-- TextDocumentCompletion
+---------------------------------------
 completionRequest :: (HasOutChannel r, HasContext r)
                   =>  Buffer -> NvimPos -> Neovim r st ()
 completionRequest b p = do
@@ -62,6 +56,4 @@ completionRequest b p = do
             <: #context      @= None
             <: nil
   pushRequest @'TextDocumentCompletionK params
-
-
 
