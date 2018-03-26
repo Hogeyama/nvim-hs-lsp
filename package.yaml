@@ -37,6 +37,7 @@ library:
   - exceptions
   - extra
   - xformat
+  - deepseq
 
     #executables:
     #  tmp:

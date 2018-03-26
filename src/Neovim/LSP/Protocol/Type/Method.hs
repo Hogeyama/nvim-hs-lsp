@@ -27,9 +27,9 @@ module Neovim.LSP.Protocol.Type.Method
 import           Data.Aeson
 import           Data.Singletons.TH
 import           Data.Singletons.TypeLits
-import           Data.Text                (Text)
-import qualified Data.Text                as T
-import           Neovim.LSP.Protocol.Type.JSON
+import           Data.Text                         (Text)
+import qualified Data.Text                         as T
+import           Neovim.LSP.Protocol.Type.Instance
 
 -------------------------------------------------------------------------------
 -- Method

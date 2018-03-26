@@ -16,7 +16,6 @@ import           Data.Extensible hiding (Nullable)
 import           Data.Singletons
 
 import           Neovim.LSP.Protocol.Type
-import           Neovim.LSP.Protocol.Type.JSON (Option (..))
 
 -------------------------------------------------------------------------------
 -- General
