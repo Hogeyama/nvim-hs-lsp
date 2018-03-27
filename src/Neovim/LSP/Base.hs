@@ -1,36 +1,41 @@
 
-{-# LANGUAGE BangPatterns          #-}
-{-# LANGUAGE DataKinds             #-}
-{-# LANGUAGE ExplicitForAll        #-}
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE FlexibleInstances     #-}
-{-# LANGUAGE GADTs                 #-}
-{-# LANGUAGE LambdaCase            #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE MultiWayIf            #-}
-{-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE PolyKinds             #-}
-{-# LANGUAGE RecordWildCards       #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE StandaloneDeriving    #-}
-{-# LANGUAGE TemplateHaskell       #-}
-{-# LANGUAGE TupleSections         #-}
-{-# LANGUAGE TypeApplications      #-}
-{-# LANGUAGE TypeOperators         #-}
-{-# LANGUAGE ViewPatterns          #-}
-{-# OPTIONS_GHC -Wall            #-}
+{-# LANGUAGE BangPatterns           #-}
+{-# LANGUAGE DataKinds              #-}
+{-# LANGUAGE ExplicitForAll         #-}
+{-# LANGUAGE FlexibleContexts       #-}
+{-# LANGUAGE FlexibleInstances      #-}
+{-# LANGUAGE GADTs                  #-}
+{-# LANGUAGE LambdaCase             #-}
+{-# LANGUAGE MultiParamTypeClasses  #-}
+{-# LANGUAGE MultiWayIf             #-}
+{-# LANGUAGE OverloadedStrings      #-}
+{-# LANGUAGE PolyKinds              #-}
+{-# LANGUAGE RecordWildCards        #-}
+{-# LANGUAGE ScopedTypeVariables    #-}
+{-# LANGUAGE StandaloneDeriving     #-}
+{-# LANGUAGE TemplateHaskell        #-}
+{-# LANGUAGE TupleSections          #-}
+{-# LANGUAGE TypeApplications       #-}
+{-# LANGUAGE TypeOperators          #-}
+{-# LANGUAGE ViewPatterns           #-}
+{-# LANGUAGE FunctionalDependencies #-}
+{-# LANGUAGE RankNTypes             #-}
+{-# LANGUAGE ConstraintKinds        #-}
+{-# OPTIONS_GHC -Wall               #-}
 
 
 module Neovim.LSP.Base where
 
+import           UnliftIO                   (MonadUnliftIO)
+import           UnliftIO.Exception
 import           Control.Concurrent         (ThreadId, forkIO)
 import           Control.Concurrent.Async   (async)
 import           Control.Concurrent.STM     (TChan, TVar, atomically,
-                                             newTChanIO, readTChan, readTVar,
-                                             writeTChan, writeTVar)
+                                             newTChanIO, readTChan, readTVar, modifyTVar',
+                                             readTVarIO, writeTChan, writeTVar)
 import           Control.Monad              (forM, forM_, forever, when)
 import           Control.Monad.IO.Class     (MonadIO, liftIO)
---import           Data.Bifunctor             (bimap)
+import           Control.Monad.Reader.Class (MonadReader, ask)
 import           Data.ByteString.Lazy.Char8 (ByteString)
 import qualified Data.ByteString.Lazy.Char8 as B
 import           Data.Constraint            (withDict)
@@ -57,13 +62,19 @@ import           System.Log.Handler.Simple  (fileHandler)
 import qualified System.Log.Logger          as L
 
 import           Control.Exception          (IOException, SomeException)
-import           Control.Monad.Catch        (Exception, MonadCatch, catch,
-                                             handle, throwM)
 import           GHC.Conc.Sync              (newTVarIO)
-import           Neovim                     hiding (Plugin)
-import           Neovim.Context             (forkNeovim)
+import           Control.DeepSeq (NFData)
 
+import           Neovim                     hiding (Plugin)
+import           Neovim.Context.Internal
 import           Neovim.LSP.Protocol.Type
+
+
+-------------------------------------------------------------------------------
+-- Env
+-------------------------------------------------------------------------------
+
+type NeovimLsp = Neovim LspEnv
 
 data ServerHandles = ServerHandles
   { serverIn  :: !Handle
@@ -78,7 +89,6 @@ data Context = Context
   , _lspUniqueVersion :: !Version
   , _lspVersionMap    :: !(Map Uri Version)
   }
-makeLenses ''Context
 
 initialContext :: Context
 initialContext = Context
@@ -89,51 +99,140 @@ initialContext = Context
   }
 
 -- TODO SenderやPluginとかのHandleを追加する
-data LspState = LspState
-  { _server      :: !(Maybe ServerHandles)
-  , _openedFiles :: Map Uri ()
-  }
-makeLenses ''LspState
-
 data LspEnv = LspEnv
-  { serverInChan  :: TChan B.ByteString -- lazy initialization
-  , serverOutChan :: TChan B.ByteString -- lazy initialization
-  , contextG      :: !(TVar Context)
+  { _lspEnvServerHandles :: !(TVar (Maybe ServerHandles))
+  ,  lspEnvInChan        :: TChan B.ByteString -- lazy initialization
+  , _lspEnvOutChan       :: TChan B.ByteString -- lazy initialization
+  , _lspEnvOpenedFiles   :: !(TVar (Map Uri Version))
+  , _lspEnvContext       :: !(TVar Context)
   }
-makeLenses ''LspEnv
-
-initialEnvIO :: IO LspEnv
-initialEnvIO = LspEnv <$> newTChanIO <*> newTChanIO <*> newTVarIO initialContext
-
-initialState :: LspState
-initialState = LspState
-  { _server      = Nothing
-  , _openedFiles = M.empty
+data PluginEnv = PluginEnv
+  { _pluginEnvInChan  :: !(TChan InMessage)
+  , _pluginEnvOutChan :: !(TChan ByteString)
+  , _pluginEnvContext :: !(TVar Context)
   }
 
-type NeovimLsp = Neovim LspEnv LspState
+initialEnvM :: MonadIO m => m LspEnv
+initialEnvM = liftIO $
+  pure LspEnv
+  <*> (newTVarIO Nothing)
+  <*> newTChanIO
+  <*> newTChanIO
+  <*> (newTVarIO M.empty)
+  <*> (newTVarIO initialContext)
 
-class HasContext r where contextL :: Lens' r (TVar Context)
-instance HasContext PluginEnv where
-  contextL = lens context (\x y -> x { context = y})
-instance HasContext LspEnv where
-  contextL = lens contextG (\x y -> x { contextG = y})
+-------------------------------------------------------------------------------
+-- Plugin
+-------------------------------------------------------------------------------
 
-class HasInChannel r where inChanL :: Lens' r (TChan InMessage)
-instance HasInChannel PluginEnv where
-  inChanL = lens inChan (\x y -> x { inChan = y})
+type PluginAction = Neovim PluginEnv
 
-class HasOutChannel r where outChanL :: Lens' r (TChan B.ByteString)
-instance HasOutChannel PluginEnv where
-  outChanL = lens outChan (\x y -> x { outChan = y})
-instance HasOutChannel LspEnv where
-  outChanL = lens serverOutChan (\x y -> x { serverOutChan = y})
+data Plugin = Plugin
+  { pred  :: !(InMessage -> Bool) -- Maybe (TVar (InMessage -> Bool))にするか
+  , acion :: !(PluginAction ())
+  }
+
+data InMessage where
+  SomeNoti :: ImplNotification m => !(ServerNotification m) -> InMessage
+  SomeReq  :: ImplRequest      m => !(ServerRequest      m) -> InMessage
+  SomeResp :: ImplResponse     m => !(ServerResponse     m) -> InMessage
+deriving instance Show InMessage
+
+instance J.ToJSON InMessage where
+  toJSON (SomeNoti x) = J.toJSON x
+  toJSON (SomeReq  x) = J.toJSON x
+  toJSON (SomeResp x) = J.toJSON x
+
+data InMessageMethod
+  = IMReq  ServerRequestMethod
+  | IMNoti ServerNotificationMethod
+  | IMResp ClientRequestMethod
+
+methodOf :: InMessage -> InMessageMethod
+methodOf (SomeNoti noti) =  IMNoti $ fromSing $ singByProxy noti
+methodOf (SomeReq  req ) =  IMReq  $ fromSing $ singByProxy req
+methodOf (SomeResp resp) =  IMResp $ fromSing $ singByProxy resp
+
+toInMessage :: HashMap ID ClientRequestMethod -> J.Value -> Either String InMessage
+toInMessage map' v@(J.Object o) = mmethod >>= \case
+    IMReq (toSing -> SomeSing (s :: Sing m))
+      -> withDict (prfServerReq s) $ SomeReq  @m <$> fromJSONEither v
+    IMNoti (toSing -> SomeSing (s :: Sing m))
+      -> withDict (prfServerNoti s) $ SomeNoti @m <$> fromJSONEither v
+    IMResp (toSing -> SomeSing (s :: Sing m))
+      -> withDict (prfServerResp s) $ SomeResp @m <$> fromJSONEither v
+  where
+    -- TODO
+    -- + error handling
+    -- + Miscが来たときに必ずNotiになってしまう
+    --   多分globalな状態で持ってどっちかを指定するのが良いのだと思う
+    --   `cancel`はNotificationとか
+    mmethod :: Either String InMessageMethod
+    mmethod
+      | Just m <- fromJSONMay =<< HM.lookup "method" o
+          = return $ IMNoti m
+      | Just m <- fromJSONMay =<< HM.lookup "method" o
+          = return $ IMReq m
+      | Just m <- (`HM.lookup` map') =<< fromJSONMay =<< HM.lookup "id" o
+          = return $ IMResp m
+      | otherwise
+          = Left "そんなバナナ1"
+toInMessage _ _ = Left "そんなバナナ2"
+
+fromJSONEither :: J.FromJSON a => J.Value -> Either String a
+fromJSONEither = resultEither . J.fromJSON
+
+fromJSONMay :: J.FromJSON a => J.Value -> Maybe a
+fromJSONMay = resultMaybe . J.fromJSON
+
+resultMaybe :: J.Result a -> Maybe a
+resultMaybe (J.Success x) = Just x
+resultMaybe _             = Nothing
+
+resultEither :: J.Result a -> Either String a
+resultEither (J.Success x) = Right x
+resultEither (J.Error e)   = Left e
+
+-------------------------------------------------------------------------------
+-- Lens
+-------------------------------------------------------------------------------
+makeLenses ''Context
+makeLensesWith camelCaseFields ''LspEnv
+makeLensesWith camelCaseFields ''PluginEnv
+
+type HasInChan'        env = HasInChan        env (TChan InMessage)
+type HasOutChan'       env = HasOutChan       env (TChan B.ByteString)
+type HasContext'       env = HasContext       env (TVar  Context)
+type HasOpenedFiles'   env = HasOpenedFiles   env (TVar  (Map Uri Version))
+type HasServerHandles' env = HasServerHandles env (TVar  (Maybe ServerHandles))
+
+useTV :: (MonadReader r m, MonadIO m) => Lens' r (TVar a) -> m a
+useTV getter = liftIO . readTVarIO =<< view getter
+
+usesTV :: (MonadReader r m, MonadIO m) => Lens' r (TVar a) -> (a -> b) -> m b
+usesTV getter f = f <$> useTV getter
+
+assignTV :: (MonadReader r m, MonadIO m) => Lens' r (TVar a) -> a -> m ()
+assignTV getter x = do
+  v <- view getter
+  liftIO $ atomically $ writeTVar v x
+
+modifyOverTV :: (MonadReader r m, MonadIO m) => Lens' r (TVar a) -> (a -> a) -> m ()
+modifyOverTV getter f = do
+  v <- view getter
+  liftIO $ atomically $ modifyTVar' v f
+
+(.==) :: (MonadReader r m, MonadIO m) => Lens' r (TVar a) -> a -> m ()
+(.==) = assignTV
+
+(%==) :: (MonadReader r m, MonadIO m) => Lens' r (TVar a) -> (a -> a) -> m ()
+(%==) = modifyOverTV
 
 -------------------------------------------------------------------------------
 -- Initialize
 -------------------------------------------------------------------------------
 
-initializeLsp :: String -> [String] -> Neovim LspEnv LspState ()
+initializeLsp :: String -> [String] -> NeovimLsp ()
 initializeLsp cmd args = do
   (Just hin, Just hout, Just herr, ph) <-
       liftIO $ createProcess $ (proc cmd args)
@@ -142,14 +241,14 @@ initializeLsp cmd args = do
         , std_out = CreatePipe
         , std_err = CreatePipe
         }
-  server .= Just ServerHandles
-              { serverIn  = hin
-              , serverOut = hout
-              , serverErr = herr
-              , serverPH  = ph
-              }
-  inCh <- asks serverInChan
-  outCh <- asks serverOutChan
+  serverHandles .== Just ServerHandles
+                         { serverIn  = hin
+                         , serverOut = hout
+                         , serverErr = herr
+                         , serverPH  = ph
+                         }
+  inCh  <- asks lspEnvInChan
+  outCh <- asks _lspEnvOutChan
   liftIO $ do
     hSetBuffering hin  NoBuffering
     hSetBuffering hout NoBuffering
@@ -163,8 +262,8 @@ initializeLsp cmd args = do
           (\(_e :: IOException) -> return ())
           (hGetLine herr >>= (errorM . ("STDERR: "++)))
 
-isInitialized :: Neovim r LspState Bool
-isInitialized = uses server isJust
+isInitialized :: NeovimLsp Bool
+isInitialized = usesTV serverHandles isJust
 
 uninitializedError :: a
 uninitializedError = error "not initialized (TODO: fabulous message)"
@@ -259,86 +358,22 @@ data Header = Header
   } deriving (Eq, Show)
 
 
--------------------------------------------------------------------------------
--- Plugin
--------------------------------------------------------------------------------
-
-data PluginEnv = PluginEnv
-  { inChan  :: !(TChan InMessage)
-  , outChan :: !(TChan ByteString)
-  , context :: !(TVar Context)
-  }
-
-type PluginAction = Neovim PluginEnv ()
-
-data Plugin = Plugin
-  { pred  :: !(InMessage -> Bool) -- Maybe (TVar (InMessage -> Bool))にするか
-  , acion :: !(PluginAction ())
-  }
-
-data InMessage where
-  SomeNoti :: ImplNotification m => !(ServerNotification m) -> InMessage
-  SomeReq  :: ImplRequest      m => !(ServerRequest      m) -> InMessage
-  SomeResp :: ImplResponse     m => !(ServerResponse     m) -> InMessage
-deriving instance Show InMessage
-
-instance J.ToJSON InMessage where
-  toJSON (SomeNoti x) = J.toJSON x
-  toJSON (SomeReq  x) = J.toJSON x
-  toJSON (SomeResp x) = J.toJSON x
-
-data InMessageMethod
-  = IMReq  ServerRequestMethod
-  | IMNoti ServerNotificationMethod
-  | IMResp ClientRequestMethod
-
-methodOf :: InMessage -> InMessageMethod
-methodOf (SomeNoti noti) =  IMNoti $ fromSing $ singByProxy noti
-methodOf (SomeReq  req ) =  IMReq  $ fromSing $ singByProxy req
-methodOf (SomeResp resp) =  IMResp $ fromSing $ singByProxy resp
-
-toInMessage :: HashMap ID ClientRequestMethod -> J.Value -> Either String InMessage
-toInMessage map' v@(J.Object o) = mmethod >>= \case
-    IMReq (toSing -> SomeSing (s :: Sing m))
-      -> withDict (prfServerReq s) $ SomeReq  @m <$> fromJSONEither v
-    IMNoti (toSing -> SomeSing (s :: Sing m))
-      -> withDict (prfServerNoti s) $ SomeNoti @m <$> fromJSONEither v
-    IMResp (toSing -> SomeSing (s :: Sing m))
-      -> withDict (prfServerResp s) $ SomeResp @m <$> fromJSONEither v
-  where
-    -- TODO
-    -- + error handling
-    -- + Miscが来たときに必ずNotiになってしまう
-    --   多分globalな状態で持ってどっちかを指定するのが良いのだと思う
-    --   `cancel`はNotificationとか
-    mmethod :: Either String InMessageMethod
-    mmethod
-      | Just m <- fromJSONMay =<< HM.lookup "method" o
-          = return $ IMNoti m
-      | Just m <- fromJSONMay =<< HM.lookup "method" o
-          = return $ IMReq m
-      | Just m <- (`HM.lookup` map') =<< fromJSONMay =<< HM.lookup "id" o
-          = return $ IMResp m
-      | otherwise
-          = Left "そんなバナナ1"
-toInMessage _ _ = Left "そんなバナナ2"
-
 -- Plugin's action
 ---------------------------------------
 
-pull :: (HasInChannel r) => Neovim r st InMessage
-pull = liftIO . atomically . readTChan =<< view inChanL
+pull :: (HasInChan' env) => Neovim env InMessage
+pull = liftIO . atomically . readTChan =<< view inChan
 
-push :: (HasOutChannel r, J.ToJSON a, Show a) => a -> Neovim r st ()
+push :: (HasOutChan' env, J.ToJSON a, Show a) => a -> Neovim env ()
 push x = do
-  outCh <- view outChanL
+  outCh <- view outChan
   liftIO $ atomically $ writeTChan outCh $ J.encode x
 
 -- modifyMVarと一致させるなら関数を一つにまとめたほうがよい？
-modifyContext :: HasContext r
-              => (Context -> Context) -> (Context -> a) -> Neovim r st a
+modifyContext :: (MonadReader env m, MonadIO m, HasContext' env)
+              => (Context -> Context) -> (Context -> a) -> m a
 modifyContext modify_ read_ = do
-  ctxV <- view contextL
+  ctxV <- view context
   ctx <- liftIO $ atomically $ do
     ctx <- readTVar ctxV
     writeTVar ctxV $! modify_ ctx
@@ -347,45 +382,58 @@ modifyContext modify_ read_ = do
 
 ---
 
-modifyContext' :: HasContext r => (Context -> Context) -> Neovim r st ()
+modifyContext' :: (MonadReader env m, MonadIO m, HasContext' env)
+               => (Context -> Context) -> m ()
 modifyContext' modify_ = modifyContext modify_ (const ())
 
-readContext :: HasContext r => (Context -> a) -> Neovim r st a
+readContext :: (MonadReader env m, MonadIO m, HasContext' env)
+            => (Context -> a) -> m a
 readContext read_ = modifyContext id read_
 
 ---
 
-genUniqueID :: HasContext r => Neovim r st ID
+genUniqueID :: (MonadReader env m, MonadIO m, HasContext' env) => m ID
 genUniqueID = modifyContext
   (lspUniqueID %~ succ)
   (IDNum . fromIntegral . (^. lspUniqueID))
 
-genUniqueVersion :: HasContext r => Neovim r st Version
+genUniqueVersion :: (MonadReader env m, MonadIO m, HasContext' env)
+                 => m Version
 genUniqueVersion = modifyContext
   (lspUniqueVersion %~ succ)
   (^. lspUniqueVersion)
 
-addIdMethodMap :: HasContext r => ID -> ClientRequestMethod -> Neovim r st ()
+addIdMethodMap :: (MonadReader env m, MonadIO m, HasContext' env)
+               => ID -> ClientRequestMethod -> m ()
 addIdMethodMap id' m = modifyContext' (lspIdMap %~ HM.insert id' m)
 
 -------------------------------------------------------------------------------
 -- Dispatcher
 -------------------------------------------------------------------------------
 
-dispatcher :: [Plugin]
-           -> Neovim LspEnv LspState (ThreadId, [ThreadId])
+-- TODO
+forkNeovim :: NFData a => iEnv -> Neovim iEnv a -> Neovim env ThreadId
+forkNeovim r a = do
+    cfg <- ask'
+    let threadConfig = retypeConfig r cfg
+    liftIO . forkIO . void $ runNeovim threadConfig a
+
+dispatcher :: [Plugin] -> NeovimLsp (ThreadId, [ThreadId])
 dispatcher hs = do
     debugM "this is dispatcher!"
-    LspEnv inChG outCh ctx <- ask
+    LspEnv {  lspEnvInChan  = inChG
+           , _lspEnvOutChan = outCh
+           , _lspEnvContext = ctx
+           } <- ask
 
     (handlers,hIDs) <- fmap unzip $ forM hs $ \(Plugin p action) -> do
       inCh <- liftIO newTChanIO
       let config = PluginEnv inCh outCh ctx
-      hID <- forkNeovim config () $ loggingError $ withCatchBlah action
+      hID <- forkNeovim config $ loggingError action
       return ((p,inCh), hID)
 
-    -- TODO handlersを動的に追加できるように
-    dpID <- liftIO $ forkIO $ loggingError $ withCatchBlah $ forever $ do
+    -- TODO handlersを動的に追加できるようにする？
+    dpID <- liftIO $ forkIO $ loggingError $ forever $ do
         rawInput <- atomically (readTChan inChG)
         let Just !v = J.decode rawInput
         idMap <- atomically (_lspIdMap <$> readTVar ctx)
@@ -399,31 +447,11 @@ dispatcher hs = do
               ]
 
     return (dpID, hIDs)
-  where
-    withCatchBlah :: (MonadIO m, MonadCatch m) => m () -> m ()
-    withCatchBlah m = m `catch` \case Blah -> return ()
-
-data Blah = Blah deriving Show
-instance Exception Blah
 
 -------------------------------------------------------------------------------
 -- Util
 -------------------------------------------------------------------------------
 
-fromJSONMay :: J.FromJSON a => J.Value -> Maybe a
-fromJSONMay = resultMaybe . J.fromJSON
-
-fromJSONEither :: J.FromJSON a => J.Value -> Either String a
-fromJSONEither = resultEither . J.fromJSON
-
-resultMaybe :: J.Result a -> Maybe a
-resultMaybe (J.Success x) = Just x
-resultMaybe _             = Nothing
-
-resultEither :: J.Result a -> Either String a
-resultEither (J.Success x) = Right x
-resultEither (J.Error e)   = Left e
-
-loggingError :: (MonadIO m, MonadCatch m) => m a -> m a
-loggingError = handle (\(e :: SomeException) -> errorM (show e) >> throwM e)
+loggingError :: (MonadUnliftIO m) => m a -> m a
+loggingError = handle (\(e :: SomeException) -> errorM (show e) >> throwIO e)
 

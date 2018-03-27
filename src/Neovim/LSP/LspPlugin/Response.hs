@@ -84,7 +84,7 @@ responsePluginAction = forever @_ @() @() $ do
 -- Hover
 -------------------------------------------------------------------------------
 
-responseHover :: ServerResponse 'TextDocumentHoverK -> Neovim PluginEnv () ()
+responseHover :: ServerResponse 'TextDocumentHoverK -> Neovim PluginEnv ()
 responseHover (Response resp) = do
   debugM $ "responseHover: " ++ show resp
   withResult resp $ \case
@@ -113,7 +113,7 @@ textDocumentHoverNoInfo = "textDocument/hover: no info"
 -- Definitions
 -------------------------------------------------------------------------------
 
-responseDefinition :: ServerResponse 'TextDocumentDefinitionK -> Neovim r st ()
+responseDefinition :: ServerResponse 'TextDocumentDefinitionK -> Neovim env ()
 responseDefinition (Response resp) = do
   debugM $ "responseDefinition: " ++ show resp
   withResult resp $ \case
@@ -121,7 +121,7 @@ responseDefinition (Response resp) = do
     Just [] -> nvimEcho textDocumentDefinitionNoInfo
     Just r  -> jumpToLocation $ head r
 
-jumpToLocation :: Location -> Neovim r st ()
+jumpToLocation :: Location -> Neovim env ()
 jumpToLocation loc = do
   let uri   = loc^. #uri
       range = loc^. #range
@@ -149,16 +149,16 @@ textDocumentDefinitionNoInfo = "textDocument/definition: no info"
 -- Complete
 -------------------------------------------------------------------------------
 
-complete :: ServerResponse 'TextDocumentCompletionK -> Neovim r st ()
+complete :: ServerResponse 'TextDocumentCompletionK -> Neovim env ()
 complete (Response resp) = withResult resp $ \case
   Nothing -> return () -- is it ok?
   Just (L cs) -> completeCompletionItems cs
   Just (R cl) -> completeCompletionList cl
 
-completeCompletionList :: CompletionList -> Neovim r st ()
+completeCompletionList :: CompletionList -> Neovim env ()
 completeCompletionList cl = completeCompletionItems $ cl^. #items
 
-completeCompletionItems :: [CompletionItem] -> Neovim r st ()
+completeCompletionItems :: [CompletionItem] -> Neovim env ()
 completeCompletionItems cs = do
   undefined cs
 
@@ -199,7 +199,7 @@ toVimItem c
 -- Util
 -------------------------------------------------------------------------------
 
-withResult :: ResponseMessage a e -> (a -> Neovim r st ()) -> Neovim r st ()
+withResult :: ResponseMessage a e -> (a -> Neovim env ()) -> Neovim env ()
 withResult resp k =
   case resp^. #error of
     Some e -> vim_report_error' (T.unpack (e^. #message))

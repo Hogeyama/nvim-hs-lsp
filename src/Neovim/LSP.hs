@@ -7,18 +7,13 @@ module Neovim.LSP (plugin) where
 import Neovim
 import Neovim.LSP.Base        hiding (Plugin)
 import Neovim.LSP.Plugin
-import Control.Monad.IO.Class (liftIO)
 
-plugin :: Neovim (StartupConfig NeovimConfig) () NeovimPlugin
+plugin :: Neovim (StartupConfig NeovimConfig) NeovimPlugin
 plugin = do
-  initialEnv <- liftIO initialEnvIO
+  initialEnv <- initialEnvM
   wrapPlugin Plugin
-    { exports = []
-    , statefulExports =
-      [ StatefulFunctionality
-          { readOnly = initialEnv
-          , writable = initialState
-          , functionalities =
+    { environment = initialEnv
+    , exports =
             [
             -- Notification
               $(command' 'nvimHsLspInitialize)     ["async"]
@@ -34,8 +29,6 @@ plugin = do
             --
             , $(function' 'nvimHsLspComplete) Sync
             ]
-        }
-      ]
     }
 
 

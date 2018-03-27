@@ -38,22 +38,27 @@ library:
   - extra
   - xformat
   - deepseq
+  - unliftio
 
-    #executables:
-    #  tmp:
-    #    main:                Main.hs
-    #    source-dirs:         app
-    #    ghc-options:
-    #    - -threaded
-    #    - -rtsopts
-    #    - -with-rtsopts=-N
-    #    - -Wall
-    #    dependencies:
-    #    - nvim-hs >= 0.2.2
-    #    - nvim-hs-lsp
-    #    - stm
-    #    - process
-    #    - lens
+executables:
+  tmp:
+    main:                Main.hs
+    source-dirs:         app
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    - -dcore-lint
+    - -O2
+      #- -ddump-splices
+    - -fprint-explicit-kinds
+    dependencies:
+    - nvim-hs
+    - nvim-hs-lsp
+    - stm
+    - lens
+    - process
+
 
 tests:
   doctests:

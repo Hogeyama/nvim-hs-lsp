@@ -3,12 +3,10 @@
 {-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications  #-}
-{-# OPTIONS_GHC -Wall #-}
+{-# OPTIONS_GHC -Wall          #-}
 
 module Neovim.LSP.Plugin where
 
-import           Control.Lens                      (use)
-import           Control.Lens.Operators            ((%=))
 import           Control.Monad                     (void)
 import           Control.Monad.Extra               (ifM)
 import           Data.Aeson
@@ -44,6 +42,7 @@ nvimHsLspInitialize ca = loggingError $ do
     void $ dispatcher [notificationHandler, requestHandler, responseHandler]
     cwd <- filePathToUri <$> errOnInvalidResult (vim_call_function "getcwd" [])
     pushRequest @'InitializeK (initializeParam Nothing (Just cwd))
+
     let hsPattern = def { acmdPattern = "*.hs" }
     Just Right{} <- addAutocmd "BufRead,BufNewFile"       hsPattern (nvimHsLspOpenBuffer ca)
     Just Right{} <- addAutocmd "TextChanged,TextChangedI" hsPattern (nvimHsLspChangeBuffer ca)
@@ -67,16 +66,14 @@ whenAlreadyOpened m = do
   ifM (alreadyOpened uri) m (vim_out_write' "nvim-hs-lsp: Not opened yet\n")
 
 alreadyOpened :: Uri -> NeovimLsp Bool
-alreadyOpened uri = do
-  opened <- use openedFiles
-  return $ M.member uri opened
+alreadyOpened uri = M.member uri <$> useTV openedFiles
 
 nvimHsLspOpenBuffer :: CommandArguments -> NeovimLsp ()
 nvimHsLspOpenBuffer _ = whenInitialized $ do
   b <- vim_get_current_buffer'
   uri <- getBufUri b
   ifM (alreadyOpened uri) (vim_out_write' "nvim-hs-lsp: Already opened\n") $ do
-    openedFiles %= M.insert uri ()
+    openedFiles %== M.insert uri 0
     didOpenBuffer b
 
 nvimHsLspCloseBuffer :: CommandArguments -> NeovimLsp ()
@@ -84,7 +81,7 @@ nvimHsLspCloseBuffer _ = whenInitialized $ do
   b <- vim_get_current_buffer'
   uri <- getBufUri b
   ifM (not <$> alreadyOpened uri) (vim_out_write' "nvim-hs-lsp: Not opened yet\n") $ do
-    openedFiles %= M.delete uri
+    openedFiles %== M.delete uri
     didCloseBuffer b
 
 nvimHsLspChangeBuffer :: CommandArguments -> NeovimLsp ()
@@ -130,7 +127,4 @@ nvimHsLspApplyRefactOne _ = whenInitialized $ whenAlreadyOpened $ do
 nvimHsLspComplete :: NeovimLsp (Either Int [VimCompleteItem])
 nvimHsLspComplete = do
   return $ Right []
-
-
-
 

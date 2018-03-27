@@ -3,7 +3,8 @@
 {-# LANGUAGE TypeApplications          #-}
 {-# LANGUAGE DataKinds                 #-}
 {-# LANGUAGE OverloadedLabels          #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleContexts          #-}
+{-# LANGUAGE ScopedTypeVariables       #-}
 {-# OPTIONS_GHC -Wall                  #-}
 
 module Neovim.LSP.Action.Notification
@@ -27,7 +28,7 @@ import           Neovim.LSP.Protocol.Type
 
 -- TextDocumentDidOpen Notification
 ---------------------------------------
-didOpenBuffer :: (HasOutChannel r, HasContext r) => Buffer -> Neovim r st ()
+didOpenBuffer :: (HasOutChan' env, HasContext' env) => Buffer -> Neovim env ()
 didOpenBuffer b = do
     contents <- getBufContents b
     language <- getBufLanguage b
@@ -44,7 +45,7 @@ didOpenBuffer b = do
 
 -- TextDocumentDidClose Notification
 ---------------------------------------
-didCloseBuffer :: (HasOutChannel r, HasContext r) => Buffer -> Neovim r st ()
+didCloseBuffer :: (HasOutChan' env, HasContext' env) => Buffer -> Neovim env ()
 didCloseBuffer b = do
     tid      <- textDocumentIdentifier <$> getBufUri b
     let param = #textDocument @= tid <: nil
@@ -52,7 +53,7 @@ didCloseBuffer b = do
 
 -- TextDocumentDidSave Notification
 ---------------------------------------
-didSaveBuffer :: (HasOutChannel r) => Buffer -> Neovim r st ()
+didSaveBuffer :: (HasOutChan' env) => Buffer -> Neovim env ()
 didSaveBuffer b = do
     tid      <- textDocumentIdentifier <$> getBufUri b
     --contents <- getBufContents b
@@ -63,7 +64,7 @@ didSaveBuffer b = do
 
 -- TextDocumentDidChange Notification
 ---------------------------------------
-didChangeBuffer :: (HasOutChannel r, HasContext r) => Buffer -> Neovim r st ()
+didChangeBuffer :: (HasOutChan' env, HasContext' env) => Buffer -> Neovim env ()
 didChangeBuffer b = do
     contents <- getBufContents b
     vtid <- versionedTextDocmentIdentifier <$> getBufUri b <*> genUniqueVersion

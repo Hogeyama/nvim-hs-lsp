@@ -28,7 +28,7 @@ import           Neovim.LSP.Protocol.Type
 --  testWithEmbeddedNeovimを使うとb:current_syntaxが存在しないことになっててダメ
 --  (filetypeは存在するのになんでだろう)
 --  extensionから推測するのが妥当か?
-getBufLanguage :: Buffer -> Neovim r st String
+getBufLanguage :: Buffer -> Neovim env String
 getBufLanguage b = nvim_buf_get_var b "current_syntax" >>= \case
     Right o | Right s <- fromObject o ->
         return s
@@ -39,19 +39,19 @@ getBufLanguage b = nvim_buf_get_var b "current_syntax" >>= \case
         return "haskell"
     _  -> error "didOpenCurrentBuffer: impossible?"
 
-getBufUri :: Buffer -> Neovim r st Uri
+getBufUri :: Buffer -> Neovim env Uri
 getBufUri b = filePathToUri <$> nvim_buf_get_name' b
 
-getNvimPos :: Neovim r st NvimPos
+getNvimPos :: Neovim env NvimPos
 getNvimPos = vim_call_function "getpos" [ObjectString "."] >>= \case
   Right (fromObject -> Right [_bufnum, lnum, col, _off]) -> return (lnum,col)
   e -> errorM (show e) >> error "getNvimPos"
 
-getBufContents :: Buffer -> Neovim r st Text
+getBufContents :: Buffer -> Neovim env Text
 getBufContents b = T.pack.unlines <$> nvim_buf_get_lines' b 0 maxBound False
 
 getTextDocumentPositionParams :: Buffer -> NvimPos
-                              -> Neovim r st TextDocumentPositionParams
+                              -> Neovim env TextDocumentPositionParams
 getTextDocumentPositionParams b p = do
   uri <- getBufUri b
   let pos = #textDocument @= textDocumentIdentifier uri
@@ -78,18 +78,18 @@ getTextDocumentPositionParams b p = do
 -- "OK"
 --
 -- TODO これをユーザーに見せるのはどうなのか．でもtype checkはして欲しいしなあ
-pushRequest :: forall (m :: ClientRequestMethodK) r st
-            .  (ImplRequest m, HasOutChannel r, HasContext r)
-            => RequestParam m -> Neovim r st ()
+pushRequest :: forall (m :: ClientRequestMethodK) env
+            .  (ImplRequest m, HasOutChan' env, HasContext' env)
+            => RequestParam m -> Neovim env ()
 pushRequest param = do
     let method = fromSing (sing :: Sing m)
     id' <- genUniqueID
     addIdMethodMap id' method
     push $ request @m id' param
 
-pushNotification :: forall (m :: ClientNotificationMethodK) r st
-                 .  (ImplNotification m, HasOutChannel r)
-                 => NotificationParam m -> Neovim PluginEnv st ()
+pushNotification :: forall (m :: ClientNotificationMethodK) env
+                 .  (ImplNotification m, HasOutChan' env)
+                 => NotificationParam m -> Neovim env ()
 pushNotification param = push $ notification @m param
 
 -- TODO NeovimのPos,RangeとLSPのPos,Rangeを上手く変換する
@@ -104,10 +104,10 @@ nvimPosToPosition (line,char) =
 positionToNvimPos :: Position -> NvimPos
 positionToNvimPos pos = (1 + pos^. #line, 1 + pos^. #character)
 
-nvimEcho :: String -> Neovim r st ()
+nvimEcho :: String -> Neovim env ()
 nvimEcho s = vim_command' $ "echo " ++ show s
 
-nvimEchom :: String -> Neovim r st ()
+nvimEchom :: String -> Neovim env ()
 nvimEchom s = vim_command' $ "echom " ++ show s
 
 -------------------------------------------------------------------------------

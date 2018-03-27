@@ -57,18 +57,20 @@ type Nullable = Maybe
 -- it will be omit with its key when converted by 'toJSON':
 --
 -- >>> :set -XDataKinds -XTypeOperators -XOverloadedStrings -XOverloadedLabels
--- >>> import qualified Data.ByteString.Lazy.Char8 as B
+-- >>> import qualified Data.ByteString.Lazy.Char8 as BL
 -- >>> let recordMay = #id @= Nothing <: nil :: Record '["id" >: Maybe  Char]
 -- >>> let recordOpt = #id @= None    <: nil :: Record '["id" >: Option Char]
--- >>> B.putStrLn $ encode $ toJSON recordMay
+-- >>> BL.putStrLn $ encode $ toJSON recordMay
 -- {"id":null}
--- >>> B.putStrLn $ encode $ toJSON recordOpt
+-- >>> BL.putStrLn $ encode $ toJSON recordOpt
 -- {}
 --
 -- TODO 説明.
 --
 -- >>> decode "{\"id\":null}" :: Maybe (Record '["id" >: Maybe  Int])
 -- Just (id @= Nothing <: nil)
+-- >>> decode "{}" :: Maybe (Record '["id" >: Maybe  Int])
+-- Nothing
 -- >>> decode "{\"id\":null}" :: Maybe (Record '["id" >: Option Int])
 -- Just (id @= None <: nil)
 -- >>> decode "{}" :: Maybe (Record '["id" >: Option Int])

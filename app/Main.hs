@@ -32,16 +32,17 @@ import           Neovim.LSP.LspPlugin.Request      (requestHandler)
 import           Neovim.LSP.Protocol.Messages
 import           Neovim.LSP.Protocol.Type
 import           Neovim.LSP.Util
+import System.Exit (ExitCode(..))
 
-print' :: Show a => a -> Neovim r st ()
+print' :: Show a => a -> Neovim env ()
 print' x = liftIO $ print x
 
 main :: IO ()
 main = do
+  initialEnv <- initialEnvM
   mapM_ unsetEnv [ "GHC_PACKAGE_PATH" ]
   let f = "test-file/hoge.hs"
-  initialEnv <- initialEnvIO
-  testWithEmbeddedNeovim (Just f) (Seconds 10000) initialEnv initialState $ do
+  testWithEmbeddedNeovim (Just f) (Seconds 10000) initialEnv $ do
       vim_command' "source ./test-file/init.vim"
 
       initializeLsp "hie" ["--lsp", "-d", "-l", "/tmp/LanguageServer.log"]
@@ -53,14 +54,14 @@ main = do
                            , handler2
                            ]
 
-      Just ph <- fmap serverPH <$> use server
-      Just herr <- fmap serverErr <$> use server
+      Just ph   <- fmap serverPH  <$> useTV serverHandles
+      Just herr <- fmap serverErr <$> useTV serverHandles
       threadDelaySec 10
       () <- liftIO $ forever (putStrLn =<< hGetLine herr)
               `catch` \(_::IOError) -> return ()
       liftIO $ do
         hFlush stdout
-        mapM_ (throwTo `flip` Blah) $ dpth : hths
+        --mapM_ (throwTo `flip` ExitSuccess) $ dpth : hths
         terminateProcess ph
       threadDelaySec 3
         -- TODO Handlerの終了を待てるようにしたほうがいいのだろうか
@@ -79,7 +80,7 @@ handler2 = Plugin (const False) $ do
 
   -- Initialize
   -------------
-  let cwd = filePathToUri "/home/hogeyama/.config/nvim/nvim-hs-libs/nvim-hs-lsp/test-file"
+  let cwd = filePathToUri "/home/hoegyama/.config/nvim/nvim-hs-libs/nvim-hs-lsp/test-file"
       params' = initializeParam Nothing (Just cwd)
   pushRequest @'InitializeK params'
 

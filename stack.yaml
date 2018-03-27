@@ -1,7 +1,7 @@
 
-resolver: lts-10.0
+resolver: lts-11.0
 
 extra-deps:
-- nvim-hs-0.2.5
-- haskell-src-exts-1.17.1
+- nvim-hs-1.0.0.0
 - xformat-0.1.2.1
+- extensible-0.4.7
