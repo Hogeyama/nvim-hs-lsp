@@ -51,14 +51,12 @@ module Neovim.LSP.Protocol.Type.Interfaces
   , VersionedTextDocmentIdentifier
   , TextDocumentItem
   , TextDocumentPositionParams
+  , CompletionItem
+  , CompletionList
   , DocumentFilter
   , DocumentSelector
   , Trace(..)
 
-  -- type familyとか
-  --, X(..)
-  --, Method
-  --
   , RequestParam
   , NotificationParam
   , ResResult
@@ -102,51 +100,24 @@ module Neovim.LSP.Protocol.Type.Interfaces
   )
   where
 
-import           Control.Applicative             ((<|>))
-import           Control.Monad                   (mzero)
-import           Data.Aeson                      hiding (Error)
-import           Data.Aeson.Types                (toJSONKeyText)
-import           Data.Char                       (digitToInt, toLower)
-import           Data.Extensible                 hiding (Nullable)
-import           Data.Hashable                   (Hashable)
-import           Data.Singletons                 (SingI, SingKind(..))
-import           Data.Text                       (Text)
-import qualified Data.Text                       as T
-import           Data.Map                        (Map)
-import           GHC.Generics                    (Generic)
-import           Neovim.LSP.Protocol.Type.JSON   (FieldJSON, Option (..))
+import           Control.Monad                      (mzero)
+import           Data.Aeson                         hiding (Error)
+import           Data.Aeson.Types                   (toJSONKeyText)
+import           Data.Char                          (digitToInt, toLower)
+import           Data.Extensible                    hiding (Nullable)
+import           Data.Hashable                      (Hashable)
+import           Data.Singletons                    (SingI, SingKind(..))
+import           Data.Text                          (Text)
+import qualified Data.Text                          as T
+import           Data.Map                           (Map)
+import           GHC.Generics                       (Generic)
+import           Neovim.LSP.Protocol.Type.Instance
 import           Neovim.LSP.Protocol.Type.Method
-import           Safe                            (lookupJust)
+import           Safe                               (lookupJust)
 import Data.Function (on)
 
 -- Interfaces defined in
 -- https://github.com/Microsoft/language-server-protocol/blob/master/protocol.md
-
--------------------------------------------------------------------------------
--- Type for fields
--------------------------------------------------------------------------------
-
-type Nullable = Maybe
-
--- | Sum type for record. The differnce against 'Either' is:
---
--- >>> :set -XOverloadedStrings -XTypeOperators
--- >>> encode (Left 1 :: Either Int Bool)
--- "{\"Left\":1}"
--- >>> encode (L 1 :: Int :|: Bool)
--- "1"
---
-data (:|:) a b = L a | R b
-  deriving (Show, Eq, Ord)
-instance (FromJSON a, FromJSON b) => FromJSON (a :|: b) where
-  parseJSON o =  L <$> parseJSON o
-             <|> R <$> parseJSON o
-instance (ToJSON a, ToJSON b) => ToJSON (a :|: b) where
-  toJSON (L o) = toJSON o
-  toJSON (R o) = toJSON o
-infixr 4 :|:
-
-type OptionRecord xs = Option (Record xs)
 
 -------------------------------------------------------------------------------
 -- Base Protocol
@@ -364,16 +335,16 @@ type DocumentSelector = [DocumentFilter]
 ----------------------------------------
 
 data ErrorCode
-  = ParseError            -- -32700
-  | InvalidRequest        -- -32600
-  | MethodNotFound        -- -32601
-  | InvalidParams         -- -32602
-  | InternalError         -- -32603
-  | ServerErrorStart      -- -32099
-  | ServerErrorEnd        -- -32000
-  | ServerNotInitialized  -- -32002
-  | UnknownErrorCode      -- -32001
-  | RequestCancelled      -- -32800
+  = ParseError
+  | InvalidRequest
+  | MethodNotFound
+  | InvalidParams
+  | InternalError
+  | ServerErrorStart
+  | ServerErrorEnd
+  | ServerNotInitialized
+  | UnknownErrorCode
+  | RequestCancelled
   | OtherError Int
   deriving (Show, Eq, Ord)
 
@@ -559,6 +530,9 @@ type ClientCapabilities = Record
    , "textDocument" >: Option TextDocumentClientCapabilities
    , "experimental" >: Option Value
    ]
+
+-- TODO move
+type OptionRecord xs = Option (Record xs)
 
 type WorkspaceClientCapabilities = Record
   -- {{{
@@ -945,7 +919,7 @@ type CompletionItem = Record
    , "sortText"            >: Option String
    , "filterText"          >: Option String
    , "insertText"          >: Option String
-   , "insertTextFormat"    >: InsertTextFormat
+   , "insertTextFormat"    >: Option InsertTextFormat
    , "textEdit"            >: Option TextEdit
    , "additionalTextEdits" >: Option [TextEdit]
    , "commitCharacters"    >: Option [String]
@@ -989,9 +963,9 @@ type ApplyWorkspaceEditResponse = Record
 
 -- Misc
 ---------------------------------------
-type instance RequestParam      ('ServerRequestMiscK      s) = Value
-type instance ResResult         ('ServerRequestMiscK      s) = Value
-type instance ResError          ('ServerRequestMiscK      s) = Value
+type instance RequestParam ('ServerRequestMiscK s) = Value
+type instance ResResult    ('ServerRequestMiscK s) = Value
+type instance ResError     ('ServerRequestMiscK s) = Value
 
 
 -------------------------------------------------------------------------------

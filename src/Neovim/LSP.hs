@@ -31,6 +31,8 @@ plugin = do
             , $(command' 'nvimHsLspHover)          ["async"]
             , $(command' 'nvimHsLspDefinition)     ["async"]
             , $(command' 'nvimHsLspApplyRefactOne) ["async"]
+            --
+            , $(function' 'nvimHsLspComplete) Sync
             ]
         }
       ]

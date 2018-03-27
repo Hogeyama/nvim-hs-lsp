@@ -16,7 +16,8 @@ module Neovim.LSP.LspPlugin.Response
 import           Control.Lens
 import           Control.Monad              (forever)
 import           Data.List                  (intercalate)
-import           Data.Aeson                 as J
+import           Data.Aeson                 as J hiding (KeyValue)
+import           Data.Extensible
 import qualified Data.ByteString.Lazy.Char8 as B
 
 import qualified Data.Text                  as T
@@ -149,10 +150,50 @@ textDocumentDefinitionNoInfo = "textDocument/definition: no info"
 -------------------------------------------------------------------------------
 
 complete :: ServerResponse 'TextDocumentCompletionK -> Neovim r st ()
-complete (Response resp) = withResult resp $ \result -> do
-  undefined result
+complete (Response resp) = withResult resp $ \case
+  Nothing -> return () -- is it ok?
+  Just (L cs) -> completeCompletionItems cs
+  Just (R cl) -> completeCompletionList cl
 
+completeCompletionList :: CompletionList -> Neovim r st ()
+completeCompletionList cl = completeCompletionItems $ cl^. #items
 
+completeCompletionItems :: [CompletionItem] -> Neovim r st ()
+completeCompletionItems cs = do
+  undefined cs
+
+toVimItem :: CompletionItem -> VimCompleteItem
+toVimItem c
+  =  #word      @= ""
+  <: #abbr      @= None
+  <: #menu      @= c^. #detail
+  <: #info      @= case c^. #documentation of
+                     None -> None
+                     Some (L s) -> Some s
+                     Some (R markup) -> Some (markup^. #value)
+  <: #kind      @= case c^. #kind of
+                     -- TODO {{{
+                     Some  1 -> None     -- text(?)
+                     Some  2 -> Some "f" -- method
+                     Some  3 -> Some "f" -- function
+                     Some  4 -> Some "f" -- constructor
+                     Some  5 -> Some "m" -- fields
+                     Some  6 -> Some "v" -- variable
+                     Some  7 -> Some "v" -- class
+                     Some  8 -> Some "v" -- interface
+                     Some  9 -> Some "m" -- module
+                     Some 10 -> None
+                     _       -> None
+                     --  v variable
+                     --  f function or method
+                     --  m member of a struct or class
+                     --  t typedef
+                     --}}}
+  <: #icase     @= None
+  <: #dup       @= Some 1
+  <: #empty     @= None
+  <: #user_data @= None
+  <: nil
 
 -------------------------------------------------------------------------------
 -- Util

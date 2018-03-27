@@ -127,3 +127,10 @@ nvimHsLspApplyRefactOne _ = whenInitialized $ whenAlreadyOpened $ do
                              ]
   executeCommandRequest "applyrefact:applyOne" (Some [arg])
 
+nvimHsLspComplete :: NeovimLsp (Either Int [VimCompleteItem])
+nvimHsLspComplete = do
+  return $ Right []
+
+
+
+

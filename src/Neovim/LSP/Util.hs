@@ -9,6 +9,7 @@
 {-# LANGUAGE TypeFamilies        #-}
 {-# LANGUAGE ViewPatterns        #-}
 {-# LANGUAGE OverloadedLabels    #-}
+{-# LANGUAGE TypeOperators       #-}
 {-# OPTIONS_GHC -Wall            #-}
 
 module Neovim.LSP.Util where
@@ -108,5 +109,19 @@ nvimEcho s = vim_command' $ "echo " ++ show s
 
 nvimEchom :: String -> Neovim r st ()
 nvimEchom s = vim_command' $ "echom " ++ show s
+
+-------------------------------------------------------------------------------
+
+type VimCompleteItem = Record
+  '[ "word"      >: String        -- the text that will be inserted
+   , "abbr"      >: Option String -- abbreviation of "word"
+   , "menu"      >: Option String -- extra text for the popup menu, displayed after "word" or "abbr"
+   , "info"      >: Option String -- more information about the item, can be displayed in a preview window
+   , "kind"      >: Option String -- single letter indicating the type of completion
+   , "icase"     >: Option Int    -- ignore case (when zero or omitted, case sensitive)
+   , "dup"       >: Option Int    -- non-zero if the same name is used
+   , "empty"     >: Option Int
+   , "user_data" >: Option String -- TODO Value is not an instance of NvimObject
+   ]
 
 
