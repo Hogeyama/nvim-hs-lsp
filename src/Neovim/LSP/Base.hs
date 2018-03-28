@@ -28,7 +28,6 @@ module Neovim.LSP.Base where
 
 import           UnliftIO
 import           Control.DeepSeq            (NFData)
-import           Control.Exception          (IOException, SomeException)
 import           Control.Lens               hiding (Context)
 import           Control.Monad              (forM, forM_, forever, when)
 import           Control.Monad.IO.Class     (MonadIO, liftIO)
@@ -91,8 +90,8 @@ initialContext = Context
 -- TODO SenderやPluginとかのHandleを追加する
 data LspEnv = LspEnv
   { _lspEnvServerHandles :: !(TVar (Maybe ServerHandles))
-  ,  lspEnvInChan        :: TChan B.ByteString -- lazy initialization
-  , _lspEnvOutChan       :: TChan B.ByteString -- lazy initialization
+  ,  lspEnvInChan        :: !(TChan B.ByteString)
+  , _lspEnvOutChan       :: !(TChan B.ByteString)
   , _lspEnvOpenedFiles   :: !(TVar (Map Uri Version))
   , _lspEnvContext       :: !(TVar Context)
   }
@@ -232,11 +231,11 @@ initializeLsp cmd args = do
         , std_err = CreatePipe
         }
   serverHandles .== Just ServerHandles
-                         { serverIn  = hin
-                         , serverOut = hout
-                         , serverErr = herr
-                         , serverPH  = ph
-                         }
+        { serverIn  = hin
+        , serverOut = hout
+        , serverErr = herr
+        , serverPH  = ph
+        }
   inCh  <- asks lspEnvInChan
   outCh <- asks _lspEnvOutChan
   liftIO $ do
@@ -248,9 +247,9 @@ initializeLsp cmd args = do
     _ <- async $ forever $ logger herr
     setupLogger
   where
-    logger herr = handle
-          (\(_e :: IOException) -> return ())
-          (hGetLine herr >>= (errorM . ("STDERR: "++)))
+    logger herr = handleAny
+      (\e -> errorM $ "STDERR: Exception: " ++ show e)
+      (hGetLine herr >>= (errorM . ("STDERR: "++)))
 
 isInitialized :: NeovimLsp Bool
 isInitialized = usesTV serverHandles isJust
@@ -443,5 +442,5 @@ dispatcher hs = do
 -------------------------------------------------------------------------------
 
 loggingError :: (MonadUnliftIO m) => m a -> m a
-loggingError = handle (\(e :: SomeException) -> errorM (show e) >> throwIO e)
+loggingError = handleAny $ \e -> errorM (show e) >> throwIO e
 
