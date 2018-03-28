@@ -1,15 +1,18 @@
 
 {-# LANGUAGE BangPatterns           #-}
+{-# LANGUAGE ConstraintKinds        #-}
 {-# LANGUAGE DataKinds              #-}
 {-# LANGUAGE ExplicitForAll         #-}
 {-# LANGUAGE FlexibleContexts       #-}
 {-# LANGUAGE FlexibleInstances      #-}
+{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE GADTs                  #-}
 {-# LANGUAGE LambdaCase             #-}
 {-# LANGUAGE MultiParamTypeClasses  #-}
 {-# LANGUAGE MultiWayIf             #-}
 {-# LANGUAGE OverloadedStrings      #-}
 {-# LANGUAGE PolyKinds              #-}
+{-# LANGUAGE RankNTypes             #-}
 {-# LANGUAGE RecordWildCards        #-}
 {-# LANGUAGE ScopedTypeVariables    #-}
 {-# LANGUAGE StandaloneDeriving     #-}
@@ -18,24 +21,19 @@
 {-# LANGUAGE TypeApplications       #-}
 {-# LANGUAGE TypeOperators          #-}
 {-# LANGUAGE ViewPatterns           #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE RankNTypes             #-}
-{-# LANGUAGE ConstraintKinds        #-}
 {-# OPTIONS_GHC -Wall               #-}
 
 
 module Neovim.LSP.Base where
 
-import           UnliftIO                   (MonadUnliftIO)
-import           UnliftIO.Exception
-import           Control.Concurrent         (ThreadId, forkIO)
-import           Control.Concurrent.Async   (async)
-import           Control.Concurrent.STM     (TChan, TVar, atomically,
-                                             newTChanIO, readTChan, readTVar, modifyTVar',
-                                             readTVarIO, writeTChan, writeTVar)
+import           UnliftIO
+import           Control.DeepSeq            (NFData)
+import           Control.Exception          (IOException, SomeException)
+import           Control.Lens               hiding (Context)
 import           Control.Monad              (forM, forM_, forever, when)
 import           Control.Monad.IO.Class     (MonadIO, liftIO)
 import           Control.Monad.Reader.Class (MonadReader, ask)
+import qualified Data.Aeson                 as J
 import           Data.ByteString.Lazy.Char8 (ByteString)
 import qualified Data.ByteString.Lazy.Char8 as B
 import           Data.Constraint            (withDict)
@@ -48,22 +46,14 @@ import           Data.Maybe                 (isJust)
 import           Data.Singletons            (Sing, SomeSing (..), fromSing,
                                              singByProxy, toSing)
 import           System.Exit                (exitSuccess)
-import           System.IO                  (BufferMode (..), Handle, hGetLine,
-                                             hSetBuffering)
-import           System.Process             (CreateProcess (..), ProcessHandle,
-                                             StdStream (..), createProcess,
-                                             proc)
-
-import           Control.Lens               hiding (Context)
-import qualified Data.Aeson                 as J
+import           System.IO                  (hGetLine)
 import           System.Log.Formatter       (simpleLogFormatter)
 import           System.Log.Handler         (setFormatter)
 import           System.Log.Handler.Simple  (fileHandler)
 import qualified System.Log.Logger          as L
-
-import           Control.Exception          (IOException, SomeException)
-import           GHC.Conc.Sync              (newTVarIO)
-import           Control.DeepSeq (NFData)
+import           System.Process             (CreateProcess (..), ProcessHandle,
+                                             StdStream (..), createProcess,
+                                             proc)
 
 import           Neovim                     hiding (Plugin)
 import           Neovim.Context.Internal
@@ -115,11 +105,11 @@ data PluginEnv = PluginEnv
 initialEnvM :: MonadIO m => m LspEnv
 initialEnvM = liftIO $
   pure LspEnv
-  <*> (newTVarIO Nothing)
+  <*> newTVarIO Nothing
   <*> newTChanIO
   <*> newTChanIO
-  <*> (newTVarIO M.empty)
-  <*> (newTVarIO initialContext)
+  <*> newTVarIO M.empty
+  <*> newTVarIO initialContext
 
 -------------------------------------------------------------------------------
 -- Plugin
@@ -255,7 +245,7 @@ initializeLsp cmd args = do
     hSetBuffering herr NoBuffering
     void $ async $ sender hin outCh
     void $ async $ receiver hout inCh
-    _ <- forkIO $ forever $ logger herr
+    _ <- async $ forever $ logger herr
     setupLogger
   where
     logger herr = handle
@@ -412,13 +402,13 @@ addIdMethodMap id' m = modifyContext' (lspIdMap %~ HM.insert id' m)
 -------------------------------------------------------------------------------
 
 -- TODO
-forkNeovim :: NFData a => iEnv -> Neovim iEnv a -> Neovim env ThreadId
-forkNeovim r a = do
+asyncNeovim :: NFData a => iEnv -> Neovim iEnv a -> Neovim env (Async ())
+asyncNeovim r a = do
     cfg <- ask'
     let threadConfig = retypeConfig r cfg
-    liftIO . forkIO . void $ runNeovim threadConfig a
+    liftIO . async . void $ runNeovim threadConfig a
 
-dispatcher :: [Plugin] -> NeovimLsp (ThreadId, [ThreadId])
+dispatcher :: [Plugin] -> NeovimLsp (Async (), [Async ()])
 dispatcher hs = do
     debugM "this is dispatcher!"
     LspEnv {  lspEnvInChan  = inChG
@@ -429,11 +419,11 @@ dispatcher hs = do
     (handlers,hIDs) <- fmap unzip $ forM hs $ \(Plugin p action) -> do
       inCh <- liftIO newTChanIO
       let config = PluginEnv inCh outCh ctx
-      hID <- forkNeovim config $ loggingError action
+      hID <- asyncNeovim config $ loggingError action
       return ((p,inCh), hID)
 
     -- TODO handlersを動的に追加できるようにする？
-    dpID <- liftIO $ forkIO $ loggingError $ forever $ do
+    dpID <- liftIO $ async $ loggingError $ forever $ do
         rawInput <- atomically (readTChan inChG)
         let Just !v = J.decode rawInput
         idMap <- atomically (_lspIdMap <$> readTVar ctx)

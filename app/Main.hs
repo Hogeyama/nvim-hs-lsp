@@ -7,24 +7,22 @@
 
 module Main where
 
-import           Neovim                            hiding (Plugin)
-import           Neovim.Context                    (quit)
-import           Neovim.Test
-
-import           Control.Concurrent                (killThread, threadDelay,
-                                                    throwTo)
+import           UnliftIO
 import           Control.Concurrent.STM
-import           Control.Exception                 (catch)
 import           Control.Lens                      (use)
 import           Control.Lens.Operators
 import           Control.Monad                     (forever)
 import           Control.Monad.IO.Class            (MonadIO)
+import           GHC.Conc                          (threadDelay)
 import           System.Environment                (unsetEnv)
-import           System.IO                         (hFlush, hGetLine, stdout)
+import           System.IO                         (hGetLine, stdout)
 import           System.Process                    (terminateProcess)
 
-import           Neovim.LSP.Action.Notification    (didChangeBuffer,
-                                                    didOpenBuffer)
+import           Neovim                            hiding (Plugin)
+import           Neovim.Context                    (quit)
+import           Neovim.Test
+
+import           Neovim.LSP.Action.Notification    (didChangeBuffer, didOpenBuffer)
 import           Neovim.LSP.Action.Request         (hoverRequest)
 import           Neovim.LSP.Base
 import           Neovim.LSP.LspPlugin.Notification (notificationHandler)
@@ -32,7 +30,6 @@ import           Neovim.LSP.LspPlugin.Request      (requestHandler)
 import           Neovim.LSP.Protocol.Messages
 import           Neovim.LSP.Protocol.Type
 import           Neovim.LSP.Util
-import System.Exit (ExitCode(..))
 
 print' :: Show a => a -> Neovim env ()
 print' x = liftIO $ print x
@@ -61,7 +58,7 @@ main = do
               `catch` \(_::IOError) -> return ()
       liftIO $ do
         hFlush stdout
-        --mapM_ (throwTo `flip` ExitSuccess) $ dpth : hths
+        mapM_ cancel $ dpth : hths
         terminateProcess ph
       threadDelaySec 3
         -- TODO Handlerの終了を待てるようにしたほうがいいのだろうか

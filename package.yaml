@@ -58,6 +58,7 @@ executables:
     - stm
     - lens
     - process
+    - unliftio
 
 
 tests:
