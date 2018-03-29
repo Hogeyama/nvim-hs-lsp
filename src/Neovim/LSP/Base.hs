@@ -26,7 +26,6 @@
 
 module Neovim.LSP.Base where
 
-import           UnliftIO
 import           Control.DeepSeq            (NFData)
 import           Control.Lens               hiding (Context)
 import           Control.Monad              (forM, forM_, forever)
@@ -52,8 +51,9 @@ import           System.Log.Handler         (setFormatter)
 import           System.Log.Handler.Simple  (fileHandler)
 import qualified System.Log.Logger          as L
 import           System.Process             (CreateProcess (..), ProcessHandle,
-                                             StdStream (..),
-                                             terminateProcess, createProcess, proc)
+                                             StdStream (..), createProcess,
+                                             proc, terminateProcess)
+import           UnliftIO
 
 import           Neovim                     hiding (Plugin)
 import           Neovim.Context.Internal
@@ -309,16 +309,20 @@ setupLogger = do
   L.updateGlobalLogger topLoggerName (L.addHandler h)
 
 debugM :: (MonadReader r m, MonadIO m, HasLoggerName' r) => String -> m ()
-debugM s = view loggerName >>= \ln -> liftIO (L.debugM ln s)
+debugM = withLoggerName L.debugM
 
 warningM :: (MonadReader r m, MonadIO m, HasLoggerName' r) => String -> m ()
-warningM s = view loggerName >>= \ln -> liftIO (L.warningM ln s)
+warningM = withLoggerName L.warningM
 
 errorM :: (MonadReader r m, MonadIO m, HasLoggerName' r) => String -> m ()
-errorM s = view loggerName >>= \ln -> liftIO (L.errorM ln s)
+errorM = withLoggerName L.errorM
 
 infoM :: (MonadReader r m, MonadIO m, HasLoggerName' r) => String -> m ()
-infoM s = view loggerName >>= \ln -> liftIO (L.infoM ln s)
+infoM = withLoggerName L.infoM
+
+withLoggerName :: (MonadReader r m, MonadIO m, HasLoggerName' r)
+               => (String -> String -> IO ()) -> String -> m ()
+withLoggerName logger s = view loggerName >>= liftIO . (logger `flip` s)
 
 -------------------------------------------------------------------------------
 -- Communication with Server

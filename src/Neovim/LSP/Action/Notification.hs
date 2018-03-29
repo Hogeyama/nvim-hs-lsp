@@ -1,10 +1,10 @@
 
-{-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE TypeApplications          #-}
 {-# LANGUAGE DataKinds                 #-}
-{-# LANGUAGE OverloadedLabels          #-}
+{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts          #-}
+{-# LANGUAGE OverloadedLabels          #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
+{-# LANGUAGE TypeApplications          #-}
 {-# OPTIONS_GHC -Wall                  #-}
 
 module Neovim.LSP.Action.Notification
@@ -12,12 +12,12 @@ module Neovim.LSP.Action.Notification
   --)
   where
 
-import           Data.Extensible               ((@=), (<:), nil)
+import           Data.Extensible              (nil, (<:), (@=))
 import           Neovim
 import           Neovim.LSP.Base
-import           Neovim.LSP.Util
 import           Neovim.LSP.Protocol.Messages
 import           Neovim.LSP.Protocol.Type
+import           Neovim.LSP.Util
 
 -- didOpen: newly opened text document
 -- didChange: change text document

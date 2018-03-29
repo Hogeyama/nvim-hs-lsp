@@ -1,14 +1,14 @@
 
-{-# LANGUAGE ConstraintKinds         #-}
-{-# LANGUAGE DataKinds               #-}
-{-# LANGUAGE GADTs                   #-}
-{-# LANGUAGE LambdaCase              #-}
-{-# LANGUAGE MultiParamTypeClasses   #-}
-{-# LANGUAGE OverloadedStrings       #-}
-{-# LANGUAGE TypeFamilies            #-}
-{-# LANGUAGE TypeFamilyDependencies  #-}
-{-# LANGUAGE TypeOperators           #-}
-{-# LANGUAGE FlexibleContexts        #-}
+{-# LANGUAGE ConstraintKinds        #-}
+{-# LANGUAGE DataKinds              #-}
+{-# LANGUAGE FlexibleContexts       #-}
+{-# LANGUAGE GADTs                  #-}
+{-# LANGUAGE LambdaCase             #-}
+{-# LANGUAGE MultiParamTypeClasses  #-}
+{-# LANGUAGE OverloadedStrings      #-}
+{-# LANGUAGE TypeFamilies           #-}
+{-# LANGUAGE TypeFamilyDependencies #-}
+{-# LANGUAGE TypeOperators          #-}
 {-# OPTIONS_GHC -Wall                #-}
 
 -- TODO
@@ -190,11 +190,11 @@ instance FromJSON ServerNotificationMethod where -- {{{
   parseJSON _                                          = mempty
 -- }}}
 instance ToJSON ServerRequestMethod where -- {{{
-  toJSON WindowShowMessageRequest       = String "window/showMessageRequest"
-  toJSON ClientRegisterCapability       = String "client/registerCapability"
-  toJSON ClientUnregisterCapability     = String "client/unregisterCapability"
-  toJSON WorkspaceApplyEdit             = String "workspace/applyEdit"
-  toJSON (ServerRequestMisc x)          = String ("$/" `T.append` x)
+  toJSON WindowShowMessageRequest   = String "window/showMessageRequest"
+  toJSON ClientRegisterCapability   = String "client/registerCapability"
+  toJSON ClientUnregisterCapability = String "client/unregisterCapability"
+  toJSON WorkspaceApplyEdit         = String "workspace/applyEdit"
+  toJSON (ServerRequestMisc x)      = String ("$/" `T.append` x)
 -- }}}
 instance ToJSON ServerNotificationMethod where -- {{{
   toJSON WindowShowMessage              = String "window/showMessage"

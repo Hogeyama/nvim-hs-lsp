@@ -34,7 +34,6 @@ library:
   - bytestring
   - mtl
   - async
-  - exceptions
   - extra
   - xformat
   - deepseq
@@ -51,8 +50,8 @@ tests:
   tmp:
     source-dirs: test
     main:        tmp.hs
+    other-modules: []
     dependencies:
-    - doctest
     - nvim-hs
     - nvim-hs-lsp
     - stm

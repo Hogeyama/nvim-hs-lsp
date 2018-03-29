@@ -1,42 +1,35 @@
 
-{-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE OverloadedStrings         #-}
-{-# LANGUAGE TypeApplications          #-}
 {-# LANGUAGE DataKinds                 #-}
-{-# LANGUAGE GADTs                     #-}
-{-# LANGUAGE ScopedTypeVariables       #-}
-{-# LANGUAGE OverloadedLabels          #-}
+{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts          #-}
+{-# LANGUAGE GADTs                     #-}
+{-# LANGUAGE OverloadedLabels          #-}
+{-# LANGUAGE OverloadedStrings         #-}
+{-# LANGUAGE ScopedTypeVariables       #-}
+{-# LANGUAGE TypeApplications          #-}
 {-# OPTIONS_GHC -Wall                  #-}
 
 module Neovim.LSP.LspPlugin.Notification
-  --( notificationHandler
-  --)
+  ( notificationHandler
+  )
   where
 
 import           Control.Lens
-import           Control.Monad                       (forever, when)
-import           Data.Text                           (Text)
-import qualified Data.Text                           as T
-import           Data.List                           (sortBy)
-import           Data.Function                       (on)
-import           Data.Extensible                     (FieldOptic)
---import           Data.Aeson                          as J hiding (Error)
---import qualified Data.ByteString.Lazy.Char8          as B
+import           Control.Monad            (forever, when)
+import           Data.Extensible          (FieldOptic)
+import           Data.Function            (on)
+import           Data.List                (sortBy)
+import           Data.Text                (Text)
+import qualified Data.Text                as T
 
---import           Neovim                              hiding (Plugin)
-import qualified Neovim.Quickfix                     as Q
-import           Neovim.Quickfix                     (QuickfixListItem)
 import           Neovim.LSP.Base
-import           Neovim.LSP.Util
 import           Neovim.LSP.Protocol.Type
+import           Neovim.LSP.Util
+import           Neovim.Quickfix          (QuickfixListItem)
+import qualified Neovim.Quickfix          as Q
 
 notificationHandler :: Plugin
 notificationHandler = Plugin "noti" notificationPluginAction
-
-notificationPred :: InMessage -> Bool
-notificationPred SomeNoti{} = True
-notificationPred _ = False
 
 notificationPluginAction :: PluginAction ()
 notificationPluginAction = forever @_ @() @() $ do
@@ -108,9 +101,9 @@ diagnosticToQFItems uri d = header : rest
         col  = 1 + start^. #character
         errorType = case d^. #severity of
             Some Error -> Q.Error
-            _ -> Q.Warning
+            _          -> Q.Warning
         text' = case d^. #source of
-            None -> ""
+            None   -> ""
             Some n -> T.pack $ "[" ++ n ++ "]"
     rest = flip map (T.lines (d^. #message)) $ \msg -> Q.QFItem
       { Q.bufOrFile     = Right ""

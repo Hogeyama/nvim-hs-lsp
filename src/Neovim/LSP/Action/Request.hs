@@ -1,8 +1,8 @@
 
 {-# LANGUAGE DataKinds        #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedLabels #-}
 {-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# OPTIONS_GHC -Wall         #-}
 
 module Neovim.LSP.Action.Request where

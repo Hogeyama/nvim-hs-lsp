@@ -16,5 +16,5 @@ test:
 
 .PHONY: lint
 lint:
-	stack exec -- hlint src app
-	stack exec -- weeder src app
+	stack exec -- hlint src
+	stack exec -- weeder src

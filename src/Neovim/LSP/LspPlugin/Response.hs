@@ -1,33 +1,33 @@
 {-# LANGUAGE DataKinds                 #-}
 {-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE FlexibleContexts          #-}
 {-# LANGUAGE GADTs                     #-}
+{-# LANGUAGE LambdaCase                #-}
 {-# LANGUAGE OverloadedLabels          #-}
+{-# LANGUAGE ScopedTypeVariables       #-}
 {-# LANGUAGE TypeApplications          #-}
 {-# LANGUAGE TypeOperators             #-}
-{-# LANGUAGE LambdaCase                #-}
-{-# LANGUAGE ScopedTypeVariables       #-}
-{-# LANGUAGE FlexibleContexts          #-}
 {-# OPTIONS_GHC -Wall                  #-}
 
 module Neovim.LSP.LspPlugin.Response
---  ( responseHandler
---  )
+  ( responseHandler
+  )
   where
 
 import           Control.Lens
-import           Control.Monad              (forever)
-import           Data.List                  (intercalate)
+import           Control.Monad            (forever)
 import           Data.Extensible
+import           Data.List                (intercalate)
 
-import qualified Data.Text                  as T
+import qualified Data.Text                as T
 
-import           Text.XFormat.Show          (showf, (%))
-import qualified Text.XFormat.Show          as X
+import           Text.XFormat.Show        (showf, (%))
+import qualified Text.XFormat.Show        as X
 
-import           Neovim                     hiding (Plugin, range)
+import           Neovim                   hiding (Plugin, range)
 import           Neovim.LSP.Base
-import           Neovim.LSP.Util
 import           Neovim.LSP.Protocol.Type
+import           Neovim.LSP.Util
 
 responseHandler :: Plugin
 responseHandler = Plugin "resp" responsePluginAction
@@ -86,7 +86,7 @@ responseHover (Response resp) = do
                  pprHoverContents (r^. #contents) ++ "\n"
 
 pprHoverContents :: MarkedString :|: [MarkedString] :|: MarkupContent -> String
-pprHoverContents (L ms) = pprMarkedString ms
+pprHoverContents (L ms)     = pprMarkedString ms
 pprHoverContents (R (L [])) = textDocumentHoverNoInfo
 pprHoverContents (R (L xs)) = unlines $ map pprMarkedString xs
 pprHoverContents (R (R x))  = x^. #value
@@ -162,8 +162,8 @@ toVimItem c
   <: #abbr      @= None
   <: #menu      @= c^. #detail
   <: #info      @= case c^. #documentation of
-                     None -> None
-                     Some (L s) -> Some s
+                     None            -> None
+                     Some (L s)      -> Some s
                      Some (R markup) -> Some (markup^. #value)
   <: #kind      @= case c^. #kind of
                      -- TODO {{{
@@ -198,6 +198,6 @@ withResult resp k =
   case resp^. #error of
     Some e -> vim_report_error' (T.unpack (e^. #message))
     None -> case resp^. #result of
-      None -> errorM "withResult: wrong input"
+      None   -> errorM "withResult: wrong input"
       Some x -> k x
 

@@ -2,17 +2,17 @@
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE OverloadedLabels      #-}
 {-# LANGUAGE OverloadedStrings     #-}
+{-# LANGUAGE PolyKinds             #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE TypeFamilies          #-}
-{-# LANGUAGE PolyKinds             #-}
-{-# LANGUAGE OverloadedLabels      #-}
 {-# OPTIONS_GHC -Wall #-}
 
 -- BuildMessageとかのほうがいいかしら
 module Neovim.LSP.Protocol.Messages where
 
-import           Data.Extensible hiding (Nullable)
+import           Data.Extensible          hiding (Nullable)
 import           Data.Singletons
 
 import           Neovim.LSP.Protocol.Type

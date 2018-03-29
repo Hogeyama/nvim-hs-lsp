@@ -7,6 +7,7 @@
 {-# LANGUAGE FlexibleContexts       #-}
 {-# LANGUAGE GADTs                  #-}
 {-# LANGUAGE LambdaCase             #-}
+{-# LANGUAGE OverloadedLabels       #-}
 {-# LANGUAGE OverloadedStrings      #-}
 {-# LANGUAGE PolyKinds              #-}
 {-# LANGUAGE ScopedTypeVariables    #-}
@@ -15,7 +16,6 @@
 {-# LANGUAGE TypeFamilies           #-}
 {-# LANGUAGE TypeFamilyDependencies #-}
 {-# LANGUAGE TypeOperators          #-}
-{-# LANGUAGE OverloadedLabels       #-}
 {-# LANGUAGE UndecidableInstances   #-}
   -- (++)とJSONのderivingに必要．JSONの方はどうにかなるかも？
 {-# OPTIONS_GHC -Wall               #-}
@@ -100,21 +100,21 @@ module Neovim.LSP.Protocol.Type.Interfaces
   )
   where
 
-import           Control.Monad                      (mzero)
-import           Data.Aeson                         hiding (Error)
-import           Data.Aeson.Types                   (toJSONKeyText)
-import           Data.Char                          (digitToInt, toLower)
-import           Data.Extensible                    hiding (Nullable)
-import           Data.Hashable                      (Hashable)
-import           Data.Singletons                    (SingI, SingKind(..))
-import           Data.Text                          (Text)
-import qualified Data.Text                          as T
-import           Data.Map                           (Map)
-import           GHC.Generics                       (Generic)
+import           Control.Monad                     (mzero)
+import           Data.Aeson                        hiding (Error)
+import           Data.Aeson.Types                  (toJSONKeyText)
+import           Data.Char                         (digitToInt, toLower)
+import           Data.Extensible                   hiding (Nullable)
+import           Data.Function                     (on)
+import           Data.Hashable                     (Hashable)
+import           Data.Map                          (Map)
+import           Data.Singletons                   (SingI, SingKind (..))
+import           Data.Text                         (Text)
+import qualified Data.Text                         as T
+import           GHC.Generics                      (Generic)
 import           Neovim.LSP.Protocol.Type.Instance
 import           Neovim.LSP.Protocol.Type.Method
-import           Safe                               (lookupJust)
-import Data.Function (on)
+import           Safe                              (lookupJust)
 
 -- Interfaces defined in
 -- https://github.com/Microsoft/language-server-protocol/blob/master/protocol.md
@@ -650,11 +650,11 @@ data MarkupKind = PlainText | Markdown
   deriving (Show, Eq, Ord)
 instance FromJSON MarkupKind where
   parseJSON (String "plaintext") = return PlainText
-  parseJSON (String "markdown") = return Markdown
-  parseJSON _ = mempty
+  parseJSON (String "markdown")  = return Markdown
+  parseJSON _                    = mempty
 instance ToJSON MarkupKind where
   toJSON PlainText = String "plaintext"
-  toJSON Markdown = String "markdown"
+  toJSON Markdown  = String "markdown"
 
 -- 後回し
 type SymbolKind = Value

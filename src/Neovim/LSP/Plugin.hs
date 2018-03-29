@@ -1,6 +1,6 @@
 {-# LANGUAGE DataKinds         #-}
-{-# LANGUAGE OverloadedLabels  #-}
 {-# LANGUAGE LambdaCase        #-}
+{-# LANGUAGE OverloadedLabels  #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TypeApplications  #-}
 {-# OPTIONS_GHC -Wall          #-}
@@ -15,15 +15,15 @@ import qualified Data.Map                          as M
 import           Neovim
 import           Neovim.Context                    (restart)
 
-import           Neovim.LSP.Base
-import           Neovim.LSP.Util
 import           Neovim.LSP.Action.Notification
 import           Neovim.LSP.Action.Request
+import           Neovim.LSP.Base
 import           Neovim.LSP.LspPlugin.Notification (notificationHandler)
 import           Neovim.LSP.LspPlugin.Request      (requestHandler)
 import           Neovim.LSP.LspPlugin.Response     (responseHandler)
 import           Neovim.LSP.Protocol.Messages
 import           Neovim.LSP.Protocol.Type
+import           Neovim.LSP.Util
 
 -------------------------------------------------------------------------------
 -- Initialize

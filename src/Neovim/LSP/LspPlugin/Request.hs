@@ -1,11 +1,11 @@
 
-{-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE OverloadedStrings         #-}
-{-# LANGUAGE OverloadedLabels          #-}
-{-# LANGUAGE TypeApplications          #-}
 {-# LANGUAGE DataKinds                 #-}
+{-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE GADTs                     #-}
+{-# LANGUAGE OverloadedLabels          #-}
+{-# LANGUAGE OverloadedStrings         #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
+{-# LANGUAGE TypeApplications          #-}
 {-# LANGUAGE ViewPatterns              #-}
 {-# OPTIONS_GHC -Wall                  #-}
 
@@ -14,18 +14,18 @@ module Neovim.LSP.LspPlugin.Request
   )
   where
 
-import           Control.Monad                       (forM_, forever)
 import           Control.Lens.Operators
-import qualified Data.ByteString.Char8               as BS
-import           Data.Map                            (Map)
-import qualified Data.Map                            as M
+import           Control.Monad                (forM_, forever)
+import qualified Data.ByteString.Char8        as BS
 import           Data.Extensible
+import           Data.Map                     (Map)
+import qualified Data.Map                     as M
 
-import           Neovim                              hiding (Plugin, range, err)
+import           Neovim                       hiding (Plugin, err, range)
 import           Neovim.LSP.Base
-import           Neovim.LSP.Util
-import           Neovim.LSP.Protocol.Type
 import           Neovim.LSP.Protocol.Messages
+import           Neovim.LSP.Protocol.Type
+import           Neovim.LSP.Util
 
 requestHandler :: Plugin
 requestHandler = Plugin "req " requestPluginAction
@@ -56,7 +56,7 @@ respondWorkspaceAplyEdit (Request req) = do
   debugM $ show edit
   case edit^. #changes of
     None -> case edit^. #documentChanges of
-      None -> errorM "respondWorkspaceAplyEdit: Wrong Input!"
+      None    -> errorM "respondWorkspaceAplyEdit: Wrong Input!"
       Some cs -> applyDocumentChanges cs >>= ret
     Some cs -> applyChanges cs >>= ret
   where
@@ -82,7 +82,7 @@ applyChanges cs = do
           , ObjectArray $ map (ObjectString . BS.pack) (lines newText)
           ]
       case m of
-        Right{}  -> return ()
+        Right{}          -> return ()
         Left (show->err) -> errorM err >> vim_report_error' err
   return True
 
