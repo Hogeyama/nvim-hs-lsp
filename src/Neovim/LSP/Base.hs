@@ -133,37 +133,33 @@ instance J.ToJSON InMessage where
   toJSON (SomeResp x) = J.toJSON x
 
 data InMessageMethod
-  = IMReq  ServerRequestMethod
-  | IMNoti ServerNotificationMethod
-  | IMResp ClientRequestMethod
+  = InReq  ServerRequestMethod
+  | InNoti ServerNotificationMethod
+  | InResp ClientRequestMethod
 
 methodOf :: InMessage -> InMessageMethod
-methodOf (SomeNoti noti) =  IMNoti $ fromSing $ singByProxy noti
-methodOf (SomeReq  req ) =  IMReq  $ fromSing $ singByProxy req
-methodOf (SomeResp resp) =  IMResp $ fromSing $ singByProxy resp
+methodOf (SomeNoti noti) =  InNoti $ fromSing $ singByProxy noti
+methodOf (SomeReq  req ) =  InReq  $ fromSing $ singByProxy req
+methodOf (SomeResp resp) =  InResp $ fromSing $ singByProxy resp
 
 toInMessage :: HashMap ID ClientRequestMethod -> J.Value -> Either String InMessage
 toInMessage map' v@(J.Object o) = mmethod >>= \case
-    IMReq (toSing -> SomeSing (s :: Sing m))
+    InReq (toSing -> SomeSing (s :: Sing m))
       -> withDict (prfServerReq s) $ SomeReq  @m <$> fromJSONEither v
-    IMNoti (toSing -> SomeSing (s :: Sing m))
+    InNoti (toSing -> SomeSing (s :: Sing m))
       -> withDict (prfServerNoti s) $ SomeNoti @m <$> fromJSONEither v
-    IMResp (toSing -> SomeSing (s :: Sing m))
+    InResp (toSing -> SomeSing (s :: Sing m))
       -> withDict (prfServerResp s) $ SomeResp @m <$> fromJSONEither v
   where
-    -- TODO
-    -- + error handling
-    -- + Miscが来たときに必ずNotiになってしまう
-    --   多分globalな状態で持ってどっちかを指定するのが良いのだと思う
-    --   `cancel`はNotificationとか
     mmethod :: Either String InMessageMethod
     mmethod
+      | isJust (HM.lookup "id" o)
+      , Just m <- fromJSONMay =<< HM.lookup "method" o
+          = return $ InReq m
       | Just m <- fromJSONMay =<< HM.lookup "method" o
-          = return $ IMNoti m
-      | Just m <- fromJSONMay =<< HM.lookup "method" o
-          = return $ IMReq m
+          = return $ InNoti m
       | Just m <- (`HM.lookup` map') =<< fromJSONMay =<< HM.lookup "id" o
-          = return $ IMResp m
+          = return $ InResp m
       | otherwise
           = Left "そんなバナナ1"
 toInMessage _ _ = Left "そんなバナナ2"

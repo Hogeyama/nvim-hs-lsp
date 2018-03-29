@@ -26,6 +26,3 @@
 
 - [ ] implement rename
 
-- [ ] appropriately classify input with method `$/...` into Request/Notification.
-      (Currently, all messages are parsed as Notification.)
-
