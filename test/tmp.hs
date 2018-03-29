@@ -24,8 +24,9 @@ import           Neovim.Test
 import           Neovim.LSP.Action.Notification    (didChangeBuffer, didOpenBuffer)
 import           Neovim.LSP.Action.Request         (hoverRequest)
 import           Neovim.LSP.Base
-import           Neovim.LSP.LspPlugin.Notification (notificationHandler)
-import           Neovim.LSP.LspPlugin.Request      (requestHandler)
+import           Neovim.LSP.LspPlugin.Notification
+import           Neovim.LSP.LspPlugin.Request
+import           Neovim.LSP.LspPlugin.Response
 import           Neovim.LSP.Protocol.Messages
 import           Neovim.LSP.Protocol.Type
 import           Neovim.LSP.Util
@@ -42,7 +43,7 @@ main = do
   testWithEmbeddedNeovim (Just f) (Seconds 10000) initialEnv $ do
     vim_command' "source ./test-file/init.vim"
     initializeLsp "hie" ["--lsp", "-d", "-l", "/tmp/LanguageServer.log"]
-    dispatch [ notificationHandler , requestHandler ]
+    dispatch [ notificationHandler , requestHandler, responseHandler ]
     wait =<< async handler2
     finalizeLSP
     liftIO exitSuccess

@@ -30,7 +30,7 @@ import           Neovim.LSP.Util
 import           Neovim.LSP.Protocol.Type
 
 responseHandler :: Plugin
-responseHandler = Plugin "responseHandler" responsePluginAction
+responseHandler = Plugin "resp" responsePluginAction
 
 responsePluginAction :: PluginAction ()
 responsePluginAction = forever @_ @() @() $ do

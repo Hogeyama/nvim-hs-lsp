@@ -32,7 +32,7 @@ import           Neovim.LSP.Util
 import           Neovim.LSP.Protocol.Type
 
 notificationHandler :: Plugin
-notificationHandler = Plugin "notificationHandler" notificationPluginAction
+notificationHandler = Plugin "noti" notificationPluginAction
 
 notificationPred :: InMessage -> Bool
 notificationPred SomeNoti{} = True

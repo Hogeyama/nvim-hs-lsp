@@ -28,7 +28,7 @@ import           Neovim.LSP.Protocol.Type
 import           Neovim.LSP.Protocol.Messages
 
 requestHandler :: Plugin
-requestHandler = Plugin "requestHandler" requestPluginAction
+requestHandler = Plugin "req " requestPluginAction
 
 requestPluginAction :: PluginAction ()
 requestPluginAction = forever @_ @() @() $ do

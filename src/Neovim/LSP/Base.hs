@@ -73,7 +73,7 @@ data LspEnv = LspEnv
   , _lspEnvOutChan       :: !(TChan B.ByteString)
   , _lspEnvOpenedFiles   :: !(TVar (Map Uri Version))
   , _lspEnvContext       :: !(TVar Context)
-  , _lspEnvLoggerName       :: !String
+  , _lspEnvLoggerName    :: !String
   }
 
 initialEnvM :: MonadIO m => m LspEnv
@@ -309,16 +309,16 @@ setupLogger = do
   L.updateGlobalLogger topLoggerName (L.addHandler h)
 
 debugM :: (MonadReader r m, MonadIO m, HasLoggerName' r) => String -> m ()
-debugM = liftIO . L.debugM "nvim-hs-lsp"
+debugM s = view loggerName >>= \ln -> liftIO (L.debugM ln s)
 
 warningM :: (MonadReader r m, MonadIO m, HasLoggerName' r) => String -> m ()
-warningM = liftIO . L.warningM "nvim-hs-lsp"
+warningM s = view loggerName >>= \ln -> liftIO (L.warningM ln s)
 
 errorM :: (MonadReader r m, MonadIO m, HasLoggerName' r) => String -> m ()
-errorM = liftIO . L.errorM "nvim-hs-lsp"
+errorM s = view loggerName >>= \ln -> liftIO (L.errorM ln s)
 
 infoM :: (MonadReader r m, MonadIO m, HasLoggerName' r) => String -> m ()
-infoM = liftIO . L.infoM "nvim-hs-lsp"
+infoM s = view loggerName >>= \ln -> liftIO (L.infoM ln s)
 
 -------------------------------------------------------------------------------
 -- Communication with Server
