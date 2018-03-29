@@ -16,7 +16,7 @@ library:
   - -Wall
     #- -fprint-explicit-kinds
   dependencies:
-  - nvim-hs >= 0.2.5
+  - nvim-hs >= 1.0.0.0
     # 0.2.4の testWithEmbeddedNeovim は壊れている模様
   - aeson
   - constraints
