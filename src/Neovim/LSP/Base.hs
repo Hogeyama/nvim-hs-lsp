@@ -46,6 +46,7 @@ import           Data.Singletons            (Sing, SomeSing (..), fromSing,
                                              singByProxy, toSing)
 import           System.Exit                (exitSuccess)
 import           System.IO                  (hGetLine)
+import           System.IO.Error            (isEOFError)
 import           System.Log.Formatter       (simpleLogFormatter)
 import           System.Log.Handler         (setFormatter)
 import           System.Log.Handler.Simple  (fileHandler)
@@ -243,8 +244,10 @@ initializeLsp cmd args = do
     _ <- async $ forever $ logger herr
     setupLogger
   where
-    logger herr = handleAny
-      (\e -> errorM $ "STDERR: Exception: " ++ show e)
+    logger herr = handleIO
+      (\e ->  if isEOFError e
+                then throwIO e
+                else errorM $ "STDERR: Exception: " ++ show e)
       (hGetLine herr >>= (errorM . ("STDERR: "++)))
 
 isInitialized :: NeovimLsp Bool
