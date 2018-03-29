@@ -28,7 +28,7 @@ import           Neovim.LSP.Protocol.Type
 --  testWithEmbeddedNeovimを使うとb:current_syntaxが存在しないことになっててダメ
 --  (filetypeは存在するのになんでだろう)
 --  extensionから推測するのが妥当か?
-getBufLanguage :: Buffer -> Neovim env String
+getBufLanguage :: (HasLoggerName' env) => Buffer -> Neovim env String
 getBufLanguage b = nvim_buf_get_var b "current_syntax" >>= \case
     Right o | Right s <- fromObject o ->
         return s
@@ -42,7 +42,7 @@ getBufLanguage b = nvim_buf_get_var b "current_syntax" >>= \case
 getBufUri :: Buffer -> Neovim env Uri
 getBufUri b = filePathToUri <$> nvim_buf_get_name' b
 
-getNvimPos :: Neovim env NvimPos
+getNvimPos :: (HasLoggerName' env) =>  Neovim env NvimPos
 getNvimPos = vim_call_function "getpos" [ObjectString "."] >>= \case
   Right (fromObject -> Right [_bufnum, lnum, col, _off]) -> return (lnum,col)
   e -> errorM (show e) >> error "getNvimPos"

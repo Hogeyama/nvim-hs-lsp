@@ -6,6 +6,7 @@
 {-# LANGUAGE TypeOperators             #-}
 {-# LANGUAGE LambdaCase                #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
+{-# LANGUAGE FlexibleContexts          #-}
 {-# OPTIONS_GHC -Wall                  #-}
 
 module Neovim.LSP.LspPlugin.Response
@@ -105,7 +106,8 @@ textDocumentHoverNoInfo = "textDocument/hover: no info"
 -- Definitions
 -------------------------------------------------------------------------------
 
-responseDefinition :: ServerResponse 'TextDocumentDefinitionK -> Neovim env ()
+responseDefinition :: (HasLoggerName' env)
+                   => ServerResponse 'TextDocumentDefinitionK -> Neovim env ()
 responseDefinition (Response resp) = do
   debugM $ "responseDefinition: " ++ show resp
   withResult resp $ \case
@@ -113,7 +115,7 @@ responseDefinition (Response resp) = do
     Just [] -> nvimEcho textDocumentDefinitionNoInfo
     Just r  -> jumpToLocation $ head r
 
-jumpToLocation :: Location -> Neovim env ()
+jumpToLocation ::  (HasLoggerName' env) => Location -> Neovim env ()
 jumpToLocation loc = do
   let uri   = loc^. #uri
       range = loc^. #range
@@ -141,7 +143,7 @@ textDocumentDefinitionNoInfo = "textDocument/definition: no info"
 -- Complete
 -------------------------------------------------------------------------------
 
-complete :: ServerResponse 'TextDocumentCompletionK -> Neovim env ()
+complete :: (HasLoggerName' env) => ServerResponse 'TextDocumentCompletionK -> Neovim env ()
 complete (Response resp) = withResult resp $ \case
   Nothing -> return () -- is it ok?
   Just (L cs) -> completeCompletionItems cs
@@ -191,7 +193,7 @@ toVimItem c
 -- Util
 -------------------------------------------------------------------------------
 
-withResult :: ResponseMessage a e -> (a -> Neovim env ()) -> Neovim env ()
+withResult :: (HasLoggerName' env) => ResponseMessage a e -> (a -> Neovim env ()) -> Neovim env ()
 withResult resp k =
   case resp^. #error of
     Some e -> vim_report_error' (T.unpack (e^. #message))

@@ -28,7 +28,8 @@ import           Neovim.LSP.Protocol.Type
 
 -- TextDocumentDidOpen Notification
 ---------------------------------------
-didOpenBuffer :: (HasOutChan' env, HasContext' env) => Buffer -> Neovim env ()
+didOpenBuffer :: (HasOutChan' env, HasContext' env, HasLoggerName' env)
+              => Buffer -> Neovim env ()
 didOpenBuffer b = do
     contents <- getBufContents b
     language <- getBufLanguage b
