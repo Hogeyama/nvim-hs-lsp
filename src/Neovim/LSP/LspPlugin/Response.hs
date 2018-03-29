@@ -16,9 +16,7 @@ module Neovim.LSP.LspPlugin.Response
 import           Control.Lens
 import           Control.Monad              (forever)
 import           Data.List                  (intercalate)
-import           Data.Aeson                 as J hiding (KeyValue)
 import           Data.Extensible
-import qualified Data.ByteString.Lazy.Char8 as B
 
 import qualified Data.Text                  as T
 
@@ -31,50 +29,44 @@ import           Neovim.LSP.Util
 import           Neovim.LSP.Protocol.Type
 
 responseHandler :: Plugin
-responseHandler = Plugin responsePred responsePluginAction
-
-responsePred :: InMessage -> Bool
-responsePred SomeResp{} = True
-responsePred _          = False
+responseHandler = Plugin "responseHandler" responsePluginAction
 
 responsePluginAction :: PluginAction ()
 responsePluginAction = forever @_ @() @() $ do
-  hoge <- pull
-  debugM $ "responseHandler got " ++ B.unpack (encode hoge)
-  case hoge of
-    SomeResp resp -> do
-      case singByProxy resp of
-        -- General
-        SInitialize -> do
-          -- TODO TVarにServerCapabilitiesをセットする
-          debugM $ "responseHandler got: " ++ show resp
-          debugM "responseHandler: Initialize not implemented"
-        SShutdown                        -> notImplemented
+  msg <- pull
+  case msg of
+    SomeResp resp -> case singByProxy resp of
+      -- General
+      SInitialize -> do
+        -- TODO TVarにServerCapabilitiesをセットする
+        debugM $ "responseHandler got: " ++ show resp
+        debugM "responseHandler: Initialize not implemented"
+      SShutdown                        -> notImplemented
 
-        -- Workspace
-        SWorkspaceSymbol                 -> notImplemented
-        SWorkspaceExecuteCommand         -> infoM "responseHandler: ignore workspace/executeCommand"
+      -- Workspace
+      SWorkspaceSymbol                 -> notImplemented
+      SWorkspaceExecuteCommand         -> infoM "responseHandler: ignore workspace/executeCommand"
 
-        -- Document
-        STextDocumentWillSaveWaitUntil   -> notImplemented
-        STextDocumentCompletion          -> complete resp
-        SCompletionItemResolve           -> notImplemented
-        STextDocumentHover               -> responseHover resp
-        STextDocumentSignatureHelp       -> notImplemented
-        STextDocumentReferences          -> notImplemented
-        STextDocumentDocumentHighlight   -> notImplemented
-        STextDocumentDocumentSymbol      -> notImplemented
-        STextDocumentFormatting          -> notImplemented
-        STextDocumentRangeFormatting     -> notImplemented
-        STextDocumentOnTypeFormatting    -> notImplemented
-        STextDocumentDefinition          -> responseDefinition resp
-        STextDocumentCodeAction          -> notImplemented
-        STextDocumentCodeLens            -> notImplemented
-        SCodeLensResolve                 -> notImplemented
-        STextDocumentDocumentLink        -> notImplemented
-        SDocumentLinkResolve             -> notImplemented
-        STextDocumentRename              -> notImplemented
-        SClientRequestMisc{}             -> notImplemented
+      -- Document
+      STextDocumentWillSaveWaitUntil   -> notImplemented
+      STextDocumentCompletion          -> complete resp
+      SCompletionItemResolve           -> notImplemented
+      STextDocumentHover               -> responseHover resp
+      STextDocumentSignatureHelp       -> notImplemented
+      STextDocumentReferences          -> notImplemented
+      STextDocumentDocumentHighlight   -> notImplemented
+      STextDocumentDocumentSymbol      -> notImplemented
+      STextDocumentFormatting          -> notImplemented
+      STextDocumentRangeFormatting     -> notImplemented
+      STextDocumentOnTypeFormatting    -> notImplemented
+      STextDocumentDefinition          -> responseDefinition resp
+      STextDocumentCodeAction          -> notImplemented
+      STextDocumentCodeLens            -> notImplemented
+      SCodeLensResolve                 -> notImplemented
+      STextDocumentDocumentLink        -> notImplemented
+      SDocumentLinkResolve             -> notImplemented
+      STextDocumentRename              -> notImplemented
+      SClientRequestMisc{}             -> notImplemented
     _ -> return ()
   where
     notImplemented :: PluginAction ()

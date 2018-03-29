@@ -39,7 +39,7 @@ nvimHsLspInitialize ca = loggingError $ do
     if b /= "haskell"
       then initializeLsp "rustup" ["run", "nightly", "rls"]
       else initializeLsp "hie" ["--lsp", "-d", "-l", "/tmp/LanguageServer.log"]
-    void $ dispatcher [notificationHandler, requestHandler, responseHandler]
+    dispatch [notificationHandler, requestHandler, responseHandler]
     cwd <- filePathToUri <$> errOnInvalidResult (vim_call_function "getcwd" [])
     pushRequest @'InitializeK (initializeParam Nothing (Just cwd))
 

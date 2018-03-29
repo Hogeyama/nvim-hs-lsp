@@ -14,41 +14,36 @@ module Neovim.LSP.LspPlugin.Request
   )
   where
 
-import Control.Monad                       (forM_, forever)
+import           Control.Monad                       (forM_, forever)
 import           Control.Lens.Operators
-import           Data.Aeson                          as J
-import qualified Data.ByteString.Char8          as BS
-import qualified Data.ByteString.Lazy.Char8          as B
+import qualified Data.ByteString.Char8               as BS
 import           Data.Map                            (Map)
 import qualified Data.Map                            as M
 import           Data.Extensible
 
-import           Neovim hiding (Plugin, range, err)
+import           Neovim                              hiding (Plugin, range, err)
 import           Neovim.LSP.Base
 import           Neovim.LSP.Util
 import           Neovim.LSP.Protocol.Type
 import           Neovim.LSP.Protocol.Messages
 
 requestHandler :: Plugin
-requestHandler = Plugin requestPred requestPluginAction
-
-requestPred :: InMessage -> Bool
-requestPred SomeReq{} = True
-requestPred _ = False
+requestHandler = Plugin "requestHandler" requestPluginAction
 
 requestPluginAction :: PluginAction ()
 requestPluginAction = forever @_ @() @() $ do
-  SomeReq req <- pull
-  debugM $ "requestHandler got " ++ B.unpack (encode req)
-  case singByProxy req of
-    SWindowShowMessageRequest   -> errorM "requestHandler: not implemented"
-      -- これ大変そう
-    SClientRegisterCapability   -> errorM "requestHandler: not implemented"
-      -- これは対応する必要性が低そう
-    SClientUnregisterCapability -> errorM "requestHandler: not implemented"
-      -- これも
-    SWorkspaceApplyEdit         -> respondWorkspaceAplyEdit req
-    SServerRequestMisc _        -> errorM "requestHandler: Misc: not implemented"
+  msg <- pull
+  case msg of
+    SomeReq req -> case singByProxy req of
+      SWindowShowMessageRequest   -> errorM "requestHandler: not implemented"
+        -- これ大変そう
+      SClientRegisterCapability   -> errorM "requestHandler: not implemented"
+        -- これは対応する必要性が低そう
+      SClientUnregisterCapability -> errorM "requestHandler: not implemented"
+        -- これも
+      SWorkspaceApplyEdit         -> respondWorkspaceAplyEdit req
+      SServerRequestMisc _        -> errorM "requestHandler: Misc: not implemented"
+    _ -> return ()
 
 -- WorkspaceApplyEdit
 ---------------------------------------

@@ -1,5 +1,4 @@
 {-# LANGUAGE DataKinds           #-}
-{-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications    #-}
@@ -43,7 +42,7 @@ main = do
   testWithEmbeddedNeovim (Just f) (Seconds 10000) initialEnv $ do
     vim_command' "source ./test-file/init.vim"
     initializeLsp "hie" ["--lsp", "-d", "-l", "/tmp/LanguageServer.log"]
-    dispatcher [ notificationHandler , requestHandler ]
+    dispatch [ notificationHandler , requestHandler ]
     wait =<< async handler2
     finalizeLSP
     liftIO exitSuccess

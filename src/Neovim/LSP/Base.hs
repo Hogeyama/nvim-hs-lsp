@@ -29,7 +29,7 @@ module Neovim.LSP.Base where
 import           UnliftIO
 import           Control.DeepSeq            (NFData)
 import           Control.Lens               hiding (Context)
-import           Control.Monad              (forM, forM_, forever, when)
+import           Control.Monad              (forM, forM_, forever)
 import           Control.Monad.IO.Class     (MonadIO, liftIO)
 import           Control.Monad.Reader.Class (MonadReader, ask)
 import qualified Data.Aeson                 as J
@@ -115,7 +115,7 @@ data ServerHandles = ServerHandles
 
 -- sender, receiver, watcher of serverErr, dispatcher, plugins
 newtype OtherHandles = OtherHandles
-  { unOtherHandles :: [Async ()] }
+  { unOtherHandles :: [(String, Async ())] } -- (name,_)
 
 -------------------------------------------------------------------------------
 -- Plugin
@@ -124,8 +124,8 @@ newtype OtherHandles = OtherHandles
 type PluginAction = Neovim PluginEnv
 
 data Plugin = Plugin
-  { pred  :: !(InMessage -> Bool) -- Maybe (TVar (InMessage -> Bool))にするか
-  , acion :: !(PluginAction ())
+  { pluginName   :: !String
+  , pluginAction :: !(PluginAction ())
   }
 
 data InMessage where
@@ -242,9 +242,9 @@ initializeLsp cmd args = do
         }
   inCh  <- asks lspEnvInChan
   outCh <- asks _lspEnvOutChan
-  registerAsyncHandle =<< async (liftIO (sender hin outCh))
-  registerAsyncHandle =<< async (liftIO (receiver hout inCh))
-  registerAsyncHandle =<< async (liftIO (watcher herr))
+  registerAsyncHandle "sender" =<< async (liftIO (sender hin outCh))
+  registerAsyncHandle "receiver" =<< async (liftIO (receiver hout inCh))
+  registerAsyncHandle "herr-watcher" =<< async (liftIO (watcher herr))
   liftIO $ do
     hSetBuffering hin  NoBuffering
     hSetBuffering hout NoBuffering
@@ -264,8 +264,9 @@ uninitializedError :: a
 uninitializedError = error "not initialized (TODO: fabulous message)"
 
 registerAsyncHandle :: (MonadReader env m, MonadIO m, HasOtherHandles' env)
-                    => Async () -> m ()
-registerAsyncHandle a = otherHandles %== (\(OtherHandles hs) -> OtherHandles (a:hs))
+                    => String -> Async () -> m ()
+registerAsyncHandle name a =
+  otherHandles %== (\(OtherHandles hs) -> OtherHandles ((name,a):hs))
 
 
 -------------------------------------------------------------------------------
@@ -274,7 +275,7 @@ registerAsyncHandle a = otherHandles %== (\(OtherHandles hs) -> OtherHandles (a:
 
 finalizeLSP :: NeovimLsp ()
 finalizeLSP = do
-  mapM_ cancel =<< usesTV otherHandles unOtherHandles
+  mapM_ (cancel.snd) =<< usesTV otherHandles unOtherHandles
   useTV serverHandles >>= \case
     Nothing -> return ()
     Just sh -> liftIO $ terminateProcess (serverPH sh)
@@ -428,27 +429,29 @@ dispatch hs = do
            , _lspEnvContext = ctx
            } <- ask
 
-    (handlers,hIDs) <- fmap unzip $ forM hs $ \(Plugin p action) -> do
+    inChs <- forM hs $ \(Plugin p action) -> do
       inCh <- liftIO newTChanIO
-      let config = PluginEnv inCh outCh ctx
-      hID <- asyncNeovim config $ loggingError action
-      return ((p,inCh), hID)
+      let config = PluginEnv
+                   { _pluginEnvInChan  = inCh
+                   , _pluginEnvOutChan = outCh
+                   , _pluginEnvContext = ctx
+                   }
+      a <- asyncNeovim config $ loggingError action
+      registerAsyncHandle "" a
+      return inCh
 
-    -- TODO handlersを動的に追加できるようにする？
-    dpID <- liftIO $ async $ loggingError $ forever $ do
+    dispatcher <- liftIO $ async $ loggingError $ forever $ do
         rawInput <- atomically (readTChan inChG)
         let Just !v = J.decode rawInput
-        idMap <- atomically (_lspIdMap <$> readTVar ctx)
+        idMap <- view lspIdMap <$> readTVarIO ctx
         case toInMessage idMap v of
-          Right !msg -> forM_ handlers $ \(p,inCh) ->
-              when (p msg) $ atomically $ writeTChan inCh msg
+          Right !msg -> forM_ inChs $ atomically . (writeTChan `flip` msg)
           Left e -> errorM $ unlines
               [ "dispatcher: could not parse input."
               , "input: " ++ B.unpack rawInput
               , "error: " ++ show e
               ]
-
-    mapM_ registerAsyncHandle (dpID:hIDs)
+    registerAsyncHandle "dispatcher" dispatcher
 
 -------------------------------------------------------------------------------
 -- Util

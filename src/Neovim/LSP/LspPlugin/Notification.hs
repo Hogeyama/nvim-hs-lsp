@@ -32,7 +32,7 @@ import           Neovim.LSP.Util
 import           Neovim.LSP.Protocol.Type
 
 notificationHandler :: Plugin
-notificationHandler = Plugin notificationPred notificationPluginAction
+notificationHandler = Plugin "notificationHandler" notificationPluginAction
 
 notificationPred :: InMessage -> Bool
 notificationPred SomeNoti{} = True
@@ -40,23 +40,22 @@ notificationPred _ = False
 
 notificationPluginAction :: PluginAction ()
 notificationPluginAction = forever @_ @() @() $ do
-    msg <- pull
-    --debugM $ "notificationHandler got " ++ B.unpack (encode msg)
-    case msg of
-      SomeNoti (noti :: ServerNotification m) -> case singByProxy noti of
-        STextDocumentPublishDiagnostics -> do
-          showDiagnotics noti
-        SWindowShowMessage -> do
-          errorM "notificationHandler: WindowShowMessage: not implemented"
-        SWindowLogMessage -> do
-          errorM "notificationHandler: WindowLogMessage: not implemented"
-        STelemetryEvent -> do
-          errorM "notificationHandler: TelemetryEvent: not implemented"
-        SServerCancel -> do
-          errorM "notificationHandler: ServerCancel: not implemented"
-        SServerNotificationMisc _ -> do
-          errorM "notificationHandler: Misc: not implemented"
-      _ -> error "impossible"
+  msg <- pull
+  case msg of
+    SomeNoti (noti :: ServerNotification m) -> case singByProxy noti of
+      STextDocumentPublishDiagnostics -> do
+        showDiagnotics noti
+      SWindowShowMessage -> do
+        errorM "notificationHandler: WindowShowMessage: not implemented"
+      SWindowLogMessage -> do
+        errorM "notificationHandler: WindowLogMessage: not implemented"
+      STelemetryEvent -> do
+        errorM "notificationHandler: TelemetryEvent: not implemented"
+      SServerCancel -> do
+        errorM "notificationHandler: ServerCancel: not implemented"
+      SServerNotificationMisc _ -> do
+        errorM "notificationHandler: Misc: not implemented"
+    _ -> return ()
 
 -------------------------------------------------------------------------------
 -- TextDocumentPublishDiagnostics
