@@ -40,33 +40,23 @@ library:
   - deepseq
   - unliftio
 
-executables:
-  tmp:
-    main:                Main.hs
-    source-dirs:         app
-    ghc-options:
-    - -threaded
-    - -rtsopts
-    - -with-rtsopts=-N
-    - -dcore-lint
-    - -O2
-      #- -ddump-splices
-    - -fprint-explicit-kinds
+tests:
+  doctests:
+    source-dirs:   test
+    main:          doctests.hs
+    other-modules:
+    - Build_doctests
     dependencies:
+    - doctest
+  tmp:
+    source-dirs: test
+    main:        tmp.hs
+    dependencies:
+    - doctest
     - nvim-hs
     - nvim-hs-lsp
     - stm
     - lens
     - process
     - unliftio
-
-
-tests:
-  doctests:
-    source-dirs:   test
-    main:          doctests.hs
-    other-modules:
-      - Build_doctests
-    dependencies:
-      - doctest
 

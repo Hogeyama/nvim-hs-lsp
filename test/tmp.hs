@@ -18,7 +18,7 @@ import           System.Environment                (unsetEnv)
 import           System.IO                         (hGetLine, stdout)
 import           System.Process                    (terminateProcess)
 
-import           Neovim                            hiding (Plugin)
+import           Neovim                            hiding (Plugin, wait)
 import           Neovim.Context                    (quit)
 import           Neovim.Test
 
@@ -30,6 +30,7 @@ import           Neovim.LSP.LspPlugin.Request      (requestHandler)
 import           Neovim.LSP.Protocol.Messages
 import           Neovim.LSP.Protocol.Type
 import           Neovim.LSP.Util
+import           System.Exit (exitSuccess)
 
 print' :: Show a => a -> Neovim env ()
 print' x = liftIO $ print x
@@ -40,39 +41,15 @@ main = do
   mapM_ unsetEnv [ "GHC_PACKAGE_PATH" ]
   let f = "test-file/hoge.hs"
   testWithEmbeddedNeovim (Just f) (Seconds 10000) initialEnv $ do
-      vim_command' "source ./test-file/init.vim"
+    liftIO $ putStrLn "start"
+    vim_command' "source ./test-file/init.vim"
+    initializeLsp "hie" ["--lsp", "-d", "-l", "/tmp/LanguageServer.log"]
+    _ <- dispatcher [ notificationHandler , requestHandler ]
+    () <- wait =<< async handler2
+    liftIO exitSuccess
 
-      initializeLsp "hie" ["--lsp", "-d", "-l", "/tmp/LanguageServer.log"]
-
-      -- stateにThreadIDを追加すべき
-      (dpth, hths) <- dispatcher
-                           [ notificationHandler
-                           , requestHandler
-                           , handler2
-                           ]
-
-      Just ph   <- fmap serverPH  <$> useTV serverHandles
-      Just herr <- fmap serverErr <$> useTV serverHandles
-      threadDelaySec 10
-      () <- liftIO $ forever (putStrLn =<< hGetLine herr)
-              `catch` \(_::IOError) -> return ()
-      liftIO $ do
-        hFlush stdout
-        mapM_ cancel $ dpth : hths
-        terminateProcess ph
-      threadDelaySec 3
-        -- TODO Handlerの終了を待てるようにしたほうがいいのだろうか
-        --      Asyncを使ってwaitするのがよいかしら
-      return ()
-
--- 全部拾うマン
-handler1 :: Plugin
-handler1 = Plugin (const True) $
-  forever @_ @_ @() $ pull >>= \case
-    x -> debugM $ "handler1 got\n" ++ show x
-
-handler2 :: Plugin
-handler2 = Plugin (const False) $ do
+handler2 :: NeovimLsp ()
+handler2 = do
   b <- vim_get_current_buffer'
 
   -- Initialize
@@ -110,9 +87,7 @@ handler2 = Plugin (const False) $ do
   -- Exit
   -------
   threadDelaySec 10
-  --pushNotification @'ExitK exitParam
-  -- なんでダメなんだ．文脈から明らかに確定するやろ
-  push $ notification @'ExitK exitParam
+  pushNotification @'ExitK exitParam
 
 -------------------------------------------------------------------------------
 

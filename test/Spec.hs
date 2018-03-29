@@ -1,5 +1,5 @@
 
-module Main where
+module Spec where
 
 main :: IO ()
 main = return ()
