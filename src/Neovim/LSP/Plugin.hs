@@ -95,6 +95,7 @@ nvimHsLspSaveBuffer _ = whenInitialized $ whenAlreadyOpened $
 nvimHsLspExit :: CommandArguments -> NeovimLsp ()
 nvimHsLspExit _ = whenInitialized $ do
   push $ notification @'ExitK exitParam
+  finalizeLSP
   restart
 
 -------------------------------------------------------------------------------

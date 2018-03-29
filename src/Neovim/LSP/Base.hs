@@ -52,8 +52,8 @@ import           System.Log.Handler         (setFormatter)
 import           System.Log.Handler.Simple  (fileHandler)
 import qualified System.Log.Logger          as L
 import           System.Process             (CreateProcess (..), ProcessHandle,
-                                             StdStream (..), createProcess,
-                                             proc)
+                                             StdStream (..),
+                                             terminateProcess, createProcess, proc)
 
 import           Neovim                     hiding (Plugin)
 import           Neovim.Context.Internal
@@ -66,11 +66,29 @@ import           Neovim.LSP.Protocol.Type
 
 type NeovimLsp = Neovim LspEnv
 
-data ServerHandles = ServerHandles
-  { serverIn  :: !Handle
-  , serverOut :: !Handle
-  , serverErr :: !Handle
-  , serverPH  :: !ProcessHandle
+data LspEnv = LspEnv
+  { _lspEnvServerHandles :: !(TVar (Maybe ServerHandles))
+  , _lspEnvOtherHandles  :: !(TVar OtherHandles)
+  ,  lspEnvInChan        :: !(TChan B.ByteString)
+  , _lspEnvOutChan       :: !(TChan B.ByteString)
+  , _lspEnvOpenedFiles   :: !(TVar (Map Uri Version))
+  , _lspEnvContext       :: !(TVar Context)
+  }
+
+initialEnvM :: MonadIO m => m LspEnv
+initialEnvM = liftIO $ do
+  _lspEnvServerHandles <- newTVarIO Nothing
+  _lspEnvOtherHandles  <- newTVarIO (OtherHandles [])
+  lspEnvInChan         <- newTChanIO
+  _lspEnvOutChan       <- newTChanIO
+  _lspEnvOpenedFiles   <- newTVarIO M.empty
+  _lspEnvContext       <- newTVarIO initialContext
+  return LspEnv {..}
+
+data PluginEnv = PluginEnv
+  { _pluginEnvInChan  :: !(TChan InMessage)
+  , _pluginEnvOutChan :: !(TChan ByteString)
+  , _pluginEnvContext :: !(TVar Context)
   }
 
 data Context = Context
@@ -88,28 +106,16 @@ initialContext = Context
   , _lspVersionMap    = M.empty
   }
 
--- TODO SenderやPluginとかのHandleを追加する
-data LspEnv = LspEnv
-  { _lspEnvServerHandles :: !(TVar (Maybe ServerHandles))
-  ,  lspEnvInChan        :: !(TChan B.ByteString)
-  , _lspEnvOutChan       :: !(TChan B.ByteString)
-  , _lspEnvOpenedFiles   :: !(TVar (Map Uri Version))
-  , _lspEnvContext       :: !(TVar Context)
-  }
-data PluginEnv = PluginEnv
-  { _pluginEnvInChan  :: !(TChan InMessage)
-  , _pluginEnvOutChan :: !(TChan ByteString)
-  , _pluginEnvContext :: !(TVar Context)
+data ServerHandles = ServerHandles
+  { serverIn  :: !Handle
+  , serverOut :: !Handle
+  , serverErr :: !Handle
+  , serverPH  :: !ProcessHandle
   }
 
-initialEnvM :: MonadIO m => m LspEnv
-initialEnvM = liftIO $
-  pure LspEnv
-  <*> newTVarIO Nothing
-  <*> newTChanIO
-  <*> newTChanIO
-  <*> newTVarIO M.empty
-  <*> newTVarIO initialContext
+-- sender, receiver, watcher of serverErr, dispatcher, plugins
+newtype OtherHandles = OtherHandles
+  { unOtherHandles :: [Async ()] }
 
 -------------------------------------------------------------------------------
 -- Plugin
@@ -190,6 +196,7 @@ type HasInChan'        env = HasInChan        env (TChan InMessage)
 type HasOutChan'       env = HasOutChan       env (TChan B.ByteString)
 type HasContext'       env = HasContext       env (TVar  Context)
 type HasOpenedFiles'   env = HasOpenedFiles   env (TVar  (Map Uri Version))
+type HasOtherHandles'  env = HasOtherHandles  env (TVar  OtherHandles)
 type HasServerHandles' env = HasServerHandles env (TVar  (Maybe ServerHandles))
 
 useTV :: (MonadReader r m, MonadIO m) => Lens' r (TVar a) -> m a
@@ -235,16 +242,16 @@ initializeLsp cmd args = do
         }
   inCh  <- asks lspEnvInChan
   outCh <- asks _lspEnvOutChan
+  registerAsyncHandle =<< async (liftIO (sender hin outCh))
+  registerAsyncHandle =<< async (liftIO (receiver hout inCh))
+  registerAsyncHandle =<< async (liftIO (watcher herr))
   liftIO $ do
     hSetBuffering hin  NoBuffering
     hSetBuffering hout NoBuffering
     hSetBuffering herr NoBuffering
-    void $ async $ sender hin outCh
-    void $ async $ receiver hout inCh
-    _ <- async $ forever $ logger herr
     setupLogger
   where
-    logger herr = handleIO
+    watcher herr = forever $ handleIO
       (\e ->  if isEOFError e
                 then throwIO e
                 else errorM $ "STDERR: Exception: " ++ show e)
@@ -256,13 +263,21 @@ isInitialized = usesTV serverHandles isJust
 uninitializedError :: a
 uninitializedError = error "not initialized (TODO: fabulous message)"
 
+registerAsyncHandle :: (MonadReader env m, MonadIO m, HasOtherHandles' env)
+                    => Async () -> m ()
+registerAsyncHandle a = otherHandles %== (\(OtherHandles hs) -> OtherHandles (a:hs))
+
+
 -------------------------------------------------------------------------------
 -- Finalize
 -------------------------------------------------------------------------------
 
--- TODO
--- removeAllHandlersとか
--- serverのShutdownとか
+finalizeLSP :: NeovimLsp ()
+finalizeLSP = do
+  mapM_ cancel =<< usesTV otherHandles unOtherHandles
+  useTV serverHandles >>= \case
+    Nothing -> return ()
+    Just sh -> liftIO $ terminateProcess (serverPH sh)
 
 -------------------------------------------------------------------------------
 -- Logger
@@ -346,8 +361,9 @@ data Header = Header
   } deriving (Eq, Show)
 
 
--- Plugin's action
----------------------------------------
+-------------------------------------------------------------------------------
+-- Access Context
+-------------------------------------------------------------------------------
 
 pull :: (HasInChan' env) => Neovim env InMessage
 pull = liftIO . atomically . readTChan =<< view inChan
@@ -357,7 +373,6 @@ push x = do
   outCh <- view outChan
   liftIO $ atomically $ writeTChan outCh $ J.encode x
 
--- modifyMVarと一致させるなら関数を一つにまとめたほうがよい？
 modifyContext :: (MonadReader env m, MonadIO m, HasContext' env)
               => (Context -> Context) -> (Context -> a) -> m a
 modifyContext modify_ read_ = do
@@ -406,9 +421,8 @@ asyncNeovim r a = do
     let threadConfig = retypeConfig r cfg
     liftIO . async . void $ runNeovim threadConfig a
 
-dispatcher :: [Plugin] -> NeovimLsp (Async (), [Async ()])
-dispatcher hs = do
-    debugM "this is dispatcher!"
+dispatch :: [Plugin] -> NeovimLsp ()
+dispatch hs = do
     LspEnv {  lspEnvInChan  = inChG
            , _lspEnvOutChan = outCh
            , _lspEnvContext = ctx
@@ -434,7 +448,7 @@ dispatcher hs = do
               , "error: " ++ show e
               ]
 
-    return (dpID, hIDs)
+    mapM_ registerAsyncHandle (dpID:hIDs)
 
 -------------------------------------------------------------------------------
 -- Util

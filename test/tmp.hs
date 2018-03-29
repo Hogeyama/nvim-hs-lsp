@@ -41,11 +41,11 @@ main = do
   mapM_ unsetEnv [ "GHC_PACKAGE_PATH" ]
   let f = "test-file/hoge.hs"
   testWithEmbeddedNeovim (Just f) (Seconds 10000) initialEnv $ do
-    liftIO $ putStrLn "start"
     vim_command' "source ./test-file/init.vim"
     initializeLsp "hie" ["--lsp", "-d", "-l", "/tmp/LanguageServer.log"]
-    _ <- dispatcher [ notificationHandler , requestHandler ]
-    () <- wait =<< async handler2
+    dispatcher [ notificationHandler , requestHandler ]
+    wait =<< async handler2
+    finalizeLSP
     liftIO exitSuccess
 
 handler2 :: NeovimLsp ()
@@ -69,7 +69,7 @@ handler2 = do
   nvim_buf_set_lines' b 5 6 False ["  return ()"]
   -- startは含まない, endは含む 上のは6行目を置換している
   -- start=end=6とすると6,7行目の間に挿入される
-  --void $ vim_command ":update" -- とかしない限り実ファイルに影響はない
+  --void $ vim_command "update" -- とかしない限り実ファイルに影響はない
   --print' =<< getBufContents b -- 確認用
   didChangeBuffer b
   -- Redundant doのみ帰ってくるはず
@@ -86,7 +86,8 @@ handler2 = do
 
   -- Exit
   -------
-  threadDelaySec 10
+  print' ()
+  threadDelaySec 3
   pushNotification @'ExitK exitParam
 
 -------------------------------------------------------------------------------
