@@ -26,5 +26,5 @@
 
 - [ ] implement rename
 
-- [ ] add callback
+- [x] add callback
 

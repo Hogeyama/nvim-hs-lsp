@@ -6,7 +6,6 @@
 {-# LANGUAGE OverloadedLabels          #-}
 {-# LANGUAGE OverloadedStrings         #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
-{-# LANGUAGE TypeApplications          #-}
 {-# OPTIONS_GHC -Wall                  #-}
 
 module Neovim.LSP.LspPlugin.Notification
@@ -32,23 +31,24 @@ notificationHandler :: Plugin
 notificationHandler = Plugin "noti" notificationPluginAction
 
 notificationPluginAction :: PluginAction ()
-notificationPluginAction = forever @_ @() @() $ do
-  msg <- pull
-  case msg of
-    SomeNoti (noti :: ServerNotification m) -> case singByProxy noti of
-      STextDocumentPublishDiagnostics -> do
-        showDiagnotics noti
-      SWindowShowMessage -> do
-        errorM "notificationHandler: WindowShowMessage: not implemented"
-      SWindowLogMessage -> do
-        errorM "notificationHandler: WindowLogMessage: not implemented"
-      STelemetryEvent -> do
-        errorM "notificationHandler: TelemetryEvent: not implemented"
-      SServerCancel -> do
-        errorM "notificationHandler: ServerCancel: not implemented"
-      SServerNotificationMisc _ -> do
-        errorM "notificationHandler: Misc: not implemented"
-    _ -> return ()
+notificationPluginAction = do
+  forever $ do
+    msg <- pull
+    case msg of
+      SomeNoti (noti :: ServerNotification m) -> case singByProxy noti of
+        STextDocumentPublishDiagnostics -> do
+          showDiagnotics noti
+        SWindowShowMessage -> do
+          errorM "notificationHandler: WindowShowMessage: not implemented"
+        SWindowLogMessage -> do
+          errorM "notificationHandler: WindowLogMessage: not implemented"
+        STelemetryEvent -> do
+          errorM "notificationHandler: TelemetryEvent: not implemented"
+        SServerCancel -> do
+          errorM "notificationHandler: ServerCancel: not implemented"
+        SServerNotificationMisc _ -> do
+          errorM "notificationHandler: Misc: not implemented"
+      _ -> return ()
 
 -------------------------------------------------------------------------------
 -- TextDocumentPublishDiagnostics
@@ -62,6 +62,8 @@ showDiagnotics (Notification noti) = do
         diagnostics = params^. #diagnostics
         qfItems     = concatMap (diagnosticToQFItems uri)
                         $ sortBy (compare `on` (^. #severity)) diagnostics
+    debugM $ "showDiagnotics: " ++ show noti
+    debugM $ "showDiagnotics: " ++ show qfItems
     Q.setqflist qfItems Q.Replace
     when (null qfItems) $ nvimEcho "textDocument/publishDiagnostics: no error"
 
