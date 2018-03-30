@@ -150,7 +150,7 @@ nvimHsLspComplete findstart base = do
         _ -> error "流石にここに来たら怒っていいよね"
   if findStart == 1 then do
     s <- nvim_get_current_line'
-    let foo = dropWhile isAlphaNum $ reverse $ take col s
+    let foo = dropWhile isAlphaNum $ reverse $ take (col-1) s
     let len = length foo
     debugM $ "foo = " ++ show foo
     otherState.completionOffset .== Just len
