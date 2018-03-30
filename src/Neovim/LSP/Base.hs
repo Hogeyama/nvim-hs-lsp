@@ -107,8 +107,8 @@ data Context = Context
   }
 
 data Callback where
-  Callback :: Typeable m => CallbackOf m -> Callback
-type CallbackOf m = ServerResponse m -> PluginAction ()
+  Callback :: Typeable m => TMVar a -> CallbackOf m a -> Callback
+type CallbackOf m a = ServerResponse m -> PluginAction a
 
 initialContext :: Context
 initialContext = Context

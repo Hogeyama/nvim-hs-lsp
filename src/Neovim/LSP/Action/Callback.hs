@@ -11,7 +11,6 @@
 
 module Neovim.LSP.Action.Callback where
 
-import           UnliftIO
 import           Control.Lens
 import           Data.Extensible
 import           Data.List                (intercalate)
@@ -30,17 +29,17 @@ import           Neovim.LSP.Util
 -- Hover
 -------------------------------------------------------------------------------
 
-callbackHoverWith :: (String -> String) -> CallbackOf 'TextDocumentHoverK
+callbackHoverWith :: (String -> String) -> CallbackOf 'TextDocumentHoverK ()
 callbackHoverWith process (Response resp) = do
   debugM $ "responseHover: " ++ show resp
   void $ withResult resp $ \case
     Nothing -> nvimEcho textDocumentHoverNoInfo
     Just r  -> nvimEcho $ process $ stringOfHoverContents (r^. #contents)
 
-callbackHover :: CallbackOf 'TextDocumentHoverK
+callbackHover :: CallbackOf 'TextDocumentHoverK ()
 callbackHover = callbackHoverWith removeLastNewlines
 
-callbackHoverOneLine :: CallbackOf 'TextDocumentHoverK
+callbackHoverOneLine :: CallbackOf 'TextDocumentHoverK ()
 callbackHoverOneLine = callbackHoverWith $
   head . dropWhile ((=="```") . take 3) . lines
 
@@ -69,7 +68,7 @@ textDocumentHoverNoInfo = "textDocument/hover: no info"
 -- Definitions
 -------------------------------------------------------------------------------
 
-callbackDefinition :: CallbackOf 'TextDocumentDefinitionK 
+callbackDefinition :: CallbackOf 'TextDocumentDefinitionK ()
 callbackDefinition (Response resp) = do
   debugM $ "responseDefinition: " ++ show resp
   void $ withResult resp $ \case
@@ -106,7 +105,7 @@ textDocumentDefinitionNoInfo = "textDocument/definition: no info"
 -------------------------------------------------------------------------------
 
 -- TODO error processing
-callbackComplete :: CallbackBuilder 'TextDocumentCompletionK [VimCompleteItem]
+callbackComplete :: CallbackOf 'TextDocumentCompletionK [VimCompleteItem]
 callbackComplete (Response resp) = do
   m <- withResult resp $ \case
     Nothing     -> return []
@@ -178,15 +177,4 @@ withResult resp k =
     None -> case resp^. #result of
       None   -> errorM "withResult: wrong input" >> return Nothing
       Some x -> Just <$> k x
-
-type CallbackBuilder m a = ServerResponse m -> PluginAction a
-
-genCallback :: CallbackBuilder m a
-            -> Neovim env (TMVar a, CallbackOf m)
-genCallback f = do
-  var <- newEmptyTMVarIO
-  let callback resp = do
-        x <- f resp
-        atomically $ putTMVar var x
-  return (var, callback)
 

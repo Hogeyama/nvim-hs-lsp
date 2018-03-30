@@ -15,6 +15,7 @@ module Neovim.LSP.LspPlugin.Callback where
 import           Control.Lens
 import           Control.Monad            (forever)
 import           Data.Typeable            (cast, typeOf)
+import           UnliftIO
 
 import           Neovim.LSP.Base
 import           Neovim.LSP.Protocol.Type
@@ -27,12 +28,13 @@ callbackPluginAction = do
   forever $ pull >>= \case
     SomeResp resp@(Response (view #id -> Just id')) ->
       getCallback id' >>= \case
-        Just (Callback callback) -> do
+        Just (Callback var callback) -> do
           removeCallback id'
           case cast resp of
             Just resp' -> do
               debugM $ "run callback function for id: " ++ show id'
-              callback resp'
+              x <- callback resp'
+              atomically $ putTMVar var x
             Nothing -> do
               errorM $ unlines
                   [ "input type does not match for id: " ++ show id'

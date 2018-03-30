@@ -111,13 +111,13 @@ nvimHsLspInfo :: CommandArguments -> NeovimLsp ()
 nvimHsLspInfo _ = whenInitialized $ whenAlreadyOpened $ do
   b <- vim_get_current_buffer'
   pos <- getNvimPos
-  hoverRequest b pos (Just callbackHoverOneLine)
+  void $ hoverRequest b pos (Just callbackHoverOneLine)
 
 nvimHsLspInfoDetail :: CommandArguments -> NeovimLsp ()
 nvimHsLspInfoDetail _ = whenInitialized $ whenAlreadyOpened $ do
   b <- vim_get_current_buffer'
   pos <- getNvimPos
-  hoverRequest b pos (Just callbackHover)
+  void $ hoverRequest b pos (Just callbackHover)
 
 nvimHsLspHover :: CommandArguments -> NeovimLsp ()
 nvimHsLspHover = nvimHsLspInfoDetail
@@ -126,7 +126,7 @@ nvimHsLspDefinition :: CommandArguments -> NeovimLsp ()
 nvimHsLspDefinition _ = whenInitialized $ whenAlreadyOpened $ do
   b <- vim_get_current_buffer'
   pos <- getNvimPos
-  definitionRequest b pos (Just callbackDefinition)
+  void $ definitionRequest b pos (Just callbackDefinition)
 
 -- argument: {file: Uri, start_pos: Position}
 nvimHsLspApplyRefactOne :: CommandArguments -> NeovimLsp ()
@@ -137,7 +137,7 @@ nvimHsLspApplyRefactOne _ = whenInitialized $ whenAlreadyOpened $ do
   let  arg = toJSON $ object [ "file" .= uri
                              , "start_pos" .= nvimPosToPosition pos
                              ]
-  executeCommandRequest "applyrefact:applyOne" (Some [arg]) Nothing
+  void $ executeCommandRequest "applyrefact:applyOne" (Some [arg]) Nothing
 
 nvimHsLspComplete :: Object -> String
                   -> NeovimLsp (Either Int [VimCompleteItem])
@@ -150,14 +150,15 @@ nvimHsLspComplete findstart base = do
         _ -> error "流石にここに来たら怒っていいよね"
   if findStart == 1 then do
     s <- nvim_get_current_line'
-    let len = length $ dropWhile isAlphaNum $ reverse $ take col s
+    let foo = dropWhile isAlphaNum $ reverse $ take col s
+    let len = length foo
+    debugM $ "foo = " ++ show foo
     otherState.completionOffset .== Just len
     return (Left len)
   else do
     Just len <- useTV (otherState.completionOffset)
     otherState.completionOffset .== Nothing
-    (var, callback) <- genCallback callbackComplete
-    completionRequest b (line,col+len) (Just callback)
+    Just var <- completionRequest b (line,col+len) (Just callbackComplete)
     xs <- atomically (takeTMVar var)
     debugM $ "COMPLETION: base = " ++ show base
     let sorted = uncurry (++) $ partition (isPrefixOf base . view #word)  xs

@@ -15,11 +15,11 @@
 module Neovim.LSP.Util where
 
 import           Control.Lens.Operators
-import           Control.Monad.Extra (whenJust)
 import           Data.Extensible
 import           Data.Singletons
 import           Data.Text                    (Text)
 import qualified Data.Text                    as T
+import           UnliftIO
 
 import           Neovim
 import           Neovim.LSP.Base
@@ -84,23 +84,28 @@ currentTextDocumentPositionParams = do
 -- "OK"
 --
 -- TODO これをユーザーに見せるのはどうなのか．でもtype checkはして欲しいしなあ
-pushRequest :: forall (m :: ClientRequestMethodK) env
+pushRequest :: forall (m :: ClientRequestMethodK) env a
             .  (ImplRequest m, HasOutChan' env, HasContext' env)
             => RequestParam m
-            -> Maybe (Response m -> PluginAction ())
-            -> Neovim env ()
-pushRequest param callback' = do
+            -> Maybe (CallbackOf m a)
+            -> Neovim env (Maybe (TMVar a))
+pushRequest param mcallback = do
     let method = fromSing (sing :: Sing m)
     id' <- genUniqueID
     addIdMethodMap id' method
-    whenJust callback' $ registerCallback id' . Callback
     push $ request @m id' param
+    case mcallback of
+      Just callback -> do
+        var <- newEmptyTMVarIO
+        registerCallback id' $ Callback var callback
+        return (Just var)
+      Nothing -> return Nothing
 
 pushRequest' :: forall (m :: ClientRequestMethodK) env
              .  (ImplRequest m, HasOutChan' env, HasContext' env)
              => RequestParam m
              -> Neovim env ()
-pushRequest' param = pushRequest @m param Nothing
+pushRequest' param = void $ pushRequest @m param Nothing
 
 pushNotification :: forall (m :: ClientNotificationMethodK) env
                  .  (ImplNotification m, HasOutChan' env)
@@ -138,5 +143,4 @@ type VimCompleteItem = Record
    , "empty"     >: Option Int
    , "user_data" >: Option String -- TODO Value is not an instance of NvimObject
    ]
-
 
