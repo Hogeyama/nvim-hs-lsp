@@ -29,19 +29,26 @@ import           Neovim.LSP.Util
 -- Hover
 -------------------------------------------------------------------------------
 
-callbackHover :: CallbackOf 'TextDocumentHoverK
-callbackHover (Response resp) = do
+callbackHoverWith :: (String -> String) -> CallbackOf 'TextDocumentHoverK
+callbackHoverWith process (Response resp) = do
   debugM $ "responseHover: " ++ show resp
   withResult resp $ \case
     Nothing -> nvimEcho textDocumentHoverNoInfo
-    Just r  -> nvimEcho $ removeLastNewlines $
-                 pprHoverContents (r^. #contents) ++ "\n"
+    Just r  -> nvimEcho $ process $ stringOfHoverContents (r^. #contents)
 
-pprHoverContents :: MarkedString :|: [MarkedString] :|: MarkupContent -> String
-pprHoverContents (L ms)     = pprMarkedString ms
-pprHoverContents (R (L [])) = textDocumentHoverNoInfo
-pprHoverContents (R (L xs)) = unlines $ map pprMarkedString xs
-pprHoverContents (R (R x))  = x^. #value
+callbackHover :: CallbackOf 'TextDocumentHoverK
+callbackHover = callbackHoverWith removeLastNewlines
+
+callbackHoverOneLine :: CallbackOf 'TextDocumentHoverK
+callbackHoverOneLine = callbackHoverWith $
+  head . dropWhile ((=="```") . take 3) . lines
+
+
+stringOfHoverContents :: MarkedString :|: [MarkedString] :|: MarkupContent -> String
+stringOfHoverContents (L ms)     = pprMarkedString ms
+stringOfHoverContents (R (L [])) = textDocumentHoverNoInfo
+stringOfHoverContents (R (L xs)) = unlines $ map pprMarkedString xs
+stringOfHoverContents (R (R x))  = x^. #value
 
 -- TODO markdownをどう表示するか
 pprMarkedString :: MarkedString -> String
@@ -50,6 +57,9 @@ pprMarkedString (R x) = x^. #value
 
 removeLastNewlines :: String -> String
 removeLastNewlines = reverse . dropWhile (=='\n') .reverse
+
+removeCodeStartEnd :: String -> String
+removeCodeStartEnd = unlines . filter ((/="```") . take 3) . lines
 
 textDocumentHoverNoInfo ::  String
 textDocumentHoverNoInfo = "textDocument/hover: no info"

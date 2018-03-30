@@ -43,11 +43,10 @@ nvimHsLspInitialize ca = loggingError $ do
     dispatch [notificationHandler, requestHandler, callbackHandler]
     cwd <- filePathToUri <$> errOnInvalidResult (vim_call_function "getcwd" [])
     pushRequest' @'InitializeK (initializeParam Nothing (Just cwd))
-
-    let hsPattern = def { acmdPattern = "*.hs" }
-    Just Right{} <- addAutocmd "BufRead,BufNewFile"       hsPattern (nvimHsLspOpenBuffer ca)
-    Just Right{} <- addAutocmd "TextChanged,TextChangedI" hsPattern (nvimHsLspChangeBuffer ca)
-    Just Right{} <- addAutocmd "BufWrite"                 hsPattern (nvimHsLspSaveBuffer ca)
+    let pattern = def { acmdPattern = "*\\.\\(hs\\|rs\\)" } -- TODO
+    Just Right{} <- addAutocmd "BufRead,BufNewFile"       pattern (nvimHsLspOpenBuffer ca)
+    Just Right{} <- addAutocmd "TextChanged,TextChangedI" pattern (nvimHsLspChangeBuffer ca)
+    Just Right{} <- addAutocmd "BufWrite"                 pattern (nvimHsLspSaveBuffer ca)
     vim_out_write' $ "nvim-hs-lsp: Initialized" ++ "\n"
     nvimHsLspOpenBuffer ca
     void $ vim_command_output "botright copen"
@@ -103,12 +102,24 @@ nvimHsLspExit _ = whenInitialized $ do
 -- Request
 -------------------------------------------------------------------------------
 
+nvimHsLspInfo :: CommandArguments -> NeovimLsp ()
+nvimHsLspInfo _ = whenInitialized $ whenAlreadyOpened $ do
+  b <- vim_get_current_buffer'
+  pos <- getNvimPos
+  hoverRequest b pos (Just callbackHoverOneLine)
+
+nvimHsLspInfoDetail :: CommandArguments -> NeovimLsp ()
+nvimHsLspInfoDetail _ = whenInitialized $ whenAlreadyOpened $ do
+  b <- vim_get_current_buffer'
+  pos <- getNvimPos
+  hoverRequest b pos (Just callbackHover)
+
 nvimHsLspHover :: CommandArguments -> NeovimLsp ()
 nvimHsLspHover _ = whenInitialized $ whenAlreadyOpened $ do
   b <- vim_get_current_buffer'
   pos <- getNvimPos
   hoverRequest b pos (Just callbackHover)
-  -- TODO responseHover
+
 nvimHsLspDefinition :: CommandArguments -> NeovimLsp ()
 nvimHsLspDefinition _ = whenInitialized $ whenAlreadyOpened $ do
   param <- currentTextDocumentPositionParams

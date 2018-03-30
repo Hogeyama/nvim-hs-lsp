@@ -480,10 +480,10 @@ dispatch hs = do
         idMap <- view lspIdMap <$> readTVarIO ctx
         case toInMessage idMap v of
           Right !msg -> forM_ inChs $ atomically . (writeTChan `flip` msg)
-          Left e -> errorM $ unlines
+          Left e -> errorM $ init $ unlines
               [ "dispatcher: could not parse input."
               , "input: " ++ B.unpack rawInput
-              , "error: " ++ show e
+              , "error: " ++ e
               ]
     registerAsyncHandle "dispatcher" dispatcher
 
