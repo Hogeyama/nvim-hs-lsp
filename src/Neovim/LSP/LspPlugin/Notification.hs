@@ -6,6 +6,7 @@
 {-# LANGUAGE OverloadedLabels          #-}
 {-# LANGUAGE OverloadedStrings         #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
+{-# LANGUAGE TypeOperators             #-}
 {-# OPTIONS_GHC -Wall                  #-}
 
 module Neovim.LSP.LspPlugin.Notification
@@ -15,13 +16,14 @@ module Neovim.LSP.LspPlugin.Notification
 
 import           Control.Lens
 import           Control.Monad            (forever, when)
-import           Data.Extensible          (FieldOptic)
+import           Data.Extensible
 import           Data.Function            (on)
 import           Data.List                (sortBy)
 import           Data.Text                (Text)
 import qualified Data.Text                as T
 import qualified System.Log.Logger        as L
 
+import           Neovim                   hiding (Plugin)
 import           Neovim.LSP.Base
 import           Neovim.LSP.Protocol.Type
 import           Neovim.LSP.Util
@@ -33,7 +35,7 @@ notificationHandler = Plugin "noti" notificationPluginAction
 
 notificationPluginAction :: PluginAction ()
 notificationPluginAction = do
-  setLogLevel L.WARNING
+  --setLogLevel L.WARNING
   forever $ do
     msg <- pull
     case msg of
@@ -62,59 +64,86 @@ showDiagnotics (Notification noti) = do
     let params      = noti^. #params
         uri         = params^. #uri
         diagnostics = params^. #diagnostics
-        qfItems     = concatMap (diagnosticToQFItems uri)
+        qfItems     = concatMap (diagnosticToQfItems uri)
                         $ sortBy (compare `on` (^. #severity)) diagnostics
     debugM $ "showDiagnotics: " ++ show noti
     debugM $ "showDiagnotics: " ++ show qfItems
-    Q.setqflist qfItems Q.Replace
+    replaceQfList qfItems
     when (null qfItems) $ nvimEcho "textDocument/publishDiagnostics: no error"
 
 -------------------------------------------------------------------------------
 
---diagnosticToQFItem :: Uri -> Diagnostic -> QuickfixListItem Text
---diagnosticToQFItem uri d = Q.QFItem
---    { Q.bufOrFile     = Right $ T.pack $ uriToFilePath uri
---    , Q.lnumOrPattern = Left lnum
---    , Q.col           = Just (col, True)
---    , Q.nr            = Nothing
---    , Q.text          = d^. #message
---    , Q.errorType     = errorType
---    }
---  where
---    start = d^. (#range :: FieldOptic "range") . #start
---    lnum = 1 + round (start^. #line)
---    col  = 1 + round (start^. #character)
---    errorType = case d^. #severity of
---      Some Error -> Q.Error
---      _ -> Q.Warning
+type QfItem = Record
+  '[ "filename" >: Option String
+   , "lnum"     >: Option Int
+   , "col"      >: Option Int
+   , "type"     >: Option String
+   , "text"     >: String
+   , "valid"    >: Option Bool
+   ]
 
-diagnosticToQFItems :: Uri -> Diagnostic -> [QuickfixListItem Text]
-diagnosticToQFItems uri d = header : rest
+replaceQfList :: [QfItem] -> Neovim env ()
+replaceQfList qs = void $ vim_call_function "setqflist" $ qs +: ['r'] +: []
+
+diagnosticToQfItems :: Uri -> Diagnostic -> [QfItem]
+diagnosticToQfItems uri d = header : rest
   where
-    header =  Q.QFItem
-      { Q.bufOrFile     = Right $ T.pack $ uriToFilePath uri
-      , Q.lnumOrPattern = Left lnum
-      , Q.col           = Q.ByteIndexColumn col
-      , Q.nr            = Nothing
-      , Q.text          = text'
-      , Q.errorType     = errorType
-      }
+    header = #filename @= Some (uriToFilePath uri)
+          <: #lnum     @= Some lnum
+          <: #col      @= Some col
+          <: #type     @= Some errorType
+          <: #text     @= text
+          <: #valid    @= Some True
+          <: nil
       where
         start = d^. (#range :: FieldOptic "range") . #start
         lnum = 1 + start^. #line
         col  = 1 + start^. #character
         errorType = case d^. #severity of
-            Some Error -> Q.Error
-            _          -> Q.Warning
-        text' = case d^. #source of
+            Some Error        -> "E"
+            Some Warning      -> "W"
+            Some Information  -> "I"
+            Some Hint         -> "H"
+            _                 -> "W"
+        text = case d^. #source of
             None   -> ""
-            Some n -> T.pack $ "[" ++ n ++ "]"
-    rest = flip map (T.lines (d^. #message)) $ \msg -> Q.QFItem
-      { Q.bufOrFile     = Right ""
-      , Q.lnumOrPattern = Right ""
-      , Q.col           = Q.NoColumn
-      , Q.nr            = Nothing
-      , Q.text          = msg
-      , Q.errorType     = Q.Warning
-      }
+            Some n -> "[" ++ n ++ "]"
+    rest = flip map (T.lines (d^. #message)) $ \msg ->
+             #filename @= None
+          <: #lnum     @= None
+          <: #col      @= None
+          <: #type     @= None
+          <: #text     @= T.unpack msg
+          <: #valid    @= Some False
+          <: nil
+
+--diagnosticToQFItems :: Uri -> Diagnostic -> [QuickfixListItem Text]
+--diagnosticToQFItems uri d = header : rest
+--  where
+--    header =  Q.QFItem
+--      { Q.bufOrFile     = Right $ T.pack $ uriToFilePath uri
+--      , Q.lnumOrPattern = Left lnum
+--      , Q.col           = Q.ByteIndexColumn col
+--      , Q.nr            = Nothing
+--      , Q.text          = text'
+--      , Q.errorType     = errorType
+--      }
+--      where
+--        start = d^. (#range :: FieldOptic "range") . #start
+--        lnum = 1 + start^. #line
+--        col  = 1 + start^. #character
+--        errorType = case d^. #severity of
+--            Some Error -> Q.Error
+--            _          -> Q.Warning
+--        text' = case d^. #source of
+--            None   -> ""
+--            Some n -> T.pack $ "[" ++ n ++ "]"
+--    rest = flip map (T.lines (d^. #message)) $ \msg -> Q.QFItem
+--      { Q.bufOrFile     = Right ""
+--      , Q.lnumOrPattern = Right ""
+--      , Q.col           = Q.NoColumn
+--      , Q.nr            = Nothing
+--      , Q.text          = msg
+--      , Q.errorType     = Q.Warning
+--      }
 
