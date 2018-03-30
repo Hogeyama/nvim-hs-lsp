@@ -9,7 +9,8 @@
 {-# LANGUAGE TypeFamilies           #-}
 {-# LANGUAGE TypeFamilyDependencies #-}
 {-# LANGUAGE TypeOperators          #-}
-{-# OPTIONS_GHC -Wall                #-}
+{-# LANGUAGE AutoDeriveTypeable     #-}
+{-# OPTIONS_GHC -Wall               #-}
 
 -- TODO
 -- FromJSONでmiscを扱うとき，Requestとして処理するかNotificationとして処理するかはどう決める？

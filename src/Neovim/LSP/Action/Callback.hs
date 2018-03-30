@@ -1,3 +1,4 @@
+
 {-# LANGUAGE DataKinds                 #-}
 {-# LANGUAGE ExistentialQuantification #-}
 {-# LANGUAGE FlexibleContexts          #-}
@@ -5,17 +6,12 @@
 {-# LANGUAGE LambdaCase                #-}
 {-# LANGUAGE OverloadedLabels          #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
-{-# LANGUAGE TypeApplications          #-}
 {-# LANGUAGE TypeOperators             #-}
 {-# OPTIONS_GHC -Wall                  #-}
 
-module Neovim.LSP.LspPlugin.Response
-  ( responseHandler
-  )
-  where
+module Neovim.LSP.Action.Callback where
 
 import           Control.Lens
-import           Control.Monad            (forever)
 import           Data.Extensible
 import           Data.List                (intercalate)
 
@@ -29,56 +25,12 @@ import           Neovim.LSP.Base
 import           Neovim.LSP.Protocol.Type
 import           Neovim.LSP.Util
 
-responseHandler :: Plugin
-responseHandler = Plugin "resp" responsePluginAction
-
-responsePluginAction :: PluginAction ()
-responsePluginAction = forever @_ @() @() $ do
-  msg <- pull
-  case msg of
-    SomeResp resp -> case singByProxy resp of
-      -- General
-      SInitialize -> do
-        -- TODO TVarにServerCapabilitiesをセットする
-        debugM $ "responseHandler got: " ++ show resp
-        debugM "responseHandler: Initialize not implemented"
-      SShutdown                        -> notImplemented
-
-      -- Workspace
-      SWorkspaceSymbol                 -> notImplemented
-      SWorkspaceExecuteCommand         -> infoM "responseHandler: ignore workspace/executeCommand"
-
-      -- Document
-      STextDocumentWillSaveWaitUntil   -> notImplemented
-      STextDocumentCompletion          -> complete resp
-      SCompletionItemResolve           -> notImplemented
-      STextDocumentHover               -> responseHover resp
-      STextDocumentSignatureHelp       -> notImplemented
-      STextDocumentReferences          -> notImplemented
-      STextDocumentDocumentHighlight   -> notImplemented
-      STextDocumentDocumentSymbol      -> notImplemented
-      STextDocumentFormatting          -> notImplemented
-      STextDocumentRangeFormatting     -> notImplemented
-      STextDocumentOnTypeFormatting    -> notImplemented
-      STextDocumentDefinition          -> responseDefinition resp
-      STextDocumentCodeAction          -> notImplemented
-      STextDocumentCodeLens            -> notImplemented
-      SCodeLensResolve                 -> notImplemented
-      STextDocumentDocumentLink        -> notImplemented
-      SDocumentLinkResolve             -> notImplemented
-      STextDocumentRename              -> notImplemented
-      SClientRequestMisc{}             -> notImplemented
-    _ -> return ()
-  where
-    notImplemented :: PluginAction ()
-    notImplemented = errorM "responseHandler: not implemented"
-
 -------------------------------------------------------------------------------
 -- Hover
 -------------------------------------------------------------------------------
 
-responseHover :: ServerResponse 'TextDocumentHoverK -> Neovim PluginEnv ()
-responseHover (Response resp) = do
+callbackHover :: CallbackOf 'TextDocumentHoverK
+callbackHover (Response resp) = do
   debugM $ "responseHover: " ++ show resp
   withResult resp $ \case
     Nothing -> nvimEcho textDocumentHoverNoInfo
@@ -106,9 +58,8 @@ textDocumentHoverNoInfo = "textDocument/hover: no info"
 -- Definitions
 -------------------------------------------------------------------------------
 
-responseDefinition :: (HasLoggerName' env)
-                   => ServerResponse 'TextDocumentDefinitionK -> Neovim env ()
-responseDefinition (Response resp) = do
+callbackDefinition :: CallbackOf 'TextDocumentDefinitionK 
+callbackDefinition (Response resp) = do
   debugM $ "responseDefinition: " ++ show resp
   withResult resp $ \case
     Nothing -> nvimEcho textDocumentDefinitionNoInfo
@@ -143,8 +94,8 @@ textDocumentDefinitionNoInfo = "textDocument/definition: no info"
 -- Complete
 -------------------------------------------------------------------------------
 
-complete :: (HasLoggerName' env) => ServerResponse 'TextDocumentCompletionK -> Neovim env ()
-complete (Response resp) = withResult resp $ \case
+callbackComplete :: CallbackOf 'TextDocumentCompletionK
+callbackComplete (Response resp) = withResult resp $ \case
   Nothing -> return () -- is it ok?
   Just (L cs) -> completeCompletionItems cs
   Just (R cl) -> completeCompletionList cl
@@ -154,7 +105,7 @@ completeCompletionList cl = completeCompletionItems $ cl^. #items
 
 completeCompletionItems :: [CompletionItem] -> Neovim env ()
 completeCompletionItems cs = do
-  undefined cs
+  undefined cs toVimItem
 
 toVimItem :: CompletionItem -> VimCompleteItem
 toVimItem c

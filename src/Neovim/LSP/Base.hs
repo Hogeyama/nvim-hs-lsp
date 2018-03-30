@@ -35,7 +35,6 @@ import qualified Data.Aeson                 as J
 import           Data.ByteString.Lazy.Char8 (ByteString)
 import qualified Data.ByteString.Lazy.Char8 as B
 import           Data.Constraint            (withDict)
-import           Data.HashMap.Strict        (HashMap)
 import qualified Data.HashMap.Strict        as HM
 import           Data.List                  (isPrefixOf)
 import           Data.Map                   (Map)
@@ -98,18 +97,24 @@ data PluginEnv = PluginEnv
   }
 
 data Context = Context
-  { _lspIdMap         :: !(HashMap ID ClientRequestMethod)
+  { _lspIdMap         :: !(Map ID ClientRequestMethod)
   , _lspUniqueID      :: !Int
   , _lspUniqueVersion :: !Version
   , _lspVersionMap    :: !(Map Uri Version)
+  , _lspCallbacks     :: !(Map ID Callback)
   }
+
+data Callback where
+  Callback :: Typeable m => CallbackOf m -> Callback
+type CallbackOf m = ServerResponse m -> PluginAction ()
 
 initialContext :: Context
 initialContext = Context
-  { _lspIdMap         = HM.empty
+  { _lspIdMap         = M.empty
   , _lspUniqueID      = 0
   , _lspUniqueVersion = 0
   , _lspVersionMap    = M.empty
+  , _lspCallbacks     = M.empty
   }
 
 data ServerHandles = ServerHandles
@@ -151,11 +156,11 @@ data InMessageMethod
   | InResp ClientRequestMethod
 
 methodOf :: InMessage -> InMessageMethod
-methodOf (SomeNoti noti) =  InNoti $ fromSing $ singByProxy noti
-methodOf (SomeReq  req ) =  InReq  $ fromSing $ singByProxy req
-methodOf (SomeResp resp) =  InResp $ fromSing $ singByProxy resp
+methodOf (SomeNoti noti) = InNoti $ fromSing $ singByProxy noti
+methodOf (SomeReq  req ) = InReq  $ fromSing $ singByProxy req
+methodOf (SomeResp resp) = InResp $ fromSing $ singByProxy resp
 
-toInMessage :: HashMap ID ClientRequestMethod -> J.Value -> Either String InMessage
+toInMessage :: Map ID ClientRequestMethod -> J.Value -> Either String InMessage
 toInMessage map' v@(J.Object o) = mmethod >>= \case
     InReq (toSing -> SomeSing (s :: Sing m))
       -> withDict (prfServerReq s) $ SomeReq  @m <$> fromJSONEither v
@@ -166,12 +171,12 @@ toInMessage map' v@(J.Object o) = mmethod >>= \case
   where
     mmethod :: Either String InMessageMethod
     mmethod
-      | isJust (HM.lookup "id" o)
+      | HM.member "id" o
       , Just m <- fromJSONMay =<< HM.lookup "method" o
           = return $ InReq m
       | Just m <- fromJSONMay =<< HM.lookup "method" o
           = return $ InNoti m
-      | Just m <- (`HM.lookup` map') =<< fromJSONMay =<< HM.lookup "id" o
+      | Just m <- M.lookup `flip` map' =<< fromJSONMay =<< HM.lookup "id" o
           = return $ InResp m
       | otherwise
           = Left "そんなバナナ1"
@@ -324,6 +329,11 @@ withLoggerName :: (MonadReader r m, MonadIO m, HasLoggerName' r)
                => (String -> String -> IO ()) -> String -> m ()
 withLoggerName logger s = view loggerName >>= liftIO . (logger `flip` s)
 
+setLogLevel :: (MonadReader r m, MonadIO m, HasLoggerName' r)
+            => L.Priority -> m ()
+setLogLevel p = view loggerName >>= liftIO . (L.updateGlobalLogger `flip` L.setLevel p)
+
+
 -------------------------------------------------------------------------------
 -- Communication with Server
 -------------------------------------------------------------------------------
@@ -385,42 +395,54 @@ push x = do
   outCh <- view outChan
   liftIO $ atomically $ writeTChan outCh $ J.encode x
 
-modifyContext :: (MonadReader env m, MonadIO m, HasContext' env)
+modifyReadContext :: (MonadReader env m, MonadIO m, HasContext' env)
               => (Context -> Context) -> (Context -> a) -> m a
-modifyContext modify_ read_ = do
+modifyReadContext modifier reader = do
   ctxV <- view context
-  ctx <- liftIO $ atomically $ do
+  ctx <- atomically $ do
     ctx <- readTVar ctxV
-    writeTVar ctxV $! modify_ ctx
+    writeTVar ctxV $! modifier ctx
     return ctx
-  return $ read_ ctx
+  return $ reader ctx
 
 ---
 
-modifyContext' :: (MonadReader env m, MonadIO m, HasContext' env)
+modifyContext :: (MonadReader env m, MonadIO m, HasContext' env)
                => (Context -> Context) -> m ()
-modifyContext' modify_ = modifyContext modify_ (const ())
+modifyContext modifier = modifyReadContext modifier (const ())
 
 readContext :: (MonadReader env m, MonadIO m, HasContext' env)
             => (Context -> a) -> m a
-readContext read_ = modifyContext id read_
+readContext reader = modifyReadContext id reader
 
 ---
 
 genUniqueID :: (MonadReader env m, MonadIO m, HasContext' env) => m ID
-genUniqueID = modifyContext
+genUniqueID = modifyReadContext
   (lspUniqueID %~ succ)
-  (IDNum . fromIntegral . (^. lspUniqueID))
+  (views lspUniqueID (IDNum . fromIntegral))
 
 genUniqueVersion :: (MonadReader env m, MonadIO m, HasContext' env)
                  => m Version
-genUniqueVersion = modifyContext
+genUniqueVersion = modifyReadContext
   (lspUniqueVersion %~ succ)
-  (^. lspUniqueVersion)
+  (view lspUniqueVersion)
 
 addIdMethodMap :: (MonadReader env m, MonadIO m, HasContext' env)
                => ID -> ClientRequestMethod -> m ()
-addIdMethodMap id' m = modifyContext' (lspIdMap %~ HM.insert id' m)
+addIdMethodMap id' m = modifyContext (lspIdMap %~ M.insert id' m)
+
+registerCallback :: (MonadReader env m, MonadIO m, HasContext' env)
+                 => ID -> Callback -> m ()
+registerCallback id' callback = modifyContext (lspCallbacks %~ M.insert id' callback)
+
+getCallback :: (MonadReader env m, MonadIO m, HasContext' env)
+            => ID -> m (Maybe Callback)
+getCallback id' = readContext (views lspCallbacks (M.lookup id'))
+
+removeCallback :: (MonadReader env m, MonadIO m, HasContext' env)
+               => ID -> m ()
+removeCallback id' = modifyContext (lspCallbacks %~ M.delete id')
 
 -------------------------------------------------------------------------------
 -- Dispatcher

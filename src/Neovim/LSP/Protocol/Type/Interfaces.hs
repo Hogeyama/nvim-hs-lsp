@@ -111,6 +111,7 @@ import           Data.Map                          (Map)
 import           Data.Singletons                   (SingI, SingKind (..))
 import           Data.Text                         (Text)
 import qualified Data.Text                         as T
+import           Data.Typeable
 import           GHC.Generics                      (Generic)
 import           Neovim.LSP.Protocol.Type.Instance
 import           Neovim.LSP.Protocol.Type.Method
@@ -453,12 +454,14 @@ type ServerNotification (m :: ServerNotificationMethodK) = Notification m
 
 type ImplRequest (m :: k) =
   (SingI m
+  ,Typeable m
   ,IsMethodKind k
   ,Show      (RequestParam m)
   ,FieldJSON (RequestParam m)
   )
 type ImplResponse (m :: k) =
   (SingI m
+  ,Typeable m
   ,IsMethodKind k
   ,Show      (ResResult m)
   ,ToJSON    (ResResult m) -- TOOD: ResultはOptionで包むのでFieldJSONではダメ
@@ -469,6 +472,7 @@ type ImplResponse (m :: k) =
   )
 type ImplNotification (m :: k) =
   (SingI m
+  ,Typeable m
   ,IsMethodKind k
   ,Show      (NotificationParam m)
   ,FieldJSON (NotificationParam m)

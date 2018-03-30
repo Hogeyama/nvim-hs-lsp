@@ -26,7 +26,7 @@ import           Neovim.LSP.Action.Request         (hoverRequest)
 import           Neovim.LSP.Base
 import           Neovim.LSP.LspPlugin.Notification
 import           Neovim.LSP.LspPlugin.Request
-import           Neovim.LSP.LspPlugin.Response
+import           Neovim.LSP.LspPlugin.Callback
 import           Neovim.LSP.Protocol.Messages
 import           Neovim.LSP.Protocol.Type
 import           Neovim.LSP.Util
@@ -43,7 +43,7 @@ main = do
   testWithEmbeddedNeovim (Just f) (Seconds 10000) initialEnv $ do
     vim_command' "source ./test-file/init.vim"
     initializeLsp "hie" ["--lsp", "-d", "-l", "/tmp/LanguageServer.log"]
-    dispatch [ notificationHandler , requestHandler, responseHandler ]
+    dispatch [ notificationHandler , requestHandler, callbackHandler ]
     wait =<< async handler2
     finalizeLSP
     liftIO exitSuccess
@@ -56,7 +56,7 @@ handler2 = do
   -------------
   let cwd = filePathToUri "/home/hoegyama/.config/nvim/nvim-hs-libs/nvim-hs-lsp/test-file"
       params' = initializeParam Nothing (Just cwd)
-  pushRequest @'InitializeK params'
+  pushRequest' @'InitializeK params'
 
   -- didOpen
   ----------
@@ -77,7 +77,7 @@ handler2 = do
   -- Hover
   --------
   threadDelaySec 3
-  hoverRequest b (6,3)
+  hoverRequest b (6,3) Nothing
   -- line,charは0-indexedでvimのと1ずれる(?)
   -- 次のreturnは range (5,2)~(5,8)
   --   6|  return ()

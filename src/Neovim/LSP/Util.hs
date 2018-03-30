@@ -15,6 +15,7 @@
 module Neovim.LSP.Util where
 
 import           Control.Lens.Operators
+import           Control.Monad.Extra (whenJust)
 import           Data.Extensible
 import           Data.Singletons
 import           Data.Text                    (Text)
@@ -42,7 +43,7 @@ getBufLanguage b = nvim_buf_get_var b "current_syntax" >>= \case
 getBufUri :: Buffer -> Neovim env Uri
 getBufUri b = filePathToUri <$> nvim_buf_get_name' b
 
-getNvimPos :: (HasLoggerName' env) =>  Neovim env NvimPos
+getNvimPos :: (HasLoggerName' env) => Neovim env NvimPos
 getNvimPos = vim_call_function "getpos" [ObjectString "."] >>= \case
   Right (fromObject -> Right [_bufnum, lnum, col, _off]) -> return (lnum,col)
   e -> errorM (show e) >> error "getNvimPos"
@@ -59,6 +60,11 @@ getTextDocumentPositionParams b p = do
          <: nil
   return pos
 
+currentTextDocumentPositionParams :: (HasLoggerName' env) => Neovim env TextDocumentPositionParams
+currentTextDocumentPositionParams = do
+  b <- vim_get_current_buffer'
+  pos <- getNvimPos
+  getTextDocumentPositionParams b pos
 
 -------------------------------------------------------------------------------
 -- TODO To be moved
@@ -80,12 +86,21 @@ getTextDocumentPositionParams b p = do
 -- TODO これをユーザーに見せるのはどうなのか．でもtype checkはして欲しいしなあ
 pushRequest :: forall (m :: ClientRequestMethodK) env
             .  (ImplRequest m, HasOutChan' env, HasContext' env)
-            => RequestParam m -> Neovim env ()
-pushRequest param = do
+            => RequestParam m
+            -> Maybe (Response m -> PluginAction ())
+            -> Neovim env ()
+pushRequest param callback' = do
     let method = fromSing (sing :: Sing m)
     id' <- genUniqueID
     addIdMethodMap id' method
+    whenJust callback' $ registerCallback id' . Callback
     push $ request @m id' param
+
+pushRequest' :: forall (m :: ClientRequestMethodK) env
+             .  (ImplRequest m, HasOutChan' env, HasContext' env)
+             => RequestParam m
+             -> Neovim env ()
+pushRequest' param = pushRequest @m param Nothing
 
 pushNotification :: forall (m :: ClientNotificationMethodK) env
                  .  (ImplNotification m, HasOutChan' env)

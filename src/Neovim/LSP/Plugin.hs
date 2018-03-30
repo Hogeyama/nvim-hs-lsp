@@ -17,10 +17,11 @@ import           Neovim.Context                    (restart)
 
 import           Neovim.LSP.Action.Notification
 import           Neovim.LSP.Action.Request
+import           Neovim.LSP.Action.Callback
 import           Neovim.LSP.Base
+import           Neovim.LSP.LspPlugin.Callback
 import           Neovim.LSP.LspPlugin.Notification (notificationHandler)
 import           Neovim.LSP.LspPlugin.Request      (requestHandler)
-import           Neovim.LSP.LspPlugin.Response     (responseHandler)
 import           Neovim.LSP.Protocol.Messages
 import           Neovim.LSP.Protocol.Type
 import           Neovim.LSP.Util
@@ -39,9 +40,9 @@ nvimHsLspInitialize ca = loggingError $ do
     if b /= "haskell"
       then initializeLsp "rustup" ["run", "nightly", "rls"]
       else initializeLsp "hie" ["--lsp", "-d", "-l", "/tmp/LanguageServer.log"]
-    dispatch [notificationHandler, requestHandler, responseHandler]
+    dispatch [notificationHandler, requestHandler, callbackHandler]
     cwd <- filePathToUri <$> errOnInvalidResult (vim_call_function "getcwd" [])
-    pushRequest @'InitializeK (initializeParam Nothing (Just cwd))
+    pushRequest' @'InitializeK (initializeParam Nothing (Just cwd))
 
     let hsPattern = def { acmdPattern = "*.hs" }
     Just Right{} <- addAutocmd "BufRead,BufNewFile"       hsPattern (nvimHsLspOpenBuffer ca)
@@ -106,13 +107,12 @@ nvimHsLspHover :: CommandArguments -> NeovimLsp ()
 nvimHsLspHover _ = whenInitialized $ whenAlreadyOpened $ do
   b <- vim_get_current_buffer'
   pos <- getNvimPos
-  hoverRequest b pos
-
+  hoverRequest b pos (Just callbackHover)
+  -- TODO responseHover
 nvimHsLspDefinition :: CommandArguments -> NeovimLsp ()
 nvimHsLspDefinition _ = whenInitialized $ whenAlreadyOpened $ do
-  b <- vim_get_current_buffer'
-  pos <- getNvimPos
-  definitionRequest b pos
+  param <- currentTextDocumentPositionParams
+  pushRequest param (Just callbackDefinition)
 
 -- argument: {file: Uri, start_pos: Position}
 nvimHsLspApplyRefactOne :: CommandArguments -> NeovimLsp ()
@@ -123,7 +123,7 @@ nvimHsLspApplyRefactOne _ = whenInitialized $ whenAlreadyOpened $ do
   let  arg = toJSON $ object [ "file" .= uri
                              , "start_pos" .= nvimPosToPosition pos
                              ]
-  executeCommandRequest "applyrefact:applyOne" (Some [arg])
+  executeCommandRequest "applyrefact:applyOne" (Some [arg]) Nothing
 
 nvimHsLspComplete :: NeovimLsp (Either Int [VimCompleteItem])
 nvimHsLspComplete = do

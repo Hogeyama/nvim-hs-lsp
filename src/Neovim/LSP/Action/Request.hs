@@ -2,7 +2,6 @@
 {-# LANGUAGE DataKinds        #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE OverloadedLabels #-}
-{-# LANGUAGE TypeApplications #-}
 {-# OPTIONS_GHC -Wall         #-}
 
 module Neovim.LSP.Action.Request where
@@ -18,43 +17,61 @@ import           Neovim.LSP.Util
 -- TextDocumentHover
 ---------------------------------------
 hoverRequest :: (HasOutChan' env, HasContext' env)
-             => Buffer -> NvimPos -> Neovim env ()
-hoverRequest b p = pushRequest @'TextDocumentHoverK
-  =<< getTextDocumentPositionParams b p
+             => Buffer
+             -> NvimPos
+             -> Maybe (CallbackOf 'TextDocumentHoverK)
+             -> Neovim env ()
+hoverRequest b p callback = do
+  param <- getTextDocumentPositionParams b p
+  pushRequest param callback
 
 -- TextDocumentSignatureHelp
 ---------------------------------------
 signatureHelpRequest :: (HasOutChan' env, HasContext' env)
-                     => Buffer -> NvimPos -> Neovim env ()
-signatureHelpRequest b p = pushRequest @'TextDocumentSignatureHelpK
-  =<< getTextDocumentPositionParams b p
+                     => Buffer
+                     -> NvimPos
+                     -> Maybe (CallbackOf 'TextDocumentSignatureHelpK)
+                     -> Neovim env ()
+signatureHelpRequest b p callback = do
+  param <- getTextDocumentPositionParams b p
+  pushRequest param callback
 
 -- TextDocumentDefinition
 ---------------------------------------
 definitionRequest :: (HasOutChan' env, HasContext' env)
-                  => Buffer -> NvimPos -> Neovim env ()
-definitionRequest b p = pushRequest @'TextDocumentDefinitionK
-  =<< getTextDocumentPositionParams b p
-
+                  => Buffer
+                  -> NvimPos
+                  -> Maybe (CallbackOf 'TextDocumentDefinitionK)
+                  -> Neovim env ()
+definitionRequest b p callback = do
+  param <- getTextDocumentPositionParams b p
+  pushRequest param callback
 
 -- WorkspaceExecuteCommand
 ---------------------------------------
 executeCommandRequest :: (HasOutChan' env, HasContext' env)
-                      => String -> Option [Value] -> Neovim env ()
-executeCommandRequest cmd margs = pushRequest @'WorkspaceExecuteCommandK $
-     #command   @= cmd
-  <: #arguments @= margs
-  <: nil
+                      => String
+                      -> Option [Value]
+                      -> Maybe (CallbackOf 'WorkspaceExecuteCommandK)
+                      -> Neovim env ()
+executeCommandRequest cmd margs callback = do
+  let param = #command   @= cmd
+           <: #arguments @= margs
+           <: nil
+  pushRequest param callback
 
 -- TextDocumentCompletion
 ---------------------------------------
 completionRequest :: (HasOutChan' env, HasContext' env)
-                  =>  Buffer -> NvimPos -> Neovim env ()
-completionRequest b p = do
+                  => Buffer
+                  -> NvimPos
+                  -> Maybe (CallbackOf 'TextDocumentCompletionK)
+                  -> Neovim env ()
+completionRequest b p callback = do
   uri <- getBufUri b
   let params = #textDocument @= textDocumentIdentifier uri
             <: #position     @= nvimPosToPosition p
             <: #context      @= None
             <: nil
-  pushRequest @'TextDocumentCompletionK params
+  pushRequest params callback
 
