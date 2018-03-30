@@ -20,6 +20,7 @@ import           Data.Function            (on)
 import           Data.List                (sortBy)
 import           Data.Text                (Text)
 import qualified Data.Text                as T
+import qualified System.Log.Logger        as L
 
 import           Neovim.LSP.Base
 import           Neovim.LSP.Protocol.Type
@@ -32,6 +33,7 @@ notificationHandler = Plugin "noti" notificationPluginAction
 
 notificationPluginAction :: PluginAction ()
 notificationPluginAction = do
+  setLogLevel L.WARNING
   forever $ do
     msg <- pull
     case msg of

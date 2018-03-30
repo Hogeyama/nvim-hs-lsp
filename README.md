@@ -22,7 +22,7 @@
 
      + partialiy implemented
 
-- [ ] implement completion
+- [x] implement completion
 
 - [ ] implement rename
 

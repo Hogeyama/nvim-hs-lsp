@@ -11,6 +11,7 @@
 
 module Neovim.LSP.Action.Callback where
 
+import           UnliftIO
 import           Control.Lens
 import           Data.Extensible
 import           Data.List                (intercalate)
@@ -32,7 +33,7 @@ import           Neovim.LSP.Util
 callbackHoverWith :: (String -> String) -> CallbackOf 'TextDocumentHoverK
 callbackHoverWith process (Response resp) = do
   debugM $ "responseHover: " ++ show resp
-  withResult resp $ \case
+  void $ withResult resp $ \case
     Nothing -> nvimEcho textDocumentHoverNoInfo
     Just r  -> nvimEcho $ process $ stringOfHoverContents (r^. #contents)
 
@@ -71,7 +72,7 @@ textDocumentHoverNoInfo = "textDocument/hover: no info"
 callbackDefinition :: CallbackOf 'TextDocumentDefinitionK 
 callbackDefinition (Response resp) = do
   debugM $ "responseDefinition: " ++ show resp
-  withResult resp $ \case
+  void $ withResult resp $ \case
     Nothing -> nvimEcho textDocumentDefinitionNoInfo
     Just [] -> nvimEcho textDocumentDefinitionNoInfo
     Just r  -> jumpToLocation $ head r
@@ -104,24 +105,28 @@ textDocumentDefinitionNoInfo = "textDocument/definition: no info"
 -- Complete
 -------------------------------------------------------------------------------
 
-callbackComplete :: CallbackOf 'TextDocumentCompletionK
-callbackComplete (Response resp) = withResult resp $ \case
-  Nothing -> return () -- is it ok?
-  Just (L cs) -> completeCompletionItems cs
-  Just (R cl) -> completeCompletionList cl
+-- TODO error processing
+callbackComplete :: CallbackBuilder 'TextDocumentCompletionK [VimCompleteItem]
+callbackComplete (Response resp) = do
+  m <- withResult resp $ \case
+    Nothing     -> return []
+    Just (L cs) -> return $ completeCompletionItems cs
+    Just (R cl) -> return $ completeCompletionList cl
+  case m of
+    Nothing -> return []
+    Just xs -> return xs
 
-completeCompletionList :: CompletionList -> Neovim env ()
+completeCompletionList :: CompletionList -> [VimCompleteItem]
 completeCompletionList cl = completeCompletionItems $ cl^. #items
 
-completeCompletionItems :: [CompletionItem] -> Neovim env ()
-completeCompletionItems cs = do
-  undefined cs toVimItem
+completeCompletionItems :: [CompletionItem] -> [VimCompleteItem]
+completeCompletionItems cs = map toVimItem cs
 
 toVimItem :: CompletionItem -> VimCompleteItem
 toVimItem c
-  =  #word      @= ""
+  =  #word      @= c^. #label
   <: #abbr      @= None
-  <: #menu      @= c^. #detail
+  <: #menu      @= removeNewline <$> c^. #detail
   <: #info      @= case c^. #documentation of
                      None            -> None
                      Some (L s)      -> Some s
@@ -150,15 +155,38 @@ toVimItem c
   <: #user_data @= None
   <: nil
 
+removeNewline :: String -> String
+removeNewline = map (\c -> if c == '\n' then ' ' else c)
+--substNewline = concatMap (\c -> if c == '\n' then " ␣ " else [c])
+-- ⤶ U+2936 ARROW POINTING DOWNWARDS THEN CURVING LEFTWARDS
+-- ↵ U+21B5 DOWNWARDS ARROW WITH CORNER LEFTWARDS
+-- ⏎ U+23CE RETURN SYMBOL
+-- ↲ U+21B2 DOWNWARDS ARROW WITH TIP LEFTWARDS
+-- ↩ U+21A9 LEFTWARDS ARROW WITH HOOK
+
 -------------------------------------------------------------------------------
 -- Util
 -------------------------------------------------------------------------------
 
-withResult :: (HasLoggerName' env) => ResponseMessage a e -> (a -> Neovim env ()) -> Neovim env ()
+withResult :: (HasLoggerName' env)
+           => ResponseMessage a e
+           -> (a -> Neovim env ret)
+           -> Neovim env (Maybe ret)
 withResult resp k =
   case resp^. #error of
-    Some e -> vim_report_error' (T.unpack (e^. #message))
+    Some e -> vim_report_error' (T.unpack (e^. #message)) >> return Nothing
     None -> case resp^. #result of
-      None   -> errorM "withResult: wrong input"
-      Some x -> k x
+      None   -> errorM "withResult: wrong input" >> return Nothing
+      Some x -> Just <$> k x
+
+type CallbackBuilder m a = ServerResponse m -> PluginAction a
+
+genCallback :: CallbackBuilder m a
+            -> Neovim env (TMVar a, CallbackOf m)
+genCallback f = do
+  var <- newEmptyTMVarIO
+  let callback resp = do
+        x <- f resp
+        atomically $ putTMVar var x
+  return (var, callback)
 

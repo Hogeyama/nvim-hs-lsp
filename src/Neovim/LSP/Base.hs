@@ -73,6 +73,7 @@ data LspEnv = LspEnv
   , _lspEnvOpenedFiles   :: !(TVar (Map Uri Version))
   , _lspEnvContext       :: !(TVar Context)
   , _lspEnvLoggerName    :: !String
+  , _lspEnvOtherState    :: !OtherState
   }
 
 initialEnvM :: MonadIO m => m LspEnv
@@ -84,6 +85,7 @@ initialEnvM = liftIO $ do
   _lspEnvOpenedFiles   <- newTVarIO M.empty
   _lspEnvContext       <- newTVarIO initialContext
   _lspEnvLoggerName    <- return topLoggerName
+  _lspEnvOtherState    <- OtherState <$> newTVarIO Nothing
   return LspEnv {..}
 
 topLoggerName :: String
@@ -127,6 +129,10 @@ data ServerHandles = ServerHandles
 -- sender, receiver, watcher of serverErr, dispatcher, plugins
 newtype OtherHandles = OtherHandles
   { unOtherHandles :: [(String, Async ())] } -- (name,_)
+
+data OtherState = OtherState
+  { otherStateCompletionOffset :: !(TVar (Maybe Int)) }
+
 
 -------------------------------------------------------------------------------
 -- Plugin
@@ -202,6 +208,7 @@ resultEither (J.Error e)   = Left e
 makeLenses ''Context
 makeLensesWith camelCaseFields ''LspEnv
 makeLensesWith camelCaseFields ''PluginEnv
+makeLensesWith camelCaseFields ''OtherState
 
 type HasInChan'        env = HasInChan        env (TChan InMessage)
 type HasOutChan'       env = HasOutChan       env (TChan B.ByteString)
@@ -229,9 +236,12 @@ modifyOverTV getter f = do
 
 (.==) :: (MonadReader r m, MonadIO m) => Lens' r (TVar a) -> a -> m ()
 (.==) = assignTV
+infix 4 .==
 
 (%==) :: (MonadReader r m, MonadIO m) => Lens' r (TVar a) -> (a -> a) -> m ()
 (%==) = modifyOverTV
+infix 4 %==
+
 
 -------------------------------------------------------------------------------
 -- Initialize

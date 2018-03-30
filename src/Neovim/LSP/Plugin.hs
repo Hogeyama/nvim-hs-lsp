@@ -7,9 +7,14 @@
 
 module Neovim.LSP.Plugin where
 
+import           UnliftIO
+import           Control.Lens                      (view)
 import           Control.Monad                     (void)
 import           Control.Monad.Extra               (ifM)
-import           Data.Aeson
+import           Data.Aeson                        hiding (Object)
+import qualified Data.ByteString.Char8             as B
+import           Data.Char (isAlphaNum)
+import           Data.List (isPrefixOf, partition)
 import qualified Data.Map                          as M
 
 import           Neovim
@@ -43,10 +48,10 @@ nvimHsLspInitialize ca = loggingError $ do
     dispatch [notificationHandler, requestHandler, callbackHandler]
     cwd <- filePathToUri <$> errOnInvalidResult (vim_call_function "getcwd" [])
     pushRequest' @'InitializeK (initializeParam Nothing (Just cwd))
-    let pattern = def { acmdPattern = "*\\.\\(hs\\|rs\\)" } -- TODO
-    Just Right{} <- addAutocmd "BufRead,BufNewFile"       pattern (nvimHsLspOpenBuffer ca)
-    Just Right{} <- addAutocmd "TextChanged,TextChangedI" pattern (nvimHsLspChangeBuffer ca)
-    Just Right{} <- addAutocmd "BufWrite"                 pattern (nvimHsLspSaveBuffer ca)
+    let pat = def { acmdPattern = "*\\.\\(hs\\|rs\\)" }
+    Just Right{} <- addAutocmd "BufRead,BufNewFile"       pat (nvimHsLspOpenBuffer ca)
+    Just Right{} <- addAutocmd "TextChanged,TextChangedI" pat (nvimHsLspChangeBuffer ca)
+    Just Right{} <- addAutocmd "BufWrite"                 pat (nvimHsLspSaveBuffer ca)
     vim_out_write' $ "nvim-hs-lsp: Initialized" ++ "\n"
     nvimHsLspOpenBuffer ca
     void $ vim_command_output "botright copen"
@@ -115,15 +120,13 @@ nvimHsLspInfoDetail _ = whenInitialized $ whenAlreadyOpened $ do
   hoverRequest b pos (Just callbackHover)
 
 nvimHsLspHover :: CommandArguments -> NeovimLsp ()
-nvimHsLspHover _ = whenInitialized $ whenAlreadyOpened $ do
-  b <- vim_get_current_buffer'
-  pos <- getNvimPos
-  hoverRequest b pos (Just callbackHover)
+nvimHsLspHover = nvimHsLspInfoDetail
 
 nvimHsLspDefinition :: CommandArguments -> NeovimLsp ()
 nvimHsLspDefinition _ = whenInitialized $ whenAlreadyOpened $ do
-  param <- currentTextDocumentPositionParams
-  pushRequest param (Just callbackDefinition)
+  b <- vim_get_current_buffer'
+  pos <- getNvimPos
+  definitionRequest b pos (Just callbackDefinition)
 
 -- argument: {file: Uri, start_pos: Position}
 nvimHsLspApplyRefactOne :: CommandArguments -> NeovimLsp ()
@@ -136,7 +139,27 @@ nvimHsLspApplyRefactOne _ = whenInitialized $ whenAlreadyOpened $ do
                              ]
   executeCommandRequest "applyrefact:applyOne" (Some [arg]) Nothing
 
-nvimHsLspComplete :: NeovimLsp (Either Int [VimCompleteItem])
-nvimHsLspComplete = do
-  return $ Right []
+nvimHsLspComplete :: Object -> String
+                  -> NeovimLsp (Either Int [VimCompleteItem])
+nvimHsLspComplete findstart base = do
+  b <- vim_get_current_buffer'
+  (line, col) <- getNvimPos
+  let findStart = case findstart of
+        ObjectInt n -> n
+        ObjectString s -> read (B.unpack s)
+        _ -> error "流石にここに来たら怒っていいよね"
+  if findStart == 1 then do
+    s <- nvim_get_current_line'
+    let len = length $ dropWhile isAlphaNum $ reverse $ take col s
+    otherState.completionOffset .== Just len
+    return (Left len)
+  else do
+    Just len <- useTV (otherState.completionOffset)
+    otherState.completionOffset .== Nothing
+    (var, callback) <- genCallback callbackComplete
+    completionRequest b (line,col+len) (Just callback)
+    xs <- atomically (takeTMVar var)
+    debugM $ "COMPLETION: base = " ++ show base
+    let sorted = uncurry (++) $ partition (isPrefixOf base . view #word)  xs
+    return (Right sorted)
 
