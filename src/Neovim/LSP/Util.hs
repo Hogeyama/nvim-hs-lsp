@@ -26,19 +26,12 @@ import           Neovim.LSP.Base
 import           Neovim.LSP.Protocol.Messages
 import           Neovim.LSP.Protocol.Type
 
---  testWithEmbeddedNeovimを使うとb:current_syntaxが存在しないことになっててダメ
---  (filetypeは存在するのになんでだろう)
---  extensionから推測するのが妥当か?
-getBufLanguage :: (HasLoggerName' env) => Buffer -> Neovim env String
+getBufLanguage :: (HasLoggerName' env)
+               => Buffer -> Neovim env (Maybe String)
 getBufLanguage b = nvim_buf_get_var b "current_syntax" >>= \case
-    Right o | Right s <- fromObject o ->
-        return s
-    Left e -> do
-        errorM $ unlines
-          [ "nvim_buf_get_var current_syntax: " ++ show e
-          , "use default value \"haskell\""]
-        return "haskell"
-    _  -> error "didOpenCurrentBuffer: impossible?"
+    Right (fromObject -> Right x) ->
+      return (Just x)
+    _ -> return Nothing
 
 getBufUri :: Buffer -> Neovim env Uri
 getBufUri b = filePathToUri <$> nvim_buf_get_name' b

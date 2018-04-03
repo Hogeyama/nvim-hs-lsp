@@ -1,16 +1,18 @@
-{-# LANGUAGE DataKinds         #-}
-{-# LANGUAGE LambdaCase        #-}
-{-# LANGUAGE OverloadedLabels  #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeApplications  #-}
-{-# OPTIONS_GHC -Wall          #-}
+{-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE LambdaCase          #-}
+{-# LANGUAGE OverloadedLabels    #-}
+{-# LANGUAGE OverloadedStrings   #-}
+{-# LANGUAGE TypeApplications    #-}
+{-# LANGUAGE TypeOperators       #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# OPTIONS_GHC -Wall            #-}
 
 module Neovim.LSP.Plugin where
 
 import           UnliftIO
 import           Control.Lens                      (view)
-import           Control.Monad                     (void)
-import           Control.Monad.Extra               (ifM)
+import           Control.Monad                     (void, when)
+import           Control.Monad.Extra               (ifM, whenJust)
 import           Data.Aeson                        hiding (Object)
 import qualified Data.ByteString.Char8             as B
 import           Data.Char (isAlphaNum)
@@ -18,7 +20,6 @@ import           Data.List (isPrefixOf, partition)
 import qualified Data.Map                          as M
 
 import           Neovim
-import           Neovim.Context                    (restart)
 
 import           Neovim.LSP.Action.Notification
 import           Neovim.LSP.Action.Request
@@ -41,20 +42,35 @@ nvimHsLspInitialize ca = loggingError $ do
   if initialized then do
     vim_out_write' $ "nvim-hs-lsp: Already initialized" ++ "\n"
   else do
-    b <- getBufLanguage =<< vim_get_current_buffer'
-    if b /= "haskell"
-      then initializeLsp "rustup" ["run", "nightly", "rls"]
-      else initializeLsp "hie" ["--lsp", "-d", "-l", "/tmp/LanguageServer.log"]
-    dispatch [notificationHandler, requestHandler, callbackHandler]
-    cwd <- filePathToUri <$> errOnInvalidResult (vim_call_function "getcwd" [])
-    pushRequest' @'InitializeK (initializeParam Nothing (Just cwd))
-    let pat = def { acmdPattern = "*\\.\\(hs\\|rs\\)" }
-    Just Right{} <- addAutocmd "BufRead,BufNewFile"       pat (nvimHsLspOpenBuffer ca)
-    Just Right{} <- addAutocmd "TextChanged,TextChangedI" pat (nvimHsLspChangeBuffer ca)
-    Just Right{} <- addAutocmd "BufWrite"                 pat (nvimHsLspSaveBuffer ca)
-    vim_out_write' $ "nvim-hs-lsp: Initialized" ++ "\n"
-    nvimHsLspOpenBuffer ca
-    void $ vim_command_output "botright copen"
+    mft <- getBufLanguage =<< vim_get_current_buffer'
+    case mft of
+      Just ft -> do
+        map' <- errOnInvalidResult $ vim_get_var  "NvimHsLsp_serverCommands"
+        case M.lookup ft map' of
+          Just (cmd:args) -> do
+            initializeLsp cmd args
+            fileType .== Just ft
+            dispatch [notificationHandler, requestHandler, callbackHandler]
+            cwd <- filePathToUri <$>
+                      errOnInvalidResult (vim_call_function "getcwd" [])
+            pushRequest' @'InitializeK (initializeParam Nothing (Just cwd))
+            let pat = def { acmdPattern = "*" }
+            Just Right{} <- addAutocmd "BufRead,BufNewFile"
+                              pat (nvimHsLspOpenBuffer ca)
+            Just Right{} <- addAutocmd "TextChanged,TextChangedI"
+                              pat (nvimHsLspChangeBuffer ca)
+            Just Right{} <- addAutocmd "BufWrite"
+                              pat (nvimHsLspSaveBuffer ca)
+            vim_out_write' $
+              "nvim-hs-lsp: Initialized for filetype `" ++ ft ++ "`\n"
+            nvimHsLspOpenBuffer ca
+            void $ vim_command_output "botright copen"
+          _ ->
+            vim_report_error' $
+              "no language server registered for filetype `" ++ ft ++ "`"
+      Nothing ->
+        vim_report_error'
+          "nvim-hs-lsp: Could not initialize: Could not determine the filetype"
 
 whenInitialized :: NeovimLsp () -> NeovimLsp ()
 whenInitialized m = isInitialized >>= \case
@@ -75,11 +91,15 @@ alreadyOpened uri = M.member uri <$> useTV openedFiles
 
 nvimHsLspOpenBuffer :: CommandArguments -> NeovimLsp ()
 nvimHsLspOpenBuffer _ = whenInitialized $ do
-  b <- vim_get_current_buffer'
-  uri <- getBufUri b
-  ifM (alreadyOpened uri) (vim_out_write' "nvim-hs-lsp: Already opened\n") $ do
-    openedFiles %== M.insert uri 0
-    didOpenBuffer b
+  b   <- vim_get_current_buffer'
+  mft <- getBufLanguage b
+  whenJust mft $ \ft -> do
+    serverFT <- useTV fileType
+    when (Just ft == serverFT) $ do
+      uri <- getBufUri b
+      unlessM (alreadyOpened uri) $ do
+        openedFiles %== M.insert uri 0
+        didOpenBuffer b
 
 nvimHsLspCloseBuffer :: CommandArguments -> NeovimLsp ()
 nvimHsLspCloseBuffer _ = whenInitialized $ do
@@ -101,7 +121,6 @@ nvimHsLspExit :: CommandArguments -> NeovimLsp ()
 nvimHsLspExit _ = whenInitialized $ do
   push $ notification @'ExitK exitParam
   finalizeLSP
-  restart
 
 -------------------------------------------------------------------------------
 -- Request

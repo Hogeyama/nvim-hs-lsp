@@ -67,6 +67,7 @@ type NeovimLsp = Neovim LspEnv
 
 data LspEnv = LspEnv
   { _lspEnvServerHandles :: !(TVar (Maybe ServerHandles))
+  , _lspEnvFileType      :: !(TVar (Maybe String))
   , _lspEnvOtherHandles  :: !(TVar OtherHandles)
   ,  lspEnvInChan        :: !(TChan B.ByteString)
   , _lspEnvOutChan       :: !(TChan B.ByteString)
@@ -86,6 +87,7 @@ initialEnvM = liftIO $ do
   _lspEnvContext       <- newTVarIO initialContext
   _lspEnvLoggerName    <- return topLoggerName
   _lspEnvOtherState    <- OtherState <$> newTVarIO Nothing
+  _lspEnvFileType      <- newTVarIO Nothing
   return LspEnv {..}
 
 topLoggerName :: String

@@ -13,6 +13,8 @@ module Neovim.LSP.Action.Notification
   where
 
 import           Data.Extensible              (nil, (<:), (@=))
+import           Data.Maybe                   (fromJust)
+
 import           Neovim
 import           Neovim.LSP.Base
 import           Neovim.LSP.Protocol.Messages
@@ -31,10 +33,10 @@ import           Neovim.LSP.Util
 didOpenBuffer :: (HasOutChan' env, HasContext' env, HasLoggerName' env)
               => Buffer -> Neovim env ()
 didOpenBuffer b = do
-    contents <- getBufContents b
-    language <- getBufLanguage b
     uri      <- getBufUri b
     version  <- genUniqueVersion
+    language <- fromJust <$> getBufLanguage b
+    contents <- getBufContents b
     let textDocumentItem :: TextDocumentItem
                          = #uri        @= uri
                         <: #languageId @= language
