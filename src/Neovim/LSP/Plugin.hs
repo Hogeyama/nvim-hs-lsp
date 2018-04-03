@@ -169,17 +169,36 @@ nvimHsLspComplete findstart base = do
         _ -> error "流石にここに来たら怒っていいよね"
   if findStart == 1 then do
     s <- nvim_get_current_line'
-    let foo = dropWhile isAlphaNum $ reverse $ take (col-1) s
+    -- TODO use 'iskeyword' of vim?
+    let isKeyword c = isAlphaNum c || (c `elem` ['_','\''])
+    let foo = reverse $ dropWhile isKeyword $ reverse $ take (col-1) s
     let len = length foo
-    debugM $ "foo = " ++ show foo
+    debugM $ "COMPLETION: findstart: foo = " ++ show foo
+    debugM $ "COMPLETION: findstart: len = " ++ show len
     otherState.completionOffset .== Just len
     return (Left len)
   else do
     Just len <- useTV (otherState.completionOffset)
     otherState.completionOffset .== Nothing
+    debugM $ "COMPLETION: complete: line = " ++ show line
+    debugM $ "COMPLETION: complete: col  = " ++ show col
+    debugM $ "COMPLETION: complete: len  = " ++ show len
+    debugM $ "COMPLETION: complete: base = " ++ show base
     Just var <- completionRequest b (line,col+len) (Just callbackComplete)
     xs <- atomically (takeTMVar var)
-    debugM $ "COMPLETION: base = " ++ show base
     let sorted = uncurry (++) $ partition (isPrefixOf base . view #word)  xs
     return (Right sorted)
+
+nvimHsLspAsyncComplete :: Int -> Int -> NeovimLsp ()
+nvimHsLspAsyncComplete lnum col = do
+  b <- vim_get_current_buffer'
+  s <- nvim_get_current_line'
+  debugM $ "COMPLETION: async: col = " ++ show col
+  debugM $ "COMPLETION: async: s   = " ++ show (take col s)
+  Just var <- completionRequest b (lnum,col) (Just callbackComplete)
+  xs <- atomically (takeTMVar var)
+  nvim_set_var' nvimHsCompleteResultVar (toObject xs)
+
+nvimHsCompleteResultVar :: String
+nvimHsCompleteResultVar = "NvimHsLspCompleteResult"
 
