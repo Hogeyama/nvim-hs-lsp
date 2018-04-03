@@ -77,7 +77,7 @@ handler2 = do
   -- Hover
   --------
   threadDelaySec 3
-  hoverRequest b (6,3) Nothing
+  void $ hoverRequest b (6,3) Nothing
   -- line,charは0-indexedでvimのと1ずれる(?)
   -- 次のreturnは range (5,2)~(5,8)
   --   6|  return ()

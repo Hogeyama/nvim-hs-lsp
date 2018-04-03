@@ -41,7 +41,7 @@ callbackPluginAction = do
                   , "Expected: " ++ show (typeOf expected)
                   , "Actual:   " ++ show (typeOf resp)
                   ]
-              where expected = let x = undefined; _ = callback expected in x
+              where expected = let _ = callback expected in expected
         Nothing ->
           debugM $ "no callback set for id: " ++ show id'
     _ -> return ()

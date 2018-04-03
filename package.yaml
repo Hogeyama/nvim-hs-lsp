@@ -1,6 +1,7 @@
 name:                nvim-hs-lsp
 version:             0.1.0.0
 
+
 custom-setup:
   dependencies:
     - base >= 4.7 && < 5
@@ -35,7 +36,6 @@ library:
   - mtl
   - async
   - extra
-  - xformat
   - deepseq
   - unliftio
 
@@ -58,4 +58,13 @@ tests:
     - lens
     - process
     - unliftio
+  quick:
+    source-dirs:   test
+    main:          Spec.hs
+    other-modules: []
+    dependencies:
+    - nvim-hs
+    - nvim-hs-lsp
+    - hspec
+    - QuickCheck
 

@@ -15,27 +15,23 @@ module Neovim.LSP.LspPlugin.Notification
   where
 
 import           Control.Lens
-import           Control.Monad            (forever, when)
+import           Control.Monad            (forever)
 import           Data.Extensible
 import           Data.Function            (on)
 import           Data.List                (sortBy)
-import           Data.Text                (Text)
 import qualified Data.Text                as T
 import qualified System.Log.Logger        as L
 
 import           Neovim                   hiding (Plugin)
 import           Neovim.LSP.Base
 import           Neovim.LSP.Protocol.Type
-import           Neovim.LSP.Util
-import           Neovim.Quickfix          (QuickfixListItem)
-import qualified Neovim.Quickfix          as Q
 
 notificationHandler :: Plugin
 notificationHandler = Plugin "noti" notificationPluginAction
 
 notificationPluginAction :: PluginAction ()
 notificationPluginAction = do
-  --setLogLevel L.WARNING
+  setLogLevel L.WARNING
   forever $ do
     msg <- pull
     case msg of
@@ -66,10 +62,7 @@ showDiagnotics (Notification noti) = do
         diagnostics = params^. #diagnostics
         qfItems     = concatMap (diagnosticToQfItems uri)
                         $ sortBy (compare `on` (^. #severity)) diagnostics
-    debugM $ "showDiagnotics: " ++ show noti
-    debugM $ "showDiagnotics: " ++ show qfItems
     replaceQfList qfItems
-    when (null qfItems) $ nvimEcho "textDocument/publishDiagnostics: no error"
 
 -------------------------------------------------------------------------------
 
@@ -103,7 +96,7 @@ diagnosticToQfItems uri d = header : rest
             Some Error        -> "E"
             Some Warning      -> "W"
             Some Information  -> "I"
-            Some Hint         -> "H"
+            Some Hint         -> "I"
             _                 -> "W"
         text = case d^. #source of
             None   -> ""
@@ -116,34 +109,4 @@ diagnosticToQfItems uri d = header : rest
           <: #text     @= T.unpack msg
           <: #valid    @= Some False
           <: nil
-
---diagnosticToQFItems :: Uri -> Diagnostic -> [QuickfixListItem Text]
---diagnosticToQFItems uri d = header : rest
---  where
---    header =  Q.QFItem
---      { Q.bufOrFile     = Right $ T.pack $ uriToFilePath uri
---      , Q.lnumOrPattern = Left lnum
---      , Q.col           = Q.ByteIndexColumn col
---      , Q.nr            = Nothing
---      , Q.text          = text'
---      , Q.errorType     = errorType
---      }
---      where
---        start = d^. (#range :: FieldOptic "range") . #start
---        lnum = 1 + start^. #line
---        col  = 1 + start^. #character
---        errorType = case d^. #severity of
---            Some Error -> Q.Error
---            _          -> Q.Warning
---        text' = case d^. #source of
---            None   -> ""
---            Some n -> T.pack $ "[" ++ n ++ "]"
---    rest = flip map (T.lines (d^. #message)) $ \msg -> Q.QFItem
---      { Q.bufOrFile     = Right ""
---      , Q.lnumOrPattern = Right ""
---      , Q.col           = Q.NoColumn
---      , Q.nr            = Nothing
---      , Q.text          = msg
---      , Q.errorType     = Q.Warning
---      }
 

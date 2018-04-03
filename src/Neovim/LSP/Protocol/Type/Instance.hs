@@ -124,7 +124,7 @@ instance FromJSON a => FieldFromJSON' 'True (Option a) where
     -- implemented around this case. e.g., rls returns something like this
     -- in response to a hover request:
     --   '{"result":{"contents":[{"language":"rust","value":"&str"}],"range":null}}'
-    -- However, 'range' cannot be 'null' here in the LSP specification.
+    -- However, 'range' cannot be 'null' here.
     Just x    -> Some <$> parseJSON x
     Nothing   -> return None
 instance FromJSON a => FieldFromJSON' 'False a where

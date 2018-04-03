@@ -93,6 +93,12 @@ initialEnvM = liftIO $ do
 topLoggerName :: String
 topLoggerName = "nvim-hs-lsp"
 
+senderLoggerName :: String
+senderLoggerName = topLoggerName ++ "." ++ "send"
+
+receiverLoggerName :: String
+receiverLoggerName = topLoggerName ++ "." ++ "receive"
+
 data PluginEnv = PluginEnv
   { _pluginEnvInChan     :: !(TChan InMessage)
   , _pluginEnvOutChan    :: !(TChan ByteString)
@@ -134,7 +140,6 @@ newtype OtherHandles = OtherHandles
 
 data OtherState = OtherState
   { otherStateCompletionOffset :: !(TVar (Maybe Int)) }
-
 
 -------------------------------------------------------------------------------
 -- Plugin
@@ -268,7 +273,7 @@ initializeLsp cmd args = do
   outCh <- asks _lspEnvOutChan
   registerAsyncHandle "sender" =<< async (liftIO (sender hin outCh))
   registerAsyncHandle "receiver" =<< async (liftIO (receiver hout inCh))
-  registerAsyncHandle "herr-watcher" =<< async (liftIO (watcher herr))
+  registerAsyncHandle "herr-watcher" =<< async (watcher herr)
   liftIO $ do
     hSetBuffering hin  NoBuffering
     hSetBuffering hout NoBuffering
@@ -281,11 +286,17 @@ initializeLsp cmd args = do
       , "￣Y^Y^Y^Y^Y^Y^Y￣"
       ]
   where
-    watcher herr = forever $ handleIO
+    watcher :: Handle -> Neovim env ()
+    watcher herr = forever $ catchIO
+      (liftIO (hGetLine herr) >>= showAndLog . ("STDERR: "++))
       (\e ->  if isEOFError e
-                then throwIO e
-                else L.errorM topLoggerName $ "STDERR: Exception: " ++ show e)
-      (hGetLine herr >>= (L.errorM topLoggerName . ("STDERR: "++)))
+              then throwIO e
+              else showAndLog $ "STDERR: Exception: " ++ show e)
+
+    showAndLog :: String -> Neovim env ()
+    showAndLog msg = do
+        liftIO $ L.errorM topLoggerName msg
+        vim_report_error' msg
 
 isInitialized :: NeovimLsp Bool
 isInitialized = usesTV serverHandles isJust
@@ -316,7 +327,6 @@ finalizeLSP = do
 
 setupLogger :: IO ()
 setupLogger = do
-  -- stderrには書き込みたくないときuncomment
   L.updateGlobalLogger L.rootLoggerName L.removeHandler
   L.updateGlobalLogger L.rootLoggerName (L.setLevel L.DEBUG)
   h <- do lh <- fileHandler "/tmp/nvim-hs-lsp.log" L.DEBUG
@@ -361,7 +371,7 @@ sender serverIn chan = do
         , "\r\n\r\n"
         , bs
         ]
-    L.debugM topLoggerName $ "=> " ++ B.unpack bs
+    L.debugM senderLoggerName $ "=> " ++ B.unpack bs
 
 receiver :: Handle -> TChan B.ByteString -> IO ()
 receiver serverOut chan = forever $ do
@@ -372,7 +382,7 @@ receiver serverOut chan = forever $ do
     receive h = do
       len <- contentLength <$> readHeader h
       content <- B.hGet h len
-      L.debugM topLoggerName $ "<= " ++ B.unpack content
+      L.debugM receiverLoggerName $ "<= " ++ B.unpack content
       return content
 
     readHeader :: Handle -> IO Header
@@ -483,7 +493,7 @@ dispatch hs = do
                    , _pluginEnvLoggerName = topLoggerName ++ "." ++ name
                    }
       a <- asyncNeovim config $ loggingError action
-      registerAsyncHandle "" a
+      registerAsyncHandle name a
       return inCh
 
     dispatcher <- async $ loggingError $ forever $ do
@@ -491,7 +501,7 @@ dispatch hs = do
         let Just !v = J.decode rawInput
         idMap <- view lspIdMap <$> readTVarIO ctx
         case toInMessage idMap v of
-          Right !msg -> forM_ inChs $ atomically . (writeTChan `flip` msg)
+          Right !msg -> forM_ inChs $ atomically . flip writeTChan msg
           Left e -> errorM $ init $ unlines
               [ "dispatcher: could not parse input."
               , "input: " ++ B.unpack rawInput
