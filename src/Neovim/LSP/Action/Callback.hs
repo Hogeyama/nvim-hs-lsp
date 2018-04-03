@@ -29,12 +29,15 @@ import           Neovim.LSP.Util
 -- Hover
 -------------------------------------------------------------------------------
 
-callbackHoverWith :: (String -> String) -> CallbackOf 'TextDocumentHoverK ()
-callbackHoverWith process (Response resp) = do
+callbackHoverPreview :: CallbackOf 'TextDocumentHoverK ()
+callbackHoverPreview (Response resp) = do
   debugM $ "responseHover: " ++ show resp
   void $ withResult resp $ \case
     Nothing -> nvimEcho textDocumentHoverNoInfo
-    Just r  -> nvimEcho $ process $ stringOfHoverContents (r^. #contents)
+    Just r -> do
+      let content = stringOfHoverContents (r^. #contents)
+      liftIO $ writeFile "/tmp/nvim-hs-lsp.preview" content
+      vim_command' "pedit /tmp/nvim-hs-lsp.preview"
 
 callbackHover :: CallbackOf 'TextDocumentHoverK ()
 callbackHover = callbackHoverWith removeLastNewlines
@@ -42,6 +45,15 @@ callbackHover = callbackHoverWith removeLastNewlines
 callbackHoverOneLine :: CallbackOf 'TextDocumentHoverK ()
 callbackHoverOneLine = callbackHoverWith $
   head . dropWhile ((=="```") . take 3) . lines
+
+--
+
+callbackHoverWith :: (String -> String) -> CallbackOf 'TextDocumentHoverK ()
+callbackHoverWith process (Response resp) = do
+  debugM $ "responseHover: " ++ show resp
+  void $ withResult resp $ \case
+    Nothing -> nvimEcho textDocumentHoverNoInfo
+    Just r  -> nvimEcho $ process $ stringOfHoverContents (r^. #contents)
 
 
 stringOfHoverContents :: MarkedString :|: [MarkedString] :|: MarkupContent -> String

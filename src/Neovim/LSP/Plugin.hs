@@ -132,14 +132,11 @@ nvimHsLspInfo _ = whenInitialized $ whenAlreadyOpened $ do
   pos <- getNvimPos
   void $ hoverRequest b pos (Just callbackHoverOneLine)
 
-nvimHsLspInfoDetail :: CommandArguments -> NeovimLsp ()
-nvimHsLspInfoDetail _ = whenInitialized $ whenAlreadyOpened $ do
+nvimHsLspHover :: CommandArguments -> NeovimLsp ()
+nvimHsLspHover _ = whenInitialized $ whenAlreadyOpened $ do
   b <- vim_get_current_buffer'
   pos <- getNvimPos
-  void $ hoverRequest b pos (Just callbackHover)
-
-nvimHsLspHover :: CommandArguments -> NeovimLsp ()
-nvimHsLspHover = nvimHsLspInfoDetail
+  void $ hoverRequest b pos (Just callbackHoverPreview)
 
 nvimHsLspDefinition :: CommandArguments -> NeovimLsp ()
 nvimHsLspDefinition _ = whenInitialized $ whenAlreadyOpened $ do
