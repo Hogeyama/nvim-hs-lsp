@@ -13,12 +13,7 @@ module Neovim.LSP.Action.Callback where
 
 import           Control.Lens
 import           Data.Extensible
-import           Data.List                (intercalate)
-
 import qualified Data.Text                as T
-
-import           Text.XFormat.Show        (showf, (%))
-import qualified Text.XFormat.Show        as X
 
 import           Neovim                   hiding (Plugin, range)
 import           Neovim.LSP.Base
@@ -90,24 +85,24 @@ callbackDefinition (Response resp) = do
 
 jumpToLocation ::  (HasLoggerName' env) => Location -> Neovim env ()
 jumpToLocation loc = do
-  let uri   = loc^. #uri
-      range = loc^. #range
-      start = range^. #start
-      cmd   = jumpCommand (uriToFilePath uri) (positionToNvimPos start)
-  debugM $ "jumpToLocation: " ++ cmd
-  Right{} <- vim_command cmd
+  let uri        = loc^. #uri
+      range      = loc^. #range
+      start      = range^. #start
+      (lnum,col) = positionToNvimPos start
+  vim_command' "normal! m`"
+  Right bufnum <- vim_call_function "bufnr"
+                  [ toObject (uriToFilePath uri)
+                  , toObject True -- create buffer if 'uri' is not opened yet
+                  ]
+  Right _      <- vim_call_function "setpos"
+                  [ toObject "."
+                  , ObjectArray [ bufnum
+                                , toObject lnum
+                                , toObject col
+                                , toObject False -- visualedit
+                                ]
+                  ]
   return ()
-
--- |
--- >>> jumpCommand "/tmp/foo.hs" (15,3)
--- "execute 'normal! m`' | execute 'edit +:call\\ cursor(15,3) /tmp/foo.hs'"
-jumpCommand :: FilePath -> NvimPos -> String
-jumpCommand file (lnum, col) =
-  intercalate " | "
-     [ "execute 'normal! m`'"
-     , showf ("execute 'edit +:call\\ cursor("%d%","%d%") "%s%"'") lnum col file
-     ]
-  where d = X.Int; s = X.String
 
 textDocumentDefinitionNoInfo ::  String
 textDocumentDefinitionNoInfo = "textDocument/definition: no info"
