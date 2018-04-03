@@ -329,6 +329,8 @@ setupLogger :: IO ()
 setupLogger = do
   L.updateGlobalLogger L.rootLoggerName L.removeHandler
   L.updateGlobalLogger L.rootLoggerName (L.setLevel L.DEBUG)
+  --L.updateGlobalLogger senderLoggerName   (L.setLevel L.WARNING)
+  --L.updateGlobalLogger receiverLoggerName (L.setLevel L.WARNING)
   h <- do lh <- fileHandler "/tmp/nvim-hs-lsp.log" L.DEBUG
           return $ setFormatter
                       lh

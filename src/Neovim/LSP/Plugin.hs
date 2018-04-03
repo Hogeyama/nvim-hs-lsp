@@ -11,7 +11,7 @@ module Neovim.LSP.Plugin where
 
 import           UnliftIO
 import           Control.Lens                      (view)
-import           Control.Monad                     (void, when)
+import Control.Monad                     (unless, void, when)
 import           Control.Monad.Extra               (ifM, whenJust)
 import           Data.Aeson                        hiding (Object)
 import qualified Data.ByteString.Char8             as B
@@ -37,7 +37,7 @@ import           Neovim.LSP.Util
 -------------------------------------------------------------------------------
 
 nvimHsLspInitialize :: CommandArguments -> NeovimLsp ()
-nvimHsLspInitialize ca = loggingError $ do
+nvimHsLspInitialize _ = loggingError $ do
   initialized <- isInitialized
   if initialized then do
     vim_out_write' $ "nvim-hs-lsp: Already initialized" ++ "\n"
@@ -45,7 +45,7 @@ nvimHsLspInitialize ca = loggingError $ do
     mft <- getBufLanguage =<< vim_get_current_buffer'
     case mft of
       Just ft -> do
-        map' <- errOnInvalidResult $ vim_get_var  "NvimHsLsp_serverCommands"
+        map' <- errOnInvalidResult $ vim_get_var "NvimHsLsp_serverCommands"
         case M.lookup ft map' of
           Just (cmd:args) -> do
             initializeLsp cmd args
@@ -55,15 +55,16 @@ nvimHsLspInitialize ca = loggingError $ do
                       errOnInvalidResult (vim_call_function "getcwd" [])
             pushRequest' @'InitializeK (initializeParam Nothing (Just cwd))
             let pat = def { acmdPattern = "*" }
+                arg = def { bang = Just True }
             Just Right{} <- addAutocmd "BufRead,BufNewFile"
-                              pat (nvimHsLspOpenBuffer ca)
+                              pat (nvimHsLspOpenBuffer arg)
             Just Right{} <- addAutocmd "TextChanged,TextChangedI"
-                              pat (nvimHsLspChangeBuffer ca)
+                              pat (nvimHsLspChangeBuffer arg)
             Just Right{} <- addAutocmd "BufWrite"
-                              pat (nvimHsLspSaveBuffer ca)
+                              pat (nvimHsLspSaveBuffer arg)
             vim_out_write' $
               "nvim-hs-lsp: Initialized for filetype `" ++ ft ++ "`\n"
-            nvimHsLspOpenBuffer ca
+            nvimHsLspOpenBuffer def
             void $ vim_command_output "botright copen"
           _ ->
             vim_report_error' $
@@ -72,10 +73,14 @@ nvimHsLspInitialize ca = loggingError $ do
         vim_report_error'
           "nvim-hs-lsp: Could not initialize: Could not determine the filetype"
 
-whenInitialized :: NeovimLsp () -> NeovimLsp ()
-whenInitialized m = isInitialized >>= \case
+whenInitialized' :: Bool -> NeovimLsp () -> NeovimLsp ()
+whenInitialized' silent m = isInitialized >>= \case
   True  -> m
-  False -> vim_out_write' $ "nvim-hs-lsp: Not initialized!" ++ "\n"
+  False -> unless silent $
+    vim_out_write' $ "nvim-hs-lsp: Not initialized!" ++ "\n"
+
+whenInitialized :: NeovimLsp () -> NeovimLsp ()
+whenInitialized = whenInitialized' False
 
 -------------------------------------------------------------------------------
 -- Notification
@@ -90,7 +95,7 @@ alreadyOpened :: Uri -> NeovimLsp Bool
 alreadyOpened uri = M.member uri <$> useTV openedFiles
 
 nvimHsLspOpenBuffer :: CommandArguments -> NeovimLsp ()
-nvimHsLspOpenBuffer _ = whenInitialized $ do
+nvimHsLspOpenBuffer arg = whenInitialized' silent $ do
   b   <- vim_get_current_buffer'
   mft <- getBufLanguage b
   whenJust mft $ \ft -> do
@@ -100,6 +105,7 @@ nvimHsLspOpenBuffer _ = whenInitialized $ do
       unlessM (alreadyOpened uri) $ do
         openedFiles %== M.insert uri 0
         didOpenBuffer b
+  where silent = Just True == bang arg
 
 nvimHsLspCloseBuffer :: CommandArguments -> NeovimLsp ()
 nvimHsLspCloseBuffer _ = whenInitialized $ do
@@ -110,12 +116,14 @@ nvimHsLspCloseBuffer _ = whenInitialized $ do
     didCloseBuffer b
 
 nvimHsLspChangeBuffer :: CommandArguments -> NeovimLsp ()
-nvimHsLspChangeBuffer _ = whenInitialized $ whenAlreadyOpened $
+nvimHsLspChangeBuffer arg = whenInitialized' silent $ whenAlreadyOpened $
   didChangeBuffer =<< vim_get_current_buffer'
+  where silent = Just True == bang arg
 
 nvimHsLspSaveBuffer :: CommandArguments -> NeovimLsp ()
-nvimHsLspSaveBuffer _ = whenInitialized $ whenAlreadyOpened $
+nvimHsLspSaveBuffer arg = whenInitialized' silent $ whenAlreadyOpened $
   didSaveBuffer =<< vim_get_current_buffer'
+  where silent = Just True == bang arg
 
 nvimHsLspExit :: CommandArguments -> NeovimLsp ()
 nvimHsLspExit _ = whenInitialized $ do

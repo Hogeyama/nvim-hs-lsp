@@ -17,10 +17,10 @@ plugin = do
             [
             -- Notification
               $(command' 'nvimHsLspInitialize)     ["async"]
-            , $(command' 'nvimHsLspOpenBuffer)     ["async"]
+            , $(command' 'nvimHsLspOpenBuffer)     ["async","!"]
             , $(command' 'nvimHsLspCloseBuffer)    ["async"]
-            , $(command' 'nvimHsLspChangeBuffer)   ["async"]
-            , $(command' 'nvimHsLspSaveBuffer)     ["async"]
+            , $(command' 'nvimHsLspChangeBuffer)   ["async","!"]
+            , $(command' 'nvimHsLspSaveBuffer)     ["async","!"]
             , $(command' 'nvimHsLspExit)           ["async"]
             -- Request
             , $(command' 'nvimHsLspHover)          ["async"]
