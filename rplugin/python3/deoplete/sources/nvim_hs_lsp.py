@@ -13,6 +13,11 @@ class Source(Base):
         self.sorters = ["sorter_rank"]
         self.filetypes = vim.eval(
             "get(g:, 'NvimHsLsp_serverCommands', {})").keys()
+        self.input_pattern += r'(\.|::|->)\w*$|\w{2,}$'
+
+    def get_complete_position(self, context):
+        m = re.search(r"\w*$", context['input'])
+        return m.start() if m else -1
 
     def gather_candidates(self, context):
         if context["is_async"]:
@@ -25,8 +30,4 @@ class Source(Base):
             self.vim.command("let {0} = -1".format(CompleteResults))
             [_,lnum,col,_] = self.vim.eval("getpos('.')")
             self.vim.funcs.NvimHsLspAsyncComplete(lnum,col)
-            # TODO レコードで渡す
-            #self.vim.funcs.NvimHsLspAsyncComplete(
-            #        {"bufnum": bufnum, "lnum": lnum,
-            #        "col": context["complete_position"]})
         return []
