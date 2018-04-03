@@ -158,43 +158,51 @@ nvimHsLspApplyRefactOne _ = whenInitialized $ whenAlreadyOpened $ do
 nvimHsLspComplete :: Object -> String
                   -> NeovimLsp (Either Int [VimCompleteItem])
 nvimHsLspComplete findstart base = do
-  b <- vim_get_current_buffer'
-  (line, col) <- getNvimPos
-  let findStart = case findstart of
-        ObjectInt n -> n
-        ObjectString s -> read (B.unpack s)
-        _ -> error "流石にここに来たら怒っていいよね"
-  if findStart == 1 then do
-    s <- nvim_get_current_line'
-    -- TODO use 'iskeyword' of vim?
-    let isKeyword c = isAlphaNum c || (c `elem` ['_','\''])
-    let foo = reverse $ dropWhile isKeyword $ reverse $ take (col-1) s
-    let len = length foo
-    debugM $ "COMPLETION: findstart: foo = " ++ show foo
-    debugM $ "COMPLETION: findstart: len = " ++ show len
-    otherState.completionOffset .== Just len
-    return (Left len)
+  notInitialized <- not <$> isInitialized
+  if notInitialized then
+    return (Left (-1))
   else do
-    Just len <- useTV (otherState.completionOffset)
-    otherState.completionOffset .== Nothing
-    debugM $ "COMPLETION: complete: line = " ++ show line
-    debugM $ "COMPLETION: complete: col  = " ++ show col
-    debugM $ "COMPLETION: complete: len  = " ++ show len
-    debugM $ "COMPLETION: complete: base = " ++ show base
-    Just var <- completionRequest b (line,col+len) (Just callbackComplete)
-    xs <- atomically (takeTMVar var)
-    let sorted = uncurry (++) $ partition (isPrefixOf base . view #word)  xs
-    return (Right sorted)
+    b <- vim_get_current_buffer'
+    (line, col) <- getNvimPos
+    let findStart = case findstart of
+          ObjectInt n -> n
+          ObjectString s -> read (B.unpack s)
+          _ -> error "流石にここに来たら怒っていいよね"
+    if findStart == 1 then do
+      s <- nvim_get_current_line'
+      -- TODO use 'iskeyword' of vim?
+      let isKeyword c = isAlphaNum c || (c `elem` ['_','\''])
+      let foo = reverse $ dropWhile isKeyword $ reverse $ take (col-1) s
+      let len = length foo
+      debugM $ "COMPLETION: findstart: foo = " ++ show foo
+      debugM $ "COMPLETION: findstart: len = " ++ show len
+      otherState.completionOffset .== Just len
+      return (Left len)
+    else do
+      Just len <- useTV (otherState.completionOffset)
+      otherState.completionOffset .== Nothing
+      debugM $ "COMPLETION: complete: line = " ++ show line
+      debugM $ "COMPLETION: complete: col  = " ++ show col
+      debugM $ "COMPLETION: complete: len  = " ++ show len
+      debugM $ "COMPLETION: complete: base = " ++ show base
+      Just var <- completionRequest b (line,col+len) (Just callbackComplete)
+      xs <- atomically (takeTMVar var)
+      let sorted = uncurry (++) $ partition (isPrefixOf base . view #word)  xs
+      return (Right sorted)
 
 nvimHsLspAsyncComplete :: Int -> Int -> NeovimLsp ()
 nvimHsLspAsyncComplete lnum col = do
-  b <- vim_get_current_buffer'
-  s <- nvim_get_current_line'
-  debugM $ "COMPLETION: async: col = " ++ show col
-  debugM $ "COMPLETION: async: s   = " ++ show (take col s)
-  Just var <- completionRequest b (lnum,col) (Just callbackComplete)
-  xs <- atomically (takeTMVar var)
-  nvim_set_var' nvimHsCompleteResultVar (toObject xs)
+  initialized <- isInitialized
+  if initialized then do
+    b <- vim_get_current_buffer'
+    s <- nvim_get_current_line'
+    debugM $ "COMPLETION: async: col = " ++ show col
+    debugM $ "COMPLETION: async: s   = " ++ show (take col s)
+    Just var <- completionRequest b (lnum,col) (Just callbackComplete)
+    xs <- atomically (takeTMVar var)
+    nvim_set_var' nvimHsCompleteResultVar (toObject xs)
+  else do
+    nvim_set_var' nvimHsCompleteResultVar (toObject ([]::[VimCompleteItem]))
 
 nvimHsCompleteResultVar :: String
 nvimHsCompleteResultVar = "NvimHsLspCompleteResult"
