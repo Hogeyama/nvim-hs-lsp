@@ -163,6 +163,8 @@ nvimHsLspApplyRefactOne _ = whenInitialized $ whenAlreadyOpened $ do
                              ]
   void $ executeCommandRequest "applyrefact:applyOne" (Some [arg]) Nothing
 
+-------------------------------------------------------------------------------
+
 nvimHsLspComplete :: Object -> String
                   -> NeovimLsp (Either Int [VimCompleteItem])
 nvimHsLspComplete findstart base = do
@@ -170,29 +172,41 @@ nvimHsLspComplete findstart base = do
   if notInitialized then
     return (Left (-1))
   else do
-    b <- vim_get_current_buffer'
-    (line, col) <- getNvimPos
     let findStart = case findstart of
           ObjectInt n -> n
           ObjectString s -> read (B.unpack s)
           _ -> error "流石にここに来たら怒っていいよね"
     if findStart == 1 then do
-      s <- nvim_get_current_line'
-      -- TODO use 'iskeyword' of vim?
-      let isKeyword c = isAlphaNum c || (c `elem` ['_','\''])
-      let foo = reverse $ dropWhile isKeyword $ reverse $ take (col-1) s
-      let len = length foo
-      debugM $ "COMPLETION: findstart: foo = " ++ show foo
-      debugM $ "COMPLETION: findstart: len = " ++ show len
-      return (Left len)
+      Left <$> completionFindStart
     else do
-      debugM $ "COMPLETION: complete: line = " ++ show line
-      debugM $ "COMPLETION: complete: col  = " ++ show col
-      debugM $ "COMPLETION: complete: base = " ++ show base
-      Just var <- completionRequest b (line, col+length base) (Just callbackComplete)
+      b   <- vim_get_current_buffer'
+      pos <- completionCalcPos base
+      Just var <- completionRequest b pos (Just callbackComplete)
       xs <- atomically (takeTMVar var)
       let sorted = uncurry (++) $ partition (isPrefixOf base . view #word)  xs
       return (Right sorted)
+
+completionFindStart :: NeovimLsp Int
+completionFindStart = do
+  s <- nvim_get_current_line'
+  col <- snd <$> getNvimPos
+  -- TODO use 'iskeyword' of vim?
+  let isKeyword c = isAlphaNum c || (c `elem` ['_','\''])
+  let foo = reverse $ dropWhile isKeyword $ reverse $ take (col-1) s
+  let len = length foo
+  debugM $ "COMPLETION: findstart: foo = " ++ show foo
+  debugM $ "COMPLETION: findstart: len = " ++ show len
+  return len
+
+completionCalcPos :: String -> NeovimLsp NvimPos
+completionCalcPos base = do
+  (line, col) <- getNvimPos
+  debugM $ "COMPLETION: complete: line = " ++ show line
+  debugM $ "COMPLETION: complete: col  = " ++ show col
+  debugM $ "COMPLETION: complete: base = " ++ show base
+  return (line, col+length base)
+
+--
 
 nvimHsLspAsyncComplete :: Int -> Int -> NeovimLsp ()
 nvimHsLspAsyncComplete lnum col = do
