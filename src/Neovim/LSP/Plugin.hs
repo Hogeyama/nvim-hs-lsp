@@ -19,7 +19,7 @@ import           Data.Char (isAlphaNum)
 import           Data.List (isPrefixOf, partition)
 import qualified Data.Map                          as M
 
-import           Neovim
+import           Neovim                            as Obj
 
 import           Neovim.LSP.Action.Notification
 import           Neovim.LSP.Action.Request
@@ -184,16 +184,12 @@ nvimHsLspComplete findstart base = do
       let len = length foo
       debugM $ "COMPLETION: findstart: foo = " ++ show foo
       debugM $ "COMPLETION: findstart: len = " ++ show len
-      otherState.completionOffset .== Just len
       return (Left len)
     else do
-      Just len <- useTV (otherState.completionOffset)
-      otherState.completionOffset .== Nothing
       debugM $ "COMPLETION: complete: line = " ++ show line
       debugM $ "COMPLETION: complete: col  = " ++ show col
-      debugM $ "COMPLETION: complete: len  = " ++ show len
       debugM $ "COMPLETION: complete: base = " ++ show base
-      Just var <- completionRequest b (line,col+len) (Just callbackComplete)
+      Just var <- completionRequest b (line, col+length base) (Just callbackComplete)
       xs <- atomically (takeTMVar var)
       let sorted = uncurry (++) $ partition (isPrefixOf base . view #word)  xs
       return (Right sorted)

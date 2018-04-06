@@ -86,7 +86,7 @@ initialEnvM = liftIO $ do
   _lspEnvOpenedFiles   <- newTVarIO M.empty
   _lspEnvContext       <- newTVarIO initialContext
   _lspEnvLoggerName    <- return topLoggerName
-  _lspEnvOtherState    <- OtherState <$> newTVarIO Nothing
+  _lspEnvOtherState    <- return OtherState
   _lspEnvFileType      <- newTVarIO Nothing
   return LspEnv {..}
 
@@ -139,7 +139,7 @@ newtype OtherHandles = OtherHandles
   { unOtherHandles :: [(String, Async ())] } -- (name,_)
 
 data OtherState = OtherState
-  { otherStateCompletionOffset :: !(TVar (Maybe Int)) }
+  {  }
 
 -------------------------------------------------------------------------------
 -- Plugin
