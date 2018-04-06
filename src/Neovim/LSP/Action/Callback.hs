@@ -90,19 +90,16 @@ jumpToLocation loc = do
       start      = range^. #start
       (lnum,col) = positionToNvimPos start
   vim_command' "normal! m`"
-  Right bufnum <- vim_call_function "bufnr"
-                  [ toObject (uriToFilePath uri)
-                  , toObject True -- create buffer if 'uri' is not opened yet
-                  ]
-  Right _      <- vim_call_function "setpos"
-                  [ toObject "."
-                  , ObjectArray [ bufnum
-                                , toObject lnum
-                                , toObject col
-                                , toObject False -- visualedit
-                                ]
-                  ]
-  return ()
+  debugM $ unwords
+              [ "edit"
+              , "+call\\ cursor(" ++ show lnum ++ "," ++ show col ++ ")"
+              , uriToFilePath uri
+              ]
+  vim_command' $ unwords
+              [ "edit"
+              , "+call\\ cursor(" ++ show lnum ++ "," ++ show col ++ ")"
+              , uriToFilePath uri
+              ]
 
 textDocumentDefinitionNoInfo ::  String
 textDocumentDefinitionNoInfo = "textDocument/definition: no info"
