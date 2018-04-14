@@ -11,6 +11,7 @@ class Source(Base):
         self.name = "nvim-hs-lsp"
         self.mark = "[nhl]"
         self.sorters = ["sorter_rank"]
+        self.max_menu_width = 1000
         self.filetypes = vim.eval(
             "get(g:, 'NvimHsLsp_serverCommands', {})").keys()
         self.input_pattern += r'(\.|::|->)\w*$|\w{2,}$'
