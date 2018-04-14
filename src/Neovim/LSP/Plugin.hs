@@ -9,17 +9,16 @@
 
 module Neovim.LSP.Plugin where
 
-import           UnliftIO
 import           Control.Lens                      (view)
-import Control.Monad                     (unless, void, when)
+import           Control.Monad                     (unless, void, when)
 import           Control.Monad.Extra               (ifM, whenJust)
 import           Data.Aeson                        hiding (Object)
 import qualified Data.ByteString.Char8             as B
-import           Data.Char (isAlphaNum)
-import           Data.List (isPrefixOf, partition)
+import           Data.Char                         (isAlphaNum)
+import           Data.List                         (isPrefixOf, partition)
 import qualified Data.Map                          as M
 
-import           Neovim                            as Obj
+import           Neovim
 
 import           Neovim.LSP.Action.Notification
 import           Neovim.LSP.Action.Request
@@ -51,8 +50,7 @@ nvimHsLspInitialize _ = loggingError $ do
             initializeLsp cmd args
             fileType .== Just ft
             dispatch [notificationHandler, requestHandler, callbackHandler]
-            cwd <- filePathToUri <$>
-                      errOnInvalidResult (vim_call_function "getcwd" [])
+            cwd <- getCWD
             pushRequest' @'InitializeK (initializeParam Nothing (Just cwd))
             let pat = def { acmdPattern = "*" }
                 arg = def { bang = Just True }
@@ -86,10 +84,13 @@ whenInitialized = whenInitialized' False
 -- Notification
 -------------------------------------------------------------------------------
 
-whenAlreadyOpened :: NeovimLsp () -> NeovimLsp ()
-whenAlreadyOpened m = do
+whenAlreadyOpened' :: Bool -> NeovimLsp () -> NeovimLsp ()
+whenAlreadyOpened' silent m = do
   uri <- getBufUri =<< vim_get_current_buffer'
-  ifM (alreadyOpened uri) m (vim_out_write' "nvim-hs-lsp: Not opened yet\n")
+  ifM (alreadyOpened uri) m (unless silent $ vim_out_write' "nvim-hs-lsp: Not opened yet\n")
+
+whenAlreadyOpened :: NeovimLsp () -> NeovimLsp ()
+whenAlreadyOpened = whenAlreadyOpened' False
 
 alreadyOpened :: Uri -> NeovimLsp Bool
 alreadyOpened uri = M.member uri <$> useTV openedFiles
@@ -116,12 +117,12 @@ nvimHsLspCloseBuffer _ = whenInitialized $ do
     didCloseBuffer b
 
 nvimHsLspChangeBuffer :: CommandArguments -> NeovimLsp ()
-nvimHsLspChangeBuffer arg = whenInitialized' silent $ whenAlreadyOpened $
+nvimHsLspChangeBuffer arg = whenInitialized' silent $ whenAlreadyOpened' silent $
   didChangeBuffer =<< vim_get_current_buffer'
   where silent = Just True == bang arg
 
 nvimHsLspSaveBuffer :: CommandArguments -> NeovimLsp ()
-nvimHsLspSaveBuffer arg = whenInitialized' silent $ whenAlreadyOpened $
+nvimHsLspSaveBuffer arg = whenInitialized' silent $ whenAlreadyOpened' silent $
   didSaveBuffer =<< vim_get_current_buffer'
   where silent = Just True == bang arg
 
@@ -138,19 +139,19 @@ nvimHsLspInfo :: CommandArguments -> NeovimLsp ()
 nvimHsLspInfo _ = whenInitialized $ whenAlreadyOpened $ do
   b <- vim_get_current_buffer'
   pos <- getNvimPos
-  void $ hoverRequest b pos (Just callbackHoverOneLine)
+  void $ hoverRequest b pos callbackHoverOneLine
 
 nvimHsLspHover :: CommandArguments -> NeovimLsp ()
 nvimHsLspHover _ = whenInitialized $ whenAlreadyOpened $ do
   b <- vim_get_current_buffer'
   pos <- getNvimPos
-  void $ hoverRequest b pos (Just callbackHoverPreview)
+  void $ hoverRequest b pos callbackHoverPreview
 
 nvimHsLspDefinition :: CommandArguments -> NeovimLsp ()
 nvimHsLspDefinition _ = whenInitialized $ whenAlreadyOpened $ do
   b <- vim_get_current_buffer'
   pos <- getNvimPos
-  void $ definitionRequest b pos (Just callbackDefinition)
+  void $ definitionRequest b pos callbackDefinition
 
 -- argument: {file: Uri, start_pos: Position}
 nvimHsLspApplyRefactOne :: CommandArguments -> NeovimLsp ()
@@ -177,34 +178,26 @@ nvimHsLspComplete findstart base = do
           ObjectString s -> read (B.unpack s)
           _ -> error "流石にここに来たら怒っていいよね"
     if findStart == 1 then do
-      Left <$> completionFindStart
+      s   <- nvim_get_current_line'
+      col <- snd <$> getNvimPos
+      return $ Left $ completionFindStart s col
     else do
-      b   <- vim_get_current_buffer'
-      pos <- completionCalcPos base
-      Just var <- completionRequest b pos (Just callbackComplete)
-      xs <- atomically (takeTMVar var)
+      curPos <- getNvimPos
+      let compPos = completionPos base curPos
+      b <- vim_get_current_buffer'
+      xs <- waitCallback $ completionRequest b compPos callbackComplete
       let sorted = uncurry (++) $ partition (isPrefixOf base . view #word)  xs
       return (Right sorted)
 
-completionFindStart :: NeovimLsp Int
-completionFindStart = do
-  s <- nvim_get_current_line'
-  col <- snd <$> getNvimPos
-  -- TODO use 'iskeyword' of vim?
+completionFindStart :: String -> Int -> Int
+completionFindStart curLine col =
   let isKeyword c = isAlphaNum c || (c `elem` ['_','\''])
-  let foo = reverse $ dropWhile isKeyword $ reverse $ take (col-1) s
-  let len = length foo
-  debugM $ "COMPLETION: findstart: foo = " ++ show foo
-  debugM $ "COMPLETION: findstart: len = " ++ show len
-  return len
+      foo = reverse $ dropWhile isKeyword $ reverse $ take (col-1) curLine
+      len = length foo
+  in  len
 
-completionCalcPos :: String -> NeovimLsp NvimPos
-completionCalcPos base = do
-  (line, col) <- getNvimPos
-  debugM $ "COMPLETION: complete: line = " ++ show line
-  debugM $ "COMPLETION: complete: col  = " ++ show col
-  debugM $ "COMPLETION: complete: base = " ++ show base
-  return (line, col+length base)
+completionPos :: String -> NvimPos -> NvimPos
+completionPos base (line, col) = (line, col+length base)
 
 --
 
@@ -216,8 +209,7 @@ nvimHsLspAsyncComplete lnum col = do
     s <- nvim_get_current_line'
     debugM $ "COMPLETION: async: col = " ++ show col
     debugM $ "COMPLETION: async: s   = " ++ show (take col s)
-    Just var <- completionRequest b (lnum,col) (Just callbackComplete)
-    xs <- atomically (takeTMVar var)
+    xs <- waitCallback $ completionRequest b (lnum,col) callbackComplete
     nvim_set_var' nvimHsCompleteResultVar (toObject xs)
   else do
     nvim_set_var' nvimHsCompleteResultVar (toObject ([]::[VimCompleteItem]))

@@ -26,6 +26,9 @@ import           Neovim.LSP.Base
 import           Neovim.LSP.Protocol.Messages
 import           Neovim.LSP.Protocol.Type
 
+getCWD :: Neovim env Uri
+getCWD = filePathToUri <$> errOnInvalidResult (vim_call_function "getcwd" [])
+
 getBufLanguage :: (HasLoggerName' env)
                => Buffer -> Neovim env (Maybe String)
 getBufLanguage b = nvim_buf_get_var b "current_syntax" >>= \case

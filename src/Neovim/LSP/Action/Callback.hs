@@ -11,6 +11,7 @@
 
 module Neovim.LSP.Action.Callback where
 
+import           UnliftIO
 import           Control.Lens
 import           Data.Extensible
 import qualified Data.Text                as T
@@ -181,4 +182,8 @@ withResult resp k =
     None -> case resp^. #result of
       None   -> errorM "withResult: wrong input" >> return Nothing
       Some x -> Just <$> k x
+
+waitCallback :: MonadIO m => m (TMVar a) -> m a
+waitCallback m = atomically . takeTMVar =<< m
+
 
