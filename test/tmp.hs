@@ -21,6 +21,7 @@ import           Neovim                            hiding (Plugin, wait)
 import           Neovim.Context                    (quit)
 import           Neovim.Test
 
+import           Neovim.LSP.Action.Callback
 import           Neovim.LSP.Action.Notification    (didChangeBuffer, didOpenBuffer)
 import           Neovim.LSP.Action.Request         (hoverRequest)
 import           Neovim.LSP.Base
@@ -31,9 +32,6 @@ import           Neovim.LSP.Protocol.Messages
 import           Neovim.LSP.Protocol.Type
 import           Neovim.LSP.Util
 import           System.Exit (exitSuccess)
-
-print' :: Show a => a -> Neovim env ()
-print' x = liftIO $ print x
 
 main :: IO ()
 main = do
@@ -54,7 +52,7 @@ handler2 = do
 
   -- Initialize
   -------------
-  let cwd = filePathToUri "/home/hoegyama/.config/nvim/nvim-hs-libs/nvim-hs-lsp/test-file"
+  let cwd = filePathToUri "/home/hogeyama/.config/nvim/nvim-hs-libs/nvim-hs-lsp/test-file"
       params' = initializeParam Nothing (Just cwd)
   pushRequest' @'InitializeK params'
 
@@ -77,7 +75,7 @@ handler2 = do
   -- Hover
   --------
   threadDelaySec 3
-  void $ hoverRequest b (6,3) Nothing
+  waitCallback $ hoverRequest b (6,3) (const (return ()))
   -- line,charは0-indexedでvimのと1ずれる(?)
   -- 次のreturnは range (5,2)~(5,8)
   --   6|  return ()
@@ -95,4 +93,6 @@ handler2 = do
 threadDelaySec :: MonadIO m => Int -> m ()
 threadDelaySec n = liftIO $ threadDelay (n * 1000 * 1000)
 
+print' :: Show a => a -> Neovim env ()
+print' x = liftIO $ print x
 

@@ -7,6 +7,7 @@ custom-setup:
     - base >= 4.7 && < 5
     - Cabal
     - cabal-doctest >= 1 && < 1.1
+    - hspec
 
 dependencies:
 - base >= 4.7 && < 5
@@ -61,10 +62,18 @@ tests:
   quick:
     source-dirs:   test
     main:          Spec.hs
-    other-modules: []
     dependencies:
     - nvim-hs
     - nvim-hs-lsp
     - hspec
     - QuickCheck
+    - unliftio
+    - prettyprinter
+    - process
+    - directory
+    - resourcet
+    - extensible
+    - prettyprinter-ansi-terminal
+    - transformers
+    - mtl
 

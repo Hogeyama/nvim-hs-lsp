@@ -1,0 +1,11 @@
+name:                test-example
+version:             0.1.0.0
+github:              "Hogeyama/test-example"
+license:             BSD3
+
+dependencies:
+- base >= 4.7 && < 5
+
+library:
+  source-dirs: .
+
