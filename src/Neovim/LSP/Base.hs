@@ -55,7 +55,7 @@ import           System.Process             (CreateProcess (..), ProcessHandle,
 import           UnliftIO
 
 import           Neovim                     hiding (Plugin)
-import           Neovim.Context.Internal
+import qualified Neovim.Context.Internal    as Internal
 import           Neovim.LSP.Protocol.Type
 
 
@@ -269,16 +269,16 @@ initializeLsp cmd args = do
         , serverErr = herr
         , serverPH  = ph
         }
-  inCh  <- asks lspEnvInChan
-  outCh <- asks _lspEnvOutChan
-  registerAsyncHandle "sender" =<< async (liftIO (sender hin outCh))
-  registerAsyncHandle "receiver" =<< async (liftIO (receiver hout inCh))
-  registerAsyncHandle "herr-watcher" =<< async (watcher herr)
   liftIO $ do
     hSetBuffering hin  NoBuffering
     hSetBuffering hout NoBuffering
     hSetBuffering herr NoBuffering
     setupLogger
+  inCh  <- asks lspEnvInChan
+  outCh <- asks _lspEnvOutChan
+  registerAsyncHandle "sender" =<< async (liftIO (sender hin outCh))
+  registerAsyncHandle "receiver" =<< async (liftIO (receiver hout inCh))
+  registerAsyncHandle "herr-watcher" =<< async (watcher herr)
   infoM $ unlines
       [ ""
       , "＿人人人人人人＿"
@@ -320,6 +320,7 @@ finalizeLSP = do
   useTV serverHandles >>= \case
     Nothing -> return ()
     Just sh -> liftIO $ terminateProcess (serverPH sh)
+  liftIO L.removeAllHandlers
 
 -------------------------------------------------------------------------------
 -- Logger
@@ -363,17 +364,15 @@ setLogLevel p = view loggerName >>= liftIO . (L.updateGlobalLogger `flip` L.setL
 -------------------------------------------------------------------------------
 
 sender :: Handle -> TChan B.ByteString -> IO ()
-sender serverIn chan = do
-  hSetBuffering serverIn NoBuffering
-  forever $ do
-    bs <- atomically $ readTChan chan
-    B.hPutStr serverIn $ B.concat
-        [ "Content-Length: "
-        , B.pack $ show $ B.length bs
-        , "\r\n\r\n"
-        , bs
-        ]
-    L.debugM senderLoggerName $ "=> " ++ B.unpack bs
+sender serverIn chan = forever $ do
+  bs <- atomically $ readTChan chan
+  B.hPutStr serverIn $ B.concat
+      [ "Content-Length: "
+      , B.pack $ show $ B.length bs
+      , "\r\n\r\n"
+      , bs
+      ]
+  L.debugM senderLoggerName $ "=> " ++ B.unpack bs
 
 receiver :: Handle -> TChan B.ByteString -> IO ()
 receiver serverOut chan = forever $ do
@@ -475,9 +474,9 @@ removeCallback id' = modifyContext (lspCallbacks %~ M.delete id')
 -- TODO
 asyncNeovim :: NFData a => iEnv -> Neovim iEnv a -> Neovim env (Async ())
 asyncNeovim r a = do
-    cfg <- ask'
-    let threadConfig = retypeConfig r cfg
-    liftIO . async . void $ runNeovim threadConfig a
+    cfg <- Internal.ask'
+    let threadConfig = Internal.retypeConfig r cfg
+    liftIO . async . void $ Internal.runNeovim threadConfig a
 
 dispatch :: [Plugin] -> NeovimLsp ()
 dispatch hs = do
