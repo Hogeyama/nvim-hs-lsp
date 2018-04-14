@@ -512,7 +512,7 @@ instance SingKind ServerNotificationMethodK where -- {{{
 -- Class
 -------------------------------------------------------------------------------
 
-class (SingKind k, Show (Demote k), FieldJSON (Demote k)) => IsMethodKind k
+class (SingKind k, Eq (Demote k), Show (Demote k), FieldJSON (Demote k)) => IsMethodKind k
 instance IsMethodKind ClientRequestMethodK
 instance IsMethodKind ClientNotificationMethodK
 instance IsMethodKind ServerRequestMethodK

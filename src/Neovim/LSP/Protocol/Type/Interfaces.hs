@@ -26,7 +26,7 @@ module Neovim.LSP.Protocol.Type.Interfaces
   , ID(..)
   , Number
   , Version
-  , Uri
+  , Uri(..)
   , ErrorCode(..)
   , DiagnosticSeverity(..)
   , TextDocumentSync(..)
@@ -456,6 +456,7 @@ type ImplRequest (m :: k) =
   (SingI m
   ,Typeable m
   ,IsMethodKind k
+  ,Eq        (RequestParam m)
   ,Show      (RequestParam m)
   ,FieldJSON (RequestParam m)
   )
@@ -463,9 +464,11 @@ type ImplResponse (m :: k) =
   (SingI m
   ,Typeable m
   ,IsMethodKind k
+  ,Eq        (ResResult m)
   ,Show      (ResResult m)
   ,ToJSON    (ResResult m) -- TOOD: ResultはOptionで包むのでFieldJSONではダメ
   ,FromJSON  (ResResult m) --       綺麗に書けないかなあ
+  ,Eq        (ResError m)
   ,Show      (ResError m)
   ,ToJSON    (ResError m)
   ,FromJSON  (ResError m)
@@ -474,6 +477,7 @@ type ImplNotification (m :: k) =
   (SingI m
   ,Typeable m
   ,IsMethodKind k
+  ,Eq        (NotificationParam m)
   ,Show      (NotificationParam m)
   ,FieldJSON (NotificationParam m)
   )
@@ -481,14 +485,17 @@ type ImplNotification (m :: k) =
 -- instances
 -------------
 
+deriving instance ImplRequest m => Eq       (Request m)
 deriving instance ImplRequest m => Show     (Request m)
 deriving instance ImplRequest m => ToJSON   (Request m)
 deriving instance ImplRequest m => FromJSON (Request m)
 
+deriving instance ImplNotification m => Eq       (Notification m)
 deriving instance ImplNotification m => Show     (Notification m)
 deriving instance ImplNotification m => ToJSON   (Notification m)
 deriving instance ImplNotification m => FromJSON (Notification m)
 
+deriving instance ImplResponse m => Eq       (Response m)
 deriving instance ImplResponse m => Show     (Response m)
 deriving instance ImplResponse m => ToJSON   (Response m)
 deriving instance ImplResponse m => FromJSON (Response m)
@@ -687,7 +694,7 @@ type ServerCapabilities = Record
 
 data TextDocumentSync = SyncOption TextDocumentSyncOptions
                       | SyncKind   TextDocumentSyncKind
-                      deriving (Show)
+                      deriving (Eq,Ord,Show)
 
 type TextDocumentSyncOptions = Record
   '[ "openClose"         >: Option Bool
@@ -763,6 +770,7 @@ type instance NotificationParam 'ClientCancelK = Record '[ "id" >: ID ]
 -- Exit
 ---------------------------------------
 data Void
+instance Eq       Void where _ == _      = True
 instance Show     Void where show        = \case{}
 instance ToJSON   Void where toJSON      = \case{}
 instance FromJSON Void where parseJSON _ = mempty
