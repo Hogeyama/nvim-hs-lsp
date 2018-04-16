@@ -24,9 +24,9 @@ import           Neovim.LSP.Protocol.Type
 notification :: forall (m :: ClientNotificationMethodK). ImplNotification m
              => NotificationParam m -> Notification m
 notification a = Notification $ #jsonrpc @= "2.0"
-                             <: #method  @= fromSing (sing :: Sing m)
-                             <: #params  @= a
-                             <: nil
+                             <! #method  @= fromSing (sing :: Sing m)
+                             <! #params  @= a
+                             <! nil
 
 -- | Build 'ClientRequest'
 request :: forall (m :: ClientRequestMethodK). ImplRequest m
@@ -34,10 +34,10 @@ request :: forall (m :: ClientRequestMethodK). ImplRequest m
         -> RequestParam m
         -> ClientRequest m
 request id' a = Request $ #jsonrpc @= "2.0"
-                       <: #id      @= id'
-                       <: #method  @= fromSing (sing :: Sing m)
-                       <: #params  @= a
-                       <: nil
+                       <! #id      @= id'
+                       <! #method  @= fromSing (sing :: Sing m)
+                       <! #params  @= a
+                       <! nil
 
 -- | Build 'ClientResponse'
 response :: forall (m :: ServerRequestMethodK). SingI m
@@ -46,10 +46,10 @@ response :: forall (m :: ServerRequestMethodK). SingI m
          -> Option (ResponseError (ResError m))
          -> ClientResponse m
 response id' resp err = Response $ #jsonrpc @= "2.0"
-                                <: #id      @= id'
-                                <: #result  @= resp
-                                <: #error   @= err
-                                <: nil
+                                <! #id      @= id'
+                                <! #result  @= resp
+                                <! #error   @= err
+                                <! nil
 
 -------------------------------------------------------------------------------
 -- Initialize
@@ -58,82 +58,82 @@ response id' resp err = Response $ #jsonrpc @= "2.0"
 initializeParam :: Nullable Number -> Nullable Uri -> RequestParam 'InitializeK
 initializeParam processId rootUri
      = #processId             @= processId
-    <: #rootPath              @= None
-    <: #rootUri               @= rootUri
-    <: #initializationOptions @= None
-    <: #capabilities          @=  ( #workspace    @= Some workspaceOption
-                                 <: #textDocument @= Some textDocumentOption
-                                 <: #experimental @= None
-                                 <: nil )
-    <: #trace                 @= Some TraceOff
-    <: nil
+    <! #rootPath              @= None
+    <! #rootUri               @= rootUri
+    <! #initializationOptions @= None
+    <! #capabilities          @=  ( #workspace    @= Some workspaceOption
+                                 <! #textDocument @= Some textDocumentOption
+                                 <! #experimental @= None
+                                 <! nil )
+    <! #trace                 @= Some TraceOff
+    <! nil
   where
     workspaceOption :: WorkspaceClientCapabilities
     workspaceOption -- {{{
       =  #applyEdit @= Some True
-      <: #workspaceEdit @= Some
-            (#documentChanges @= Some False <: nil)
-      <: #didChangeConfiguration @= Some
-            (#dynamicRegistration @= Some False <: nil)
-      <: #didChangeWatchedFiles @= Some
-            (#dynamicRegistration @= Some False <: nil)
-      <: #symbol @= Some
+      <! #workspaceEdit @= Some
+            (#documentChanges @= Some False <! nil)
+      <! #didChangeConfiguration @= Some
+            (#dynamicRegistration @= Some False <! nil)
+      <! #didChangeWatchedFiles @= Some
+            (#dynamicRegistration @= Some False <! nil)
+      <! #symbol @= Some
              ( #dynamicRegistration @= Some False
-            <: #symbolKind @= None -- TODO
-            <: nil )
-      <: #executeCommand @= noDyn
-      <: #workspaceFolders @= Some False
-      <: #configuration @= Some False
-      <: nil
+            <! #symbolKind @= None -- TODO
+            <! nil )
+      <! #executeCommand @= noDyn
+      <! #workspaceFolders @= Some False
+      <! #configuration @= Some False
+      <! nil
     -- }}}
     textDocumentOption :: TextDocumentClientCapabilities
     textDocumentOption -- {{{
       =  #synchronization @= Some
              ( #dynamicRegistration @= Some False
-            <: #willSave @= Some False
-            <: #willSaveUntil @= Some False
-            <: #didSave @= Some True
-            <: nil )
-      <: #completion @= Some
+            <! #willSave @= Some False
+            <! #willSaveUntil @= Some False
+            <! #didSave @= Some True
+            <! nil )
+      <! #completion @= Some
              ( #dynamicRegistration @= Some False
-            <: #completionItem @= Some
+            <! #completionItem @= Some
                    ( #snippetSupport @= Some True -- use neosnippet
-                  <: #commitCharactersSupport @= Some True
-                  <: #documentationFormat @= Some [PlainText]
-                  <: nil )
-            <: #completionItemKind @= Some
-                   ( #valueSet @= None <: nil )
-            <: #contextSupport @= Some True -- TODO
-            <: nil )
-      <: #hover @= Some
+                  <! #commitCharactersSupport @= Some True
+                  <! #documentationFormat @= Some [PlainText]
+                  <! nil )
+            <! #completionItemKind @= Some
+                   ( #valueSet @= None <! nil )
+            <! #contextSupport @= Some True -- TODO
+            <! nil )
+      <! #hover @= Some
              ( #dynamicRegistration @= Some False
-            <: #contentFormat @= Some [PlainText]
-            <: nil )
-      <: #signatureHelp @= Some
+            <! #contentFormat @= Some [PlainText]
+            <! nil )
+      <! #signatureHelp @= Some
              ( #dynamicRegistration @= Some False
-            <: #signatureInformation @= Some
-                   ( #documentationFormat @= Some [PlainText] <: nil )
-            <: nil )
-      <: #references @= noDyn
-      <: #documentHightlight @= noDyn
-      <: #documentSymbol @= Some
+            <! #signatureInformation @= Some
+                   ( #documentationFormat @= Some [PlainText] <! nil )
+            <! nil )
+      <! #references @= noDyn
+      <! #documentHightlight @= noDyn
+      <! #documentSymbol @= Some
              ( #dynamicRegistration @= Some False
-            <: #symbolKind @= None
-            <: nil )
-      <: #formatting         @= noDyn
-      <: #rangeFormatting    @= noDyn
-      <: #onTypeFormatting   @= noDyn
-      <: #definition         @= noDyn
-      <: #typeDefinition     @= noDyn
-      <: #implementation     @= noDyn
-      <: #codeAction         @= noDyn
-      <: #codeLens           @= noDyn
-      <: #documentLink       @= noDyn
-      <: #colorProvider      @= noDyn
-      <: #rename             @= noDyn
-      <: nil
+            <! #symbolKind @= None
+            <! nil )
+      <! #formatting         @= noDyn
+      <! #rangeFormatting    @= noDyn
+      <! #onTypeFormatting   @= noDyn
+      <! #definition         @= noDyn
+      <! #typeDefinition     @= noDyn
+      <! #implementation     @= noDyn
+      <! #codeAction         @= noDyn
+      <! #codeLens           @= noDyn
+      <! #documentLink       @= noDyn
+      <! #colorProvider      @= noDyn
+      <! #rename             @= noDyn
+      <! nil
     -- }}}
-    noDyn = Some (#dynamicRegistration @= Some False <: nil)
+    noDyn = Some (#dynamicRegistration @= Some False <! nil)
 
 
 -------------------------------------------------------------------------------
@@ -152,5 +152,5 @@ exitParam = None
 
 didOpenTextDocumentParam :: TextDocumentItem
                          -> NotificationParam 'TextDocumentDidOpenK
-didOpenTextDocumentParam textDocument = #textDocument @= textDocument <: nil
+didOpenTextDocumentParam textDocument = #textDocument @= textDocument <! nil
 

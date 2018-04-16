@@ -298,12 +298,12 @@ type VersionedTextDocmentIdentifierF =
    ]
 
 textDocumentIdentifier :: Uri -> TextDocumentIdentifier
-textDocumentIdentifier uri = #uri @= uri <: nil
+textDocumentIdentifier uri = #uri @= uri <! nil
 
 versionedTextDocmentIdentifier :: Uri -> Version -> VersionedTextDocmentIdentifier
 versionedTextDocmentIdentifier uri version = #uri @= uri
-                                          <: #version @= Some version
-                                          <: nil
+                                          <! #version @= Some version
+                                          <! nil
 
 -- TextDocumentItem
 --   An item to transfer a text document from the client to the server.

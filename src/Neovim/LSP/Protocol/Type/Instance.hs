@@ -55,8 +55,8 @@ type Nullable = Maybe
 --
 -- >>> :set -XDataKinds -XTypeOperators -XOverloadedStrings -XOverloadedLabels
 -- >>> import qualified Data.ByteString.Lazy.Char8 as BL
--- >>> let recordMay = #id @= Nothing <: nil :: Record '["id" >: Maybe  Char]
--- >>> let recordOpt = #id @= None    <: nil :: Record '["id" >: Option Char]
+-- >>> let recordMay = #id @= Nothing <! nil :: Record '["id" >: Maybe  Char]
+-- >>> let recordOpt = #id @= None    <! nil :: Record '["id" >: Option Char]
 -- >>> BL.putStrLn $ encode $ toJSON recordMay
 -- {"id":null}
 -- >>> BL.putStrLn $ encode $ toJSON recordOpt

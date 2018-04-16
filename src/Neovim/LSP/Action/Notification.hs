@@ -12,7 +12,7 @@ module Neovim.LSP.Action.Notification
   --)
   where
 
-import           Data.Extensible              (nil, (<:), (@=))
+import           Data.Extensible              (nil, (<!), (@=))
 import           Data.Maybe                   (fromJust)
 
 import           Neovim
@@ -39,10 +39,10 @@ didOpenBuffer b = do
     contents <- getBufContents b
     let textDocumentItem :: TextDocumentItem
                          = #uri        @= uri
-                        <: #languageId @= language
-                        <: #version    @= version
-                        <: #text       @= contents
-                        <: nil
+                        <! #languageId @= language
+                        <! #version    @= version
+                        <! #text       @= contents
+                        <! nil
     push $ notification @'TextDocumentDidOpenK
          $ didOpenTextDocumentParam textDocumentItem
 
@@ -51,7 +51,7 @@ didOpenBuffer b = do
 didCloseBuffer :: (HasOutChan' env, HasContext' env) => Buffer -> Neovim env ()
 didCloseBuffer b = do
     tid      <- textDocumentIdentifier <$> getBufUri b
-    let param = #textDocument @= tid <: nil
+    let param = #textDocument @= tid <! nil
     push $ notification @'TextDocumentDidCloseK param
 
 -- TextDocumentDidSave Notification
@@ -61,8 +61,8 @@ didSaveBuffer b = do
     tid      <- textDocumentIdentifier <$> getBufUri b
     --contents <- getBufContents b
     let param = #textDocument @= tid
-             <: #text         @= None --Some contents
-             <: nil
+             <! #text         @= None --Some contents
+             <! nil
     push $ notification @'TextDocumentDidSaveK param
 
 -- TextDocumentDidChange Notification
@@ -72,11 +72,11 @@ didChangeBuffer b = do
     contents <- getBufContents b
     vtid <- versionedTextDocmentIdentifier <$> getBufUri b <*> genUniqueVersion
     let change = #range       @= None
-              <: #rangeLength @= None
-              <: #text        @= contents
-              <: nil
+              <! #rangeLength @= None
+              <! #text        @= contents
+              <! nil
         param = #textDocument   @= vtid
-             <: #contentChanges @= [change]
-             <: nil
+             <! #contentChanges @= [change]
+             <! nil
     push $ notification @'TextDocumentDidChangeK param
 

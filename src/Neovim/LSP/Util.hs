@@ -52,8 +52,8 @@ getTextDocumentPositionParams :: Buffer -> NvimPos
 getTextDocumentPositionParams b p = do
   uri <- getBufUri b
   let pos = #textDocument @= textDocumentIdentifier uri
-         <: #position     @= nvimPosToPosition p
-         <: nil
+         <! #position     @= nvimPosToPosition p
+         <! nil
   return pos
 
 catchAndDisplay :: (HasLoggerName' env) => Neovim env () -> Neovim env ()
@@ -111,8 +111,8 @@ type NvimPos = (Int,Int)
 nvimPosToPosition :: NvimPos -> Position
 nvimPosToPosition (line,char) =
     #line      @= line - 1
- <: #character @= char - 1
- <: nil
+ <! #character @= char - 1
+ <! nil
 
 positionToNvimPos :: Position -> NvimPos
 positionToNvimPos pos = (1 + pos^. #line, 1 + pos^. #character)

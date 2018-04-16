@@ -61,7 +61,7 @@ respondWorkspaceAplyEdit (Request req) = do
   where
     ret x = push $ response @'WorkspaceApplyEditK
               (Just (req^. #id)) (Some (result x)) None
-    result b = #applied @= b <: nil
+    result b = #applied @= b <! nil
 
 -- just apply edits from bottom to top.
 -- TODO consider the case of multiple edits with the same start.

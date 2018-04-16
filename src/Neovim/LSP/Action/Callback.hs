@@ -129,13 +129,13 @@ completeCompletionItems cs = map toVimItem cs
 toVimItem :: CompletionItem -> VimCompleteItem
 toVimItem c
   =  #word      @= c^. #label
-  <: #abbr      @= None
-  <: #menu      @= removeNewline <$> c^. #detail
-  <: #info      @= case c^. #documentation of
+  <! #abbr      @= None
+  <! #menu      @= removeNewline <$> c^. #detail
+  <! #info      @= case c^. #documentation of
                      None            -> None
                      Some (L s)      -> Some s
                      Some (R markup) -> Some (markup^. #value)
-  <: #kind      @= case c^. #kind of
+  <! #kind      @= case c^. #kind of
                      -- TODO {{{
                      Some  1 -> None     -- text(?)
                      Some  2 -> Some "f" -- method
@@ -153,11 +153,11 @@ toVimItem c
                      --  m member of a struct or class
                      --  t typedef
                      --}}}
-  <: #icase     @= None
-  <: #dup       @= Some 1
-  <: #empty     @= None
-  <: #user_data @= None
-  <: nil
+  <! #icase     @= None
+  <! #dup       @= Some 1
+  <! #empty     @= None
+  <! #user_data @= None
+  <! nil
 
 removeNewline :: String -> String
 removeNewline = map (\c -> if c == '\n' then ' ' else c)

@@ -82,12 +82,12 @@ diagnosticToQfItems :: Uri -> Diagnostic -> [QfItem]
 diagnosticToQfItems uri d = header : rest
   where
     header = #filename @= Some (uriToFilePath uri)
-          <: #lnum     @= Some lnum
-          <: #col      @= Some col
-          <: #type     @= Some errorType
-          <: #text     @= text
-          <: #valid    @= Some True
-          <: nil
+          <! #lnum     @= Some lnum
+          <! #col      @= Some col
+          <! #type     @= Some errorType
+          <! #text     @= text
+          <! #valid    @= Some True
+          <! nil
       where
         start = d^. (#range :: FieldOptic "range") . #start
         lnum = 1 + start^. #line
@@ -103,10 +103,10 @@ diagnosticToQfItems uri d = header : rest
             Some n -> "[" ++ n ++ "]"
     rest = flip map (T.lines (d^. #message)) $ \msg ->
              #filename @= None
-          <: #lnum     @= None
-          <: #col      @= None
-          <: #type     @= None
-          <: #text     @= T.unpack msg
-          <: #valid    @= Some False
-          <: nil
+          <! #lnum     @= None
+          <! #col      @= None
+          <! #type     @= None
+          <! #text     @= T.unpack msg
+          <! #valid    @= Some False
+          <! nil
 

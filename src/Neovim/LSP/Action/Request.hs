@@ -58,8 +58,8 @@ executeCommandRequest :: (HasOutChan' env, HasContext' env)
                       -> Neovim env (Maybe (TMVar a))
 executeCommandRequest cmd margs mcallback = do
   let param = #command   @= cmd
-           <: #arguments @= margs
-           <: nil
+           <! #arguments @= margs
+           <! nil
   pushRequest param mcallback
 
 -- TextDocumentCompletion
@@ -72,8 +72,8 @@ completionRequest :: (HasOutChan' env, HasContext' env)
 completionRequest b p callback = do
   uri <- getBufUri b
   let params = #textDocument @= textDocumentIdentifier uri
-            <: #position     @= nvimPosToPosition p
-            <: #context      @= None
-            <: nil
+            <! #position     @= nvimPosToPosition p
+            <! #context      @= None
+            <! nil
   fromJust <$> pushRequest params (Just callback)
 
