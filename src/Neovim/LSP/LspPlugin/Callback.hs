@@ -17,6 +17,7 @@ import           Control.Monad            (forever)
 import           Data.Typeable            (cast, typeOf)
 import           UnliftIO
 
+import           Neovim                   (vim_report_error')
 import           Neovim.LSP.Base
 import           Neovim.LSP.Protocol.Type
 
