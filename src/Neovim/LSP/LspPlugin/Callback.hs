@@ -41,6 +41,7 @@ callbackPluginAction = do
                   , "Expected: " ++ show (typeOf expected)
                   , "Actual:   " ++ show (typeOf resp)
                   ]
+              vim_report_error' "nvim-hs-lsp: error: callback function type mismatched"
               where expected = let _ = callback expected in expected
         Nothing ->
           debugM $ "no callback set for id: " ++ show id'

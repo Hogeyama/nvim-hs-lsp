@@ -56,11 +56,8 @@ getTextDocumentPositionParams b p = do
          <: nil
   return pos
 
-currentTextDocumentPositionParams :: (HasLoggerName' env) => Neovim env TextDocumentPositionParams
-currentTextDocumentPositionParams = do
-  b <- vim_get_current_buffer'
-  pos <- getNvimPos
-  getTextDocumentPositionParams b pos
+catchAndDisplay :: (HasLoggerName' env) => Neovim env () -> Neovim env ()
+catchAndDisplay = handleAny $ \e -> errorM (show e) >> vim_report_error' (show e)
 
 -------------------------------------------------------------------------------
 -- TODO To be moved

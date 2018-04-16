@@ -6,7 +6,6 @@
 {-# LANGUAGE OverloadedStrings         #-}
 {-# LANGUAGE ScopedTypeVariables       #-}
 {-# LANGUAGE TypeApplications          #-}
-{-# LANGUAGE ViewPatterns              #-}
 {-# OPTIONS_GHC -Wall                  #-}
 
 module Neovim.LSP.LspPlugin.Request
@@ -21,7 +20,7 @@ import           Data.Extensible
 import           Data.Map                     (Map)
 import qualified Data.Map                     as M
 
-import           Neovim                       hiding (Plugin, err, range)
+import           Neovim                       hiding (Plugin, range)
 import           Neovim.LSP.Base
 import           Neovim.LSP.Protocol.Messages
 import           Neovim.LSP.Protocol.Type
@@ -52,7 +51,7 @@ requestPluginAction = forever @_ @() @() $ do
 respondWorkspaceAplyEdit :: Request 'WorkspaceApplyEditK -> PluginAction ()
 respondWorkspaceAplyEdit (Request req) = do
   let params = req^. #params
-      edit   = params^. #edit :: WorkspaceEdit
+      edit   = params^. #edit
   debugM $ show edit
   case edit^. #changes of
     None -> case edit^. #documentChanges of
@@ -69,43 +68,21 @@ respondWorkspaceAplyEdit (Request req) = do
 applyChanges :: Map Uri [TextEdit] -> PluginAction Bool
 applyChanges cs = do
   forM_ (M.toList cs) $ \(uri,es) -> do
-    forM_ es $ \e -> do
+    forM_ es $ \e -> catchAndDisplay $ do
       let range   = e^. #range
           (l1,_)  = positionToNvimPos (range^. #start)
           (l2,_)  = positionToNvimPos (range^. #end)
           newText = e^. #newText
-      m <- do
-        vim_command' $ "edit " ++ uriToFilePath uri ++ " | "
-                    ++ show l1 ++ "," ++ show (l2-1) ++ "d"
-        vim_call_function "setline"
-          [ ObjectInt (fromIntegral l1)
-          , ObjectArray $ map (ObjectString . BS.pack) (lines newText)
-          ]
-      case m of
-        Right{}          -> return ()
-        Left (show->err) -> errorM err >> vim_report_error' err
+      vim_command' $ "edit " ++ uriToFilePath uri ++ " | "
+                  ++ show l1 ++ "," ++ show (l2-1) ++ "d"
+      void $ vim_call_function' "setline"
+        [ ObjectInt (fromIntegral l1)
+        , ObjectArray $ map (ObjectString . BS.pack) (lines newText)
+        ]
   return True
 
 -- hieが対応していないので後回しで良い
 applyDocumentChanges :: [TextDocumentEdit] -> PluginAction Bool
 applyDocumentChanges _ = errorM "WorkspaceApplyEdit: not implemented for versioned changes"
                       >> return False
-
-{-
-type WorkspaceEdit = Record
-  '[ "changes"         >: Option (Map Uri [TextEdit])
-   , "documentChanges" >: Option [TextDocumentEdit]
-   -- the latter is preffered.
-   -- tell the server whether the client can handle latter in initialize notification.
-   ]
-type TextDocumentEdit = Record
-  '[ "textDocument" >: VersionedTextDocmentIdentifier
-   , "edits"        >: [TextEdit]
-   ]
-type TextEdit = Record
-  '[ "range"   >: Range
-   , "newText" >: String
-   ]
--}
-
 

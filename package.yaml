@@ -59,7 +59,7 @@ tests:
     - lens
     - process
     - unliftio
-  quick:
+  spec:
     source-dirs:   test
     main:          Spec.hs
     dependencies:
