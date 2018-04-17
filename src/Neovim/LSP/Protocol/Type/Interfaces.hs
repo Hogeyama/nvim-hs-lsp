@@ -948,6 +948,21 @@ type CompletionParamsF =
    ]
 type CompletionContext = Value
 
+-- TextDocumentReferences
+---------------------------------------
+type instance RequestParam 'TextDocumentReferencesK = ReferenceParams
+type instance ResResult    'TextDocumentReferencesK = Nullable [Location]
+type instance ResError     'TextDocumentReferencesK = String
+
+type ReferenceParams  = Record ReferenceParamsF
+type ReferenceParamsF =
+  TextDocumentPositionParamsF ++
+  '[ "context" >: ReferenceContext
+   ]
+type ReferenceContext = Record
+  '[ "includeDeclaration" >: Bool
+   ]
+
 -- Misc
 ---------------------------------------
 

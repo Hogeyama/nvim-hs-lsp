@@ -31,7 +31,7 @@ prfClientReq = \case -- {{{
     SCompletionItemResolve           -> notImplemented
     STextDocumentHover               -> Dict
     STextDocumentSignatureHelp       -> Dict
-    STextDocumentReferences          -> notImplemented
+    STextDocumentReferences          -> Dict
     STextDocumentDocumentHighlight   -> notImplemented
     STextDocumentDocumentSymbol      -> notImplemented
     STextDocumentFormatting          -> notImplemented
@@ -73,7 +73,7 @@ prfServerResp = \case  -- {{{
     SCompletionItemResolve           -> notImplemented
     STextDocumentHover               -> Dict
     STextDocumentSignatureHelp       -> Dict
-    STextDocumentReferences          -> notImplemented
+    STextDocumentReferences          -> Dict
     STextDocumentDocumentHighlight   -> notImplemented
     STextDocumentDocumentSymbol      -> notImplemented
     STextDocumentFormatting          -> notImplemented
