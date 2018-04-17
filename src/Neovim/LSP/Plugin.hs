@@ -135,6 +135,8 @@ nvimHsLspExit _ = whenInitialized $ do
 -- Request
 -------------------------------------------------------------------------------
 
+-- Hover
+--------
 nvimHsLspInfo :: CommandArguments -> NeovimLsp ()
 nvimHsLspInfo _ = whenInitialized $ whenAlreadyOpened $ do
   b <- vim_get_current_buffer'
@@ -147,11 +149,16 @@ nvimHsLspHover _ = whenInitialized $ whenAlreadyOpened $ do
   pos <- getNvimPos
   void $ hoverRequest b pos callbackHoverPreview
 
+-- Definition
+-------------
 nvimHsLspDefinition :: CommandArguments -> NeovimLsp ()
 nvimHsLspDefinition _ = whenInitialized $ whenAlreadyOpened $ do
   b <- vim_get_current_buffer'
   pos <- getNvimPos
   void $ definitionRequest b pos callbackDefinition
+
+-- HIE ApplyRefact
+------------------
 
 -- argument: {file: Uri, start_pos: Position}
 nvimHsLspApplyRefactOne :: CommandArguments -> NeovimLsp ()
@@ -164,8 +171,10 @@ nvimHsLspApplyRefactOne _ = whenInitialized $ whenAlreadyOpened $ do
                              ]
   void $ executeCommandRequest "applyrefact:applyOne" (Some [arg]) Nothing
 
--------------------------------------------------------------------------------
+-- Completion
+-------------
 
+-- Sync
 nvimHsLspComplete :: Object -> String
                   -> NeovimLsp (Either Int [VimCompleteItem])
 nvimHsLspComplete findstart base = do
@@ -199,8 +208,7 @@ completionFindStart curLine col =
 completionPos :: String -> NvimPos -> NvimPos
 completionPos base (line, col) = (line, col+length base)
 
---
-
+-- Async
 nvimHsLspAsyncComplete :: Int -> Int -> NeovimLsp ()
 nvimHsLspAsyncComplete lnum col = do
   initialized <- isInitialized
