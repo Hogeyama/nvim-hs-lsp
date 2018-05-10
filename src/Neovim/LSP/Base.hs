@@ -74,7 +74,6 @@ data LspEnv = LspEnv
   , _lspEnvOpenedFiles   :: !(TVar (Map Uri Version))
   , _lspEnvContext       :: !(TVar Context)
   , _lspEnvLoggerName    :: !String
-  , _lspEnvOtherState    :: !OtherState
   }
 
 initialEnvM :: MonadIO m => m LspEnv
@@ -86,7 +85,6 @@ initialEnvM = liftIO $ do
   _lspEnvOpenedFiles   <- newTVarIO M.empty
   _lspEnvContext       <- newTVarIO initialContext
   _lspEnvLoggerName    <- return topLoggerName
-  _lspEnvOtherState    <- return OtherState
   _lspEnvFileType      <- newTVarIO Nothing
   return LspEnv {..}
 
@@ -112,6 +110,7 @@ data Context = Context
   , _lspUniqueVersion :: !Version
   , _lspVersionMap    :: !(Map Uri Version)
   , _lspCallbacks     :: !(Map ID Callback)
+  , _lspOtherState    :: !OtherState
   }
 
 data Callback where
@@ -125,6 +124,9 @@ initialContext = Context
   , _lspUniqueVersion = 0
   , _lspVersionMap    = M.empty
   , _lspCallbacks     = M.empty
+  , _lspOtherState    = OtherState
+                        { _otherStateDiagnosticsMap = M.empty
+                        }
   }
 
 data ServerHandles = ServerHandles
@@ -139,7 +141,8 @@ newtype OtherHandles = OtherHandles
   { unOtherHandles :: [(String, Async ())] } -- (name,_)
 
 data OtherState = OtherState
-  {  }
+  { _otherStateDiagnosticsMap :: !(Map Uri [Diagnostic])
+  }
 
 -------------------------------------------------------------------------------
 -- Plugin
@@ -419,7 +422,7 @@ push x = do
   liftIO $ atomically $ writeTChan outCh $ J.encode x
 
 modifyReadContext :: (MonadReader env m, MonadIO m, HasContext' env)
-              => (Context -> Context) -> (Context -> a) -> m a
+                  => (Context -> Context) -> (Context -> a) -> m a
 modifyReadContext modifier reader = do
   ctxV <- view context
   ctx <- atomically $ do

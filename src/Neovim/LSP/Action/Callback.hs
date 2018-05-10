@@ -20,6 +20,7 @@ import           Neovim                   hiding (Plugin, range)
 import           Neovim.LSP.Base
 import           Neovim.LSP.Protocol.Type
 import           Neovim.LSP.Util
+import Data.Either.Combinators (whenLeft)
 
 -------------------------------------------------------------------------------
 -- Hover
@@ -96,11 +97,12 @@ jumpToLocation loc = do
               , "+call\\ cursor(" ++ show lnum ++ "," ++ show col ++ ")"
               , uriToFilePath uri
               ]
-  vim_command' $ unwords
+  m <- vim_command $ unwords
               [ "edit"
               , "+call\\ cursor(" ++ show lnum ++ "," ++ show col ++ ")"
               , uriToFilePath uri
               ]
+  whenLeft m (\e -> errorM (show e) >> nvimEcho (show e))
 
 textDocumentDefinitionNoInfo ::  String
 textDocumentDefinitionNoInfo = "textDocument/definition: no info"

@@ -39,6 +39,7 @@ library:
   - extra
   - deepseq
   - unliftio
+  - either
 
 tests:
   doctests:

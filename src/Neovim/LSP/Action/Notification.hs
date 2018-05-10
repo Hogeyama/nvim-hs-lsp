@@ -12,8 +12,10 @@ module Neovim.LSP.Action.Notification
   --)
   where
 
+import           Control.Lens
 import           Data.Extensible              (nil, (<!), (@=))
 import           Data.Maybe                   (fromJust)
+import qualified Data.Map                     as M
 
 import           Neovim
 import           Neovim.LSP.Base
@@ -50,33 +52,41 @@ didOpenBuffer b = do
 ---------------------------------------
 didCloseBuffer :: (HasOutChan' env, HasContext' env) => Buffer -> Neovim env ()
 didCloseBuffer b = do
-    tid      <- textDocumentIdentifier <$> getBufUri b
-    let param = #textDocument @= tid <! nil
+    uri <- getBufUri b
+    let param = #textDocument @= textDocumentIdentifier uri
+             <! nil
     push $ notification @'TextDocumentDidCloseK param
+    resetDiagnostics uri
 
 -- TextDocumentDidSave Notification
 ---------------------------------------
-didSaveBuffer :: (HasOutChan' env) => Buffer -> Neovim env ()
+didSaveBuffer :: (HasOutChan' env, HasContext' env) => Buffer -> Neovim env ()
 didSaveBuffer b = do
-    tid      <- textDocumentIdentifier <$> getBufUri b
-    --contents <- getBufContents b
-    let param = #textDocument @= tid
+    uri  <- getBufUri b
+    let param = #textDocument @= textDocumentIdentifier uri
              <! #text         @= None --Some contents
              <! nil
     push $ notification @'TextDocumentDidSaveK param
+    resetDiagnostics uri
 
 -- TextDocumentDidChange Notification
 ---------------------------------------
 didChangeBuffer :: (HasOutChan' env, HasContext' env) => Buffer -> Neovim env ()
 didChangeBuffer b = do
+    uri      <- getBufUri b
     contents <- getBufContents b
-    vtid <- versionedTextDocmentIdentifier <$> getBufUri b <*> genUniqueVersion
+    version  <- genUniqueVersion
     let change = #range       @= None
               <! #rangeLength @= None
               <! #text        @= contents
               <! nil
-        param = #textDocument   @= vtid
+        param = #textDocument   @= versionedTextDocmentIdentifier uri version
              <! #contentChanges @= [change]
              <! nil
     push $ notification @'TextDocumentDidChangeK param
+    resetDiagnostics uri
+
+resetDiagnostics :: HasContext' env => Uri -> Neovim env ()
+resetDiagnostics uri =
+  modifyContext $ over (lspOtherState.diagnosticsMap) $ M.delete uri
 
