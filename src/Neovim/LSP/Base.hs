@@ -21,6 +21,7 @@
 {-# LANGUAGE TypeApplications       #-}
 {-# LANGUAGE TypeOperators          #-}
 {-# LANGUAGE ViewPatterns           #-}
+{-# LANGUAGE StrictData             #-}
 {-# OPTIONS_GHC -Wall               #-}
 
 
@@ -67,14 +68,14 @@ type NeovimLsp = Neovim LspEnv
 
 -- | Enviroment of the main thread.
 data LspEnv = LspEnv
-  { _lspEnvServerHandles :: !(TVar (Maybe ServerHandles))
-  , _lspEnvFileType      :: !(TVar (Maybe String))
-  , _lspEnvOtherHandles  :: !(TVar OtherHandles)
-  ,  lspEnvInChan        :: !(TChan B.ByteString)
-  , _lspEnvOutChan       :: !(TChan B.ByteString)
-  , _lspEnvOpenedFiles   :: !(TVar (Map Uri Version))
-  , _lspEnvContext       :: !(TVar Context)
-  , _lspEnvLoggerName    :: !String
+  { _lspEnvServerHandles :: TVar (Maybe ServerHandles)
+  , _lspEnvFileType      :: TVar (Maybe String)
+  , _lspEnvOtherHandles  :: TVar OtherHandles
+  ,  lspEnvInChan        :: TChan B.ByteString
+  , _lspEnvOutChan       :: TChan B.ByteString
+  , _lspEnvOpenedFiles   :: TVar (Map Uri Version)
+  , _lspEnvContext       :: TVar Context
+  , _lspEnvLoggerName    :: String
   }
 
 initialEnvM :: MonadIO m => m LspEnv
@@ -100,21 +101,21 @@ receiverLoggerName = topLoggerName ++ "." ++ "receive"
 
 -- | Enviroment of each plugin.
 data PluginEnv = PluginEnv
-  { _pluginEnvInChan     :: !(TChan InMessage)
-  , _pluginEnvOutChan    :: !(TChan ByteString)
-  , _pluginEnvContext    :: !(TVar Context)
-  , _pluginEnvLoggerName :: !String
+  { _pluginEnvInChan     :: TChan InMessage
+  , _pluginEnvOutChan    :: TChan ByteString
+  , _pluginEnvContext    :: TVar Context
+  , _pluginEnvLoggerName :: String
   }
 
 -- | Context shared with main thread and all plugins.
 data Context = Context
-  { _lspIdMap         :: !(Map ID ClientRequestMethod)
-  , _lspUniqueID      :: !Int
-  , _lspUniqueVersion :: !Version
-  , _lspVersionMap    :: !(Map Uri Version)
-  , _lspCallbacks     :: !(Map ID Callback)
-  , _lspConfig        :: !LspConfig
-  , _lspOtherState    :: !OtherState
+  { _lspIdMap         :: Map ID ClientRequestMethod
+  , _lspUniqueID      :: Int
+  , _lspUniqueVersion :: Version
+  , _lspVersionMap    :: Map Uri Version
+  , _lspCallbacks     :: Map ID Callback
+  , _lspConfig        :: LspConfig
+  , _lspOtherState    :: OtherState
   }
 
 data Callback where
@@ -137,10 +138,10 @@ initialContext = Context
   }
 
 data ServerHandles = ServerHandles
-  { serverIn  :: !Handle
-  , serverOut :: !Handle
-  , serverErr :: !Handle
-  , serverPH  :: !ProcessHandle
+  { serverIn  :: Handle
+  , serverOut :: Handle
+  , serverErr :: Handle
+  , serverPH  :: ProcessHandle
   }
 
 -- sender, receiver, watcher of serverErr, dispatcher, plugins
@@ -148,7 +149,7 @@ newtype OtherHandles = OtherHandles
   { unOtherHandles :: [(String, Async ())] } -- (name,_)
 
 data OtherState = OtherState
-  { _diagnosticsMap :: !(Map Uri [Diagnostic])
+  { _diagnosticsMap :: Map Uri [Diagnostic]
   }
 
 data LspConfig = LspConfig
@@ -162,14 +163,14 @@ data LspConfig = LspConfig
 type PluginAction = Neovim PluginEnv
 
 data Plugin = Plugin
-  { pluginName   :: !String
-  , pluginAction :: !(PluginAction ())
+  { pluginName   :: String
+  , pluginAction :: PluginAction ()
   }
 
 data InMessage where
-  SomeNoti :: ImplNotification m => !(ServerNotification m) -> InMessage
-  SomeReq  :: ImplRequest      m => !(ServerRequest      m) -> InMessage
-  SomeResp :: ImplResponse     m => !(ServerResponse     m) -> InMessage
+  SomeNoti :: ImplNotification m => ServerNotification m -> InMessage
+  SomeReq  :: ImplRequest      m => ServerRequest      m -> InMessage
+  SomeResp :: ImplResponse     m => ServerResponse     m -> InMessage
 deriving instance Show InMessage
 
 instance J.ToJSON InMessage where
@@ -435,8 +436,8 @@ receiver serverOut chan = forever $ do
              | otherwise          -> Prelude.error $ "unknown input: " ++ show x
 
 data Header = Header
-  { contentLength :: Int -- lazy initialization
-  , contentType   :: !(Maybe String)
+  { contentLength :: ~Int -- lazy initialization
+  , contentType   :: Maybe String
   } deriving (Eq, Show)
 
 
