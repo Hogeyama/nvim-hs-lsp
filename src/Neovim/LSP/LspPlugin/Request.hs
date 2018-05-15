@@ -1,12 +1,5 @@
 
-{-# LANGUAGE DataKinds                 #-}
-{-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE GADTs                     #-}
-{-# LANGUAGE OverloadedLabels          #-}
-{-# LANGUAGE OverloadedStrings         #-}
-{-# LANGUAGE ScopedTypeVariables       #-}
-{-# LANGUAGE TypeApplications          #-}
-{-# OPTIONS_GHC -Wall                  #-}
+{-# OPTIONS_GHC -Wall #-}
 
 module Neovim.LSP.LspPlugin.Request
   ( requestHandler

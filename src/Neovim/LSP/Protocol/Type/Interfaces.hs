@@ -1,23 +1,8 @@
-{-# LANGUAGE ConstraintKinds        #-}
-{-# LANGUAGE DataKinds              #-}
-{-# LANGUAGE DeriveAnyClass         #-}
+
 {-# LANGUAGE DeriveGeneric          #-}
+{-# LANGUAGE DeriveAnyClass         #-}
 {-# LANGUAGE EmptyCase              #-}
-{-# LANGUAGE EmptyDataDecls         #-}
-{-# LANGUAGE FlexibleContexts       #-}
-{-# LANGUAGE GADTs                  #-}
-{-# LANGUAGE LambdaCase             #-}
-{-# LANGUAGE OverloadedLabels       #-}
-{-# LANGUAGE OverloadedStrings      #-}
-{-# LANGUAGE PolyKinds              #-}
-{-# LANGUAGE ScopedTypeVariables    #-}
-{-# LANGUAGE StandaloneDeriving     #-}
-{-# LANGUAGE TypeApplications       #-}
-{-# LANGUAGE TypeFamilies           #-}
-{-# LANGUAGE TypeFamilyDependencies #-}
-{-# LANGUAGE TypeOperators          #-}
 {-# LANGUAGE UndecidableInstances   #-}
-  -- (++)とJSONのderivingに必要．JSONの方はどうにかなるかも？
 {-# OPTIONS_GHC -Wall               #-}
 
 module Neovim.LSP.Protocol.Type.Interfaces

@@ -1,16 +1,5 @@
 
-{-# LANGUAGE ConstraintKinds        #-}
-{-# LANGUAGE DataKinds              #-}
-{-# LANGUAGE FlexibleContexts       #-}
-{-# LANGUAGE GADTs                  #-}
-{-# LANGUAGE LambdaCase             #-}
-{-# LANGUAGE MultiParamTypeClasses  #-}
-{-# LANGUAGE OverloadedStrings      #-}
-{-# LANGUAGE TypeFamilies           #-}
-{-# LANGUAGE TypeFamilyDependencies #-}
-{-# LANGUAGE TypeOperators          #-}
-{-# LANGUAGE AutoDeriveTypeable     #-}
-{-# OPTIONS_GHC -Wall               #-}
+{-# OPTIONS_GHC -Wall #-}
 
 -- TODO
 -- FromJSONでmiscを扱うとき，Requestとして処理するかNotificationとして処理するかはどう決める？

@@ -1,29 +1,6 @@
 
-{-# LANGUAGE BangPatterns           #-}
-{-# LANGUAGE ConstraintKinds        #-}
-{-# LANGUAGE DataKinds              #-}
-{-# LANGUAGE ExplicitForAll         #-}
-{-# LANGUAGE FlexibleContexts       #-}
-{-# LANGUAGE FlexibleInstances      #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE GADTs                  #-}
-{-# LANGUAGE LambdaCase             #-}
-{-# LANGUAGE MultiParamTypeClasses  #-}
-{-# LANGUAGE MultiWayIf             #-}
-{-# LANGUAGE OverloadedStrings      #-}
-{-# LANGUAGE PolyKinds              #-}
-{-# LANGUAGE RankNTypes             #-}
-{-# LANGUAGE RecordWildCards        #-}
-{-# LANGUAGE ScopedTypeVariables    #-}
-{-# LANGUAGE StandaloneDeriving     #-}
-{-# LANGUAGE TemplateHaskell        #-}
-{-# LANGUAGE TupleSections          #-}
-{-# LANGUAGE TypeApplications       #-}
-{-# LANGUAGE TypeOperators          #-}
-{-# LANGUAGE ViewPatterns           #-}
-{-# LANGUAGE StrictData             #-}
-{-# OPTIONS_GHC -Wall               #-}
-
+{-# LANGUAGE TemplateHaskell #-}
+{-# OPTIONS_GHC -Wall        #-}
 
 module Neovim.LSP.Base where
 

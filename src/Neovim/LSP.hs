@@ -1,6 +1,5 @@
 
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE OverloadedStrings #-}
 
 module Neovim.LSP (plugin) where
 

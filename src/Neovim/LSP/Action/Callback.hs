@@ -1,13 +1,5 @@
 
-{-# LANGUAGE DataKinds                 #-}
-{-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE FlexibleContexts          #-}
-{-# LANGUAGE GADTs                     #-}
-{-# LANGUAGE LambdaCase                #-}
-{-# LANGUAGE OverloadedLabels          #-}
-{-# LANGUAGE ScopedTypeVariables       #-}
-{-# LANGUAGE TypeOperators             #-}
-{-# OPTIONS_GHC -Wall                  #-}
+{-# OPTIONS_GHC -Wall #-}
 
 module Neovim.LSP.Action.Callback where
 

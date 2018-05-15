@@ -1,6 +1,4 @@
 
-{-# LANGUAGE DataKinds        #-}
-{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TemplateHaskell  #-}
 {-# OPTIONS_GHC -Wno-simplifiable-class-constraints #-}
 

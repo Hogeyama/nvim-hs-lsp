@@ -1,23 +1,10 @@
 
-{-# LANGUAGE ConstraintKinds       #-}
-{-# LANGUAGE DataKinds             #-}
-{-# LANGUAGE DeriveAnyClass        #-}
-{-# LANGUAGE DeriveGeneric         #-}
-{-# LANGUAGE DeriveFunctor         #-}
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE FlexibleInstances     #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE PolyKinds             #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE TypeApplications      #-}
-{-# LANGUAGE TypeFamilies          #-}
-{-# LANGUAGE TypeOperators         #-}
-{-# LANGUAGE UndecidableInstances  #-}
-{-# OPTIONS_GHC -Wall              #-}
-{-# OPTIONS_GHC -Wno-orphans       #-}
-
--- cf. https://github.com/fumieval/extensible/blob/master/examples/aeson.hs
+{-# LANGUAGE DeriveAnyClass       #-}
+{-# LANGUAGE DeriveFunctor        #-}
+{-# LANGUAGE DeriveGeneric        #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -Wall             #-}
+{-# OPTIONS_GHC -Wno-orphans      #-}
 
 module Neovim.LSP.Protocol.Type.Instance
   ( Option(..)

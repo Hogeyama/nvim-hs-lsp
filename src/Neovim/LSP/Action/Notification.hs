@@ -1,11 +1,5 @@
 
-{-# LANGUAGE DataKinds                 #-}
-{-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE FlexibleContexts          #-}
-{-# LANGUAGE OverloadedLabels          #-}
-{-# LANGUAGE ScopedTypeVariables       #-}
-{-# LANGUAGE TypeApplications          #-}
-{-# OPTIONS_GHC -Wall                  #-}
+{-# OPTIONS_GHC -Wall #-}
 
 module Neovim.LSP.Action.Notification
   --(

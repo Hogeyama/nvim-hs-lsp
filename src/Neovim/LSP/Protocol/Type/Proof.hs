@@ -1,10 +1,3 @@
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE DataKinds       #-}
-{-# LANGUAGE ExplicitForAll  #-}
-{-# LANGUAGE GADTs           #-}
-{-# LANGUAGE KindSignatures  #-}
-{-# LANGUAGE LambdaCase      #-}
-{-# LANGUAGE TypeOperators   #-}
 
 module Neovim.LSP.Protocol.Type.Proof
   ( prfClientReq

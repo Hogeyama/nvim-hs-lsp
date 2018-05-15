@@ -1,13 +1,5 @@
 
-{-# LANGUAGE DataKinds                 #-}
-{-# LANGUAGE ExistentialQuantification #-}
-{-# LANGUAGE FlexibleContexts          #-}
-{-# LANGUAGE GADTs                     #-}
-{-# LANGUAGE OverloadedLabels          #-}
-{-# LANGUAGE OverloadedStrings         #-}
-{-# LANGUAGE ScopedTypeVariables       #-}
-{-# LANGUAGE TypeOperators             #-}
-{-# OPTIONS_GHC -Wall                  #-}
+{-# OPTIONS_GHC -Wall #-}
 
 module Neovim.LSP.LspPlugin.Notification
   ( notificationHandler

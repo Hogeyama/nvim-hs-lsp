@@ -1,6 +1,36 @@
 name:                nvim-hs-lsp
 version:             0.1.0.0
 
+default-extensions:
+- AutoDeriveTypeable
+- BangPatterns
+- ConstraintKinds
+- DefaultSignatures
+- DataKinds
+- FlexibleContexts
+- FlexibleInstances
+- FunctionalDependencies
+- GADTs
+- InstanceSigs
+- KindSignatures
+- LambdaCase
+- MultiParamTypeClasses
+- MultiWayIf
+- OverloadedLabels
+- OverloadedStrings
+- PatternSynonyms
+- PolyKinds
+- RankNTypes
+- RecordWildCards
+- ScopedTypeVariables
+- StandaloneDeriving
+- StrictData
+- TupleSections
+- TypeApplications
+- TypeFamilies
+- TypeFamilyDependencies
+- TypeOperators
+- ViewPatterns
 
 custom-setup:
   dependencies:

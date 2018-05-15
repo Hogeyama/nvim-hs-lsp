@@ -1,10 +1,4 @@
-{-# LANGUAGE DataKinds           #-}
-{-# LANGUAGE LambdaCase          #-}
-{-# LANGUAGE OverloadedLabels    #-}
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE TypeApplications    #-}
-{-# LANGUAGE TypeOperators       #-}
-{-# LANGUAGE ScopedTypeVariables #-}
+
 {-# OPTIONS_GHC -Wall            #-}
 
 module Neovim.LSP.Plugin where
