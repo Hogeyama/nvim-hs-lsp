@@ -6,7 +6,8 @@ module Neovim.LSP.Action.Notification
   --)
   where
 
-import           Control.Lens
+import           RIO
+
 import           Data.Extensible              (nil, (<!), (@=))
 import           Data.Maybe                   (fromJust)
 import qualified Data.Map                     as M

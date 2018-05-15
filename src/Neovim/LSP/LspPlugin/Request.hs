@@ -6,6 +6,8 @@ module Neovim.LSP.LspPlugin.Request
   )
   where
 
+import           RIO                          hiding ((^.))
+
 import           Control.Lens.Operators
 import           Control.Monad                (forM_, forever)
 import qualified Data.ByteString.Char8        as BS

@@ -16,6 +16,7 @@ default-extensions:
 - LambdaCase
 - MultiParamTypeClasses
 - MultiWayIf
+- NoImplicitPrelude
 - OverloadedLabels
 - OverloadedStrings
 - PatternSynonyms
@@ -41,6 +42,7 @@ custom-setup:
 
 dependencies:
 - base >= 4.7 && < 5
+- rio
 
 library:
   source-dirs: src

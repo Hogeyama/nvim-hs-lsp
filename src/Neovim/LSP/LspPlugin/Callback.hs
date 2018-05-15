@@ -3,10 +3,11 @@
 
 module Neovim.LSP.LspPlugin.Callback where
 
-import           Control.Lens
+import           RIO
+
+--import           Control.Lens
 import           Control.Monad            (forever)
 import           Data.Typeable            (cast, typeOf)
-import           UnliftIO
 
 import           Neovim                   (vim_report_error')
 import           Neovim.LSP.Base

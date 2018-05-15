@@ -3,9 +3,10 @@
 
 module Neovim.LSP.Action.Request where
 
+import           RIO
+
 import           Data.Aeson
 import           Data.Extensible
-import           UnliftIO
 
 import           Neovim
 import           Neovim.LSP.Base

@@ -13,8 +13,9 @@ module Neovim.LSP.Protocol.Type.Instance
   , FieldJSON
   ) where
 
+import           RIO
+
 import           Control.Applicative   ((<|>))
-import           Control.DeepSeq
 import           Data.Aeson            hiding (KeyValue, Object)
 import qualified Data.Aeson.Types      as J
 import           Data.Extensible       hiding (Nullable)

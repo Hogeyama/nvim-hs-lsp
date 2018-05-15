@@ -4,6 +4,8 @@
 -- BuildMessageとかのほうがいいかしら
 module Neovim.LSP.Protocol.Messages where
 
+import           RIO
+
 import           Data.Extensible          hiding (Nullable)
 import           Data.Singletons
 

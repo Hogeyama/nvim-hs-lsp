@@ -4,6 +4,8 @@
 
 module Neovim.LSP.Protocol.Type.Key where
 
+import           RIO
+
 import           Data.Extensible (mkField)
 
 -- OverloadedLabelsはチェインさせると型推論に失敗するので

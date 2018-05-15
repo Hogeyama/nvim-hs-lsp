@@ -1,6 +1,7 @@
 
 module Main where
 
+import           RIO
 import           Build_doctests (flags, module_sources, pkgs)
 import           Data.Foldable  (traverse_)
 import           Test.DocTest   (doctest)

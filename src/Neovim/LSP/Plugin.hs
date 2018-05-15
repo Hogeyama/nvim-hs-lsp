@@ -3,7 +3,8 @@
 
 module Neovim.LSP.Plugin where
 
-import           Control.Lens                      (view)
+import           RIO
+
 import           Control.Monad                     (unless, void, when)
 import           Control.Monad.Extra               (ifM, whenJust)
 import           Data.Aeson                        hiding (Object)
@@ -12,7 +13,7 @@ import           Data.Char                         (isAlphaNum)
 import           Data.List                         (isPrefixOf, partition)
 import qualified Data.Map                          as M
 
-import           Neovim
+import           Neovim                            hiding (whenM, unlessM)
 
 import           Neovim.LSP.Action.Notification
 import           Neovim.LSP.Action.Request
@@ -181,7 +182,8 @@ nvimHsLspComplete findstart base = do
   else do
     let findStart = case findstart of
           ObjectInt n -> n
-          ObjectString s -> read (B.unpack s)
+          ObjectString s
+            | Just n <- readMaybe (B.unpack s) -> n
           _ -> error "流石にここに来たら怒っていいよね"
     if findStart == 1 then do
       s   <- nvim_get_current_line'

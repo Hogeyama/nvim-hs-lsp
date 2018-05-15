@@ -7,16 +7,14 @@
 
 module Neovim.LSP.PluginSpec where
 
-import           UnliftIO
+import           RIO
+import           RIO.List.Partial (tail)
 import           Test.Hspec
 import           Data.Extensible
---import           Neovim.Test
 import           Neovim.Test_
 import           Neovim.Context.Internal
 
 import           Neovim
-
-import           GHC.Conc                          (threadDelay)
 
 import           Neovim.LSP.Action.Notification    (didChangeBuffer, didOpenBuffer)
 import           Neovim.LSP.Action.Request
@@ -174,5 +172,5 @@ threadDelaySec :: MonadIO m => Int -> m ()
 threadDelaySec n = liftIO $ threadDelay (n * 1000 * 1000)
 
 print' :: Show a => a -> Neovim env ()
-print' x = liftIO $ print x
+print' x = liftIO $ hPutBuilder stdout (getUtf8Builder (displayShow x))
 

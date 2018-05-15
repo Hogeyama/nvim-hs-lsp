@@ -6,13 +6,12 @@
 
 module Main where
 
-import           UnliftIO
+import           RIO
 import           Control.Concurrent.STM
 import           Control.Lens                      (use)
 import           Control.Lens.Operators
 import           Control.Monad                     (forever)
 import           Control.Monad.IO.Class            (MonadIO)
-import           GHC.Conc                          (threadDelay)
 import           System.Environment                (unsetEnv)
 import           System.IO                         (hGetLine, stdout)
 import           System.Process                    (terminateProcess)
@@ -94,5 +93,5 @@ threadDelaySec :: MonadIO m => Int -> m ()
 threadDelaySec n = liftIO $ threadDelay (n * 1000 * 1000)
 
 print' :: Show a => a -> Neovim env ()
-print' x = liftIO $ print x
+print' x = liftIO $ hPutBuilder stdout (getUtf8Builder (displayShow x))
 

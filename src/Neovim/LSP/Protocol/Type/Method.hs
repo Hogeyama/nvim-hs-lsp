@@ -14,6 +14,8 @@ module Neovim.LSP.Protocol.Type.Method
   )
   where
 
+import           RIO
+
 import           Data.Aeson
 import           Data.Singletons.TH
 import           Data.Singletons.TypeLits

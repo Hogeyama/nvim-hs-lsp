@@ -4,6 +4,8 @@
 
 module Neovim.Test_ where
 
+import           RIO
+
 import           Neovim
 import qualified Neovim.Context.Internal                   as Internal
 import           Neovim.RPC.Common                         (newRPCConfig)
@@ -15,7 +17,6 @@ import           Control.Monad.Trans.Resource              (runResourceT)
 import           System.Exit                               (ExitCode (..))
 import           System.Process                            hiding (env)
 import           UnliftIO
-import Control.Concurrent (threadDelay)
 
 newtype Seconds = Seconds Word
 
@@ -80,6 +81,5 @@ waitForProcess' ph = getProcessExitCode ph >>= \case
 
 
 debug :: MonadIO m => String -> m ()
-{-debug = const $ return ()-}
-debug s = liftIO $ putStrLn s >> hFlush stdout
+debug s = liftIO $ hPutBuilder stderr (fromString s)
 

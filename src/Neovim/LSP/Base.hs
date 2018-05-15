@@ -4,14 +4,17 @@
 
 module Neovim.LSP.Base where
 
-import           Control.DeepSeq            (NFData)
-import           Control.Lens               hiding (Context)
+import           RIO                        hiding(Lens', view)
+import qualified RIO.ByteString             as BS
+import qualified RIO.ByteString.Lazy        as BL
+import           RIO.List.Partial           (init)
+import           Prelude                    (read, succ)
+
+import           Control.Lens               hiding (Context)--(makeLenses, makeLensesWith, camelCaseFields, Lens')
 import           Control.Monad              ((>=>), forM, forM_, forever)
 import           Control.Monad.IO.Class     (MonadIO, liftIO)
 import           Control.Monad.Reader.Class (MonadReader, ask)
 import qualified Data.Aeson                 as J
-import           Data.ByteString.Lazy.Char8 (ByteString)
-import qualified Data.ByteString.Lazy.Char8 as B
 import           Data.Constraint            (withDict)
 import qualified Data.HashMap.Strict        as HM
 import           Data.List                  (isPrefixOf)
@@ -30,7 +33,6 @@ import qualified System.Log.Logger          as L
 import           System.Process             (CreateProcess (..), ProcessHandle,
                                              StdStream (..), createProcess,
                                              proc, terminateProcess)
-import           UnliftIO
 
 import           Neovim                     hiding (Plugin)
 import qualified Neovim.Context.Internal    as Internal
@@ -48,8 +50,8 @@ data LspEnv = LspEnv
   { _lspEnvServerHandles :: TVar (Maybe ServerHandles)
   , _lspEnvFileType      :: TVar (Maybe String)
   , _lspEnvOtherHandles  :: TVar OtherHandles
-  ,  lspEnvInChan        :: TChan B.ByteString
-  , _lspEnvOutChan       :: TChan B.ByteString
+  ,  lspEnvInChan        :: TChan ByteString
+  , _lspEnvOutChan       :: TChan ByteString
   , _lspEnvOpenedFiles   :: TVar (Map Uri Version)
   , _lspEnvContext       :: TVar Context
   , _lspEnvLoggerName    :: String
@@ -207,7 +209,7 @@ resultEither (J.Error e)   = Left e
 makeLensesWith camelCaseFields ''LspEnv
 makeLensesWith camelCaseFields ''PluginEnv
 type HasInChan'        env = HasInChan        env (TChan InMessage)
-type HasOutChan'       env = HasOutChan       env (TChan B.ByteString)
+type HasOutChan'       env = HasOutChan       env (TChan ByteString)
 type HasContext'       env = HasContext       env (TVar  Context)
 type HasOpenedFiles'   env = HasOpenedFiles   env (TVar  (Map Uri Version))
 type HasOtherHandles'  env = HasOtherHandles  env (TVar  OtherHandles)
@@ -375,31 +377,33 @@ setLogLevel p = view loggerName >>= liftIO . (L.updateGlobalLogger `flip` L.setL
 -- Communication with Server
 -------------------------------------------------------------------------------
 
-sender :: Handle -> TChan B.ByteString -> IO ()
+sender :: Handle -> TChan ByteString -> IO ()
 sender serverIn chan = forever $ do
   bs <- atomically $ readTChan chan
-  B.hPutStr serverIn $ B.concat
+  hPutBuilder serverIn $ getUtf8Builder $ mconcat
       [ "Content-Length: "
-      , B.pack $ show $ B.length bs
+      , displayShow $ BS.length bs
       , "\r\n\r\n"
-      , bs
+      , displayBytesUtf8 bs
       ]
-  L.debugM senderLoggerName $ "=> " ++ B.unpack bs
+  --L.debugM senderLoggerName $ "=> " ++ B.unpack bs TODO
+  L.debugM senderLoggerName $ "=> " ++ show bs
 
-receiver :: Handle -> TChan B.ByteString -> IO ()
+receiver :: Handle -> TChan ByteString -> IO ()
 receiver serverOut chan = forever $ do
     v <- receive serverOut
     atomically $ writeTChan chan v
   where
-    receive :: Handle -> IO B.ByteString
+    receive :: Handle -> IO ByteString
     receive h = do
       len <- contentLength <$> readHeader h
-      content <- B.hGet h len
-      L.debugM receiverLoggerName $ "<= " ++ B.unpack content
+      content <- BS.hGet h len
+      --L.debugM receiverLoggerName $ "<= " ++ B.unpack content
+      L.debugM receiverLoggerName $ "<= " ++ show content
       return content
 
     readHeader :: Handle -> IO Header
-    readHeader h = go Header { contentLength = Prelude.error "broken header"
+    readHeader h = go Header { contentLength = error "broken header"
                              , contentType   = Nothing }
       where
         go header = do
@@ -410,7 +414,7 @@ receiver serverOut chan = forever $ do
                   go $ header { contentType = Just (drop 14 x) }
              | "\r" == x          -> return header
              | "ExitSuccess" == x -> exitSuccess -- TODO hieだけだよね，これ
-             | otherwise          -> Prelude.error $ "unknown input: " ++ show x
+             | otherwise          -> error $ "unknown input: " ++ show x
 
 data Header = Header
   { contentLength :: ~Int -- lazy initialization
@@ -428,7 +432,7 @@ pull = liftIO . atomically . readTChan =<< view inChan
 push :: (HasOutChan' env, J.ToJSON a, Show a) => a -> Neovim env ()
 push x = do
   outCh <- view outChan
-  liftIO $ atomically $ writeTChan outCh $ J.encode x
+  liftIO $ atomically $ writeTChan outCh $ BL.toStrict (J.encode x)
 
 modifyReadContext :: (MonadReader env m, MonadIO m, HasContext' env)
                   => (Context -> Context) -> (Context -> a) -> m a
@@ -511,13 +515,13 @@ dispatch hs = do
 
     dispatcher <- async $ loggingError $ forever $ do
       rawInput <- atomically (readTChan inChG)
-      let Just !v = J.decode rawInput
+      let Just !v = J.decode (BL.fromStrict rawInput)
       idMap <- view lspIdMap <$> readTVarIO ctx
       case toInMessage idMap v of
         Right !msg -> forM_ inChs $ atomically . flip writeTChan msg
         Left e -> errorM $ init $ unlines
             [ "dispatcher: could not parse input."
-            , "input: " ++ B.unpack rawInput
+            --, "input: " ++ B.unpack rawInput
             , "error: " ++ e
             ]
     registerAsyncHandle "dispatcher" dispatcher

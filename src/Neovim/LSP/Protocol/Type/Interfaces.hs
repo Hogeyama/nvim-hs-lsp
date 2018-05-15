@@ -85,6 +85,10 @@ module Neovim.LSP.Protocol.Type.Interfaces
   )
   where
 
+import           RIO                               hiding (Void)
+import           RIO.List.Partial                  (tail)
+import           Prelude                           (Enum(toEnum))
+
 import           Control.Monad                     (mzero)
 import           Data.Aeson                        hiding (Error)
 import           Data.Aeson.Types                  (toJSONKeyText)
@@ -96,7 +100,6 @@ import           Data.Map                          (Map)
 import           Data.Singletons                   (SingI, SingKind (..))
 import           Data.Text                         (Text)
 import qualified Data.Text                         as T
-import           Data.Typeable
 import           GHC.Generics                      (Generic)
 import           Neovim.LSP.Protocol.Type.Instance
 import           Neovim.LSP.Protocol.Type.Method

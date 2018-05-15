@@ -3,8 +3,9 @@
 
 module Neovim.LSP.Action.Callback where
 
-import           UnliftIO
-import           Control.Lens
+import           RIO
+import           RIO.List.Partial         (head)
+
 import           Data.Extensible
 import qualified Data.Text                as T
 
@@ -25,7 +26,7 @@ callbackHoverPreview (Response resp) = do
     Nothing -> nvimEcho textDocumentHoverNoInfo
     Just r -> do
       let content = stringOfHoverContents (r^. #contents)
-      liftIO $ writeFile "/tmp/nvim-hs-lsp.preview" content
+      writeFileUtf8Builder "/tmp/nvim-hs-lsp.preview" (fromString content)
       vim_command' "pedit /tmp/nvim-hs-lsp.preview"
 
 callbackHover :: CallbackOf 'TextDocumentHoverK ()

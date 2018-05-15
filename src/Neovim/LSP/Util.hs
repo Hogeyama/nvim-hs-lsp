@@ -4,7 +4,8 @@
 
 module Neovim.LSP.Util where
 
-import           Control.Lens                 (view)
+import           RIO                          hiding ((^.))
+
 import           Control.Lens.Operators
 import           Data.Extensible
 import           Data.Function                (on)
@@ -14,7 +15,6 @@ import qualified Data.Text                    as T
 import           Data.Map                     (Map)
 import qualified Data.Map                     as M
 import           Data.Singletons
-import           UnliftIO
 
 import           Neovim
 import           Neovim.LSP.Base

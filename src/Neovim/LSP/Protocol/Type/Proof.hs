@@ -8,6 +8,8 @@ module Neovim.LSP.Protocol.Type.Proof
   , prfServerResp
   ) where
 
+import           RIO
+
 import           Data.Constraint
 import           Data.Singletons.TypeLits
 import           Neovim.LSP.Protocol.Type.Interfaces

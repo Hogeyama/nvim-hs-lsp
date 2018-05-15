@@ -3,6 +3,7 @@
 
 module Neovim.LSP (plugin) where
 
+import RIO
 import Neovim
 import Neovim.LSP.Base        hiding (Plugin)
 import Neovim.LSP.Plugin

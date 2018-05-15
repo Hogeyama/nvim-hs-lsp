@@ -6,12 +6,13 @@ module Neovim.LSP.LspPlugin.Notification
   )
   where
 
-import           Control.Lens
+import           RIO
+
 import           Control.Monad            (forever)
 import qualified Data.Map                 as M
 import qualified System.Log.Logger        as L
 
-import           Neovim                   hiding (Plugin)
+import           Neovim                   hiding (Plugin, whenM)
 import           Neovim.LSP.Base
 import           Neovim.LSP.Util
 import           Neovim.LSP.Protocol.Type
