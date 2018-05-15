@@ -28,7 +28,7 @@ module Neovim.LSP.Base where
 
 import           Control.DeepSeq            (NFData)
 import           Control.Lens               hiding (Context)
-import           Control.Monad              (forM, forM_, forever)
+import           Control.Monad              ((>=>), forM, forM_, forever)
 import           Control.Monad.IO.Class     (MonadIO, liftIO)
 import           Control.Monad.Reader.Class (MonadReader, ask)
 import qualified Data.Aeson                 as J
@@ -65,6 +65,7 @@ import           Neovim.LSP.Protocol.Type
 
 type NeovimLsp = Neovim LspEnv
 
+-- | Enviroment of the main thread.
 data LspEnv = LspEnv
   { _lspEnvServerHandles :: !(TVar (Maybe ServerHandles))
   , _lspEnvFileType      :: !(TVar (Maybe String))
@@ -97,6 +98,7 @@ senderLoggerName = topLoggerName ++ "." ++ "send"
 receiverLoggerName :: String
 receiverLoggerName = topLoggerName ++ "." ++ "receive"
 
+-- | Enviroment of each plugin.
 data PluginEnv = PluginEnv
   { _pluginEnvInChan     :: !(TChan InMessage)
   , _pluginEnvOutChan    :: !(TChan ByteString)
@@ -104,12 +106,14 @@ data PluginEnv = PluginEnv
   , _pluginEnvLoggerName :: !String
   }
 
+-- | Context shared with main thread and all plugins.
 data Context = Context
   { _lspIdMap         :: !(Map ID ClientRequestMethod)
   , _lspUniqueID      :: !Int
   , _lspUniqueVersion :: !Version
   , _lspVersionMap    :: !(Map Uri Version)
   , _lspCallbacks     :: !(Map ID Callback)
+  , _lspConfig        :: !LspConfig
   , _lspOtherState    :: !OtherState
   }
 
@@ -124,9 +128,12 @@ initialContext = Context
   , _lspUniqueVersion = 0
   , _lspVersionMap    = M.empty
   , _lspCallbacks     = M.empty
+  , _lspConfig        = LspConfig
+                      { _autoLoadQuickfix = False
+                      }
   , _lspOtherState    = OtherState
-                        { _otherStateDiagnosticsMap = M.empty
-                        }
+                      { _diagnosticsMap = M.empty
+                      }
   }
 
 data ServerHandles = ServerHandles
@@ -141,7 +148,11 @@ newtype OtherHandles = OtherHandles
   { unOtherHandles :: [(String, Async ())] } -- (name,_)
 
 data OtherState = OtherState
-  { _otherStateDiagnosticsMap :: !(Map Uri [Diagnostic])
+  { _diagnosticsMap :: !(Map Uri [Diagnostic])
+  }
+
+data LspConfig = LspConfig
+  { _autoLoadQuickfix :: Bool
   }
 
 -------------------------------------------------------------------------------
@@ -215,11 +226,8 @@ resultEither (J.Error e)   = Left e
 -------------------------------------------------------------------------------
 -- Lens
 -------------------------------------------------------------------------------
-makeLenses ''Context
 makeLensesWith camelCaseFields ''LspEnv
 makeLensesWith camelCaseFields ''PluginEnv
-makeLensesWith camelCaseFields ''OtherState
-
 type HasInChan'        env = HasInChan        env (TChan InMessage)
 type HasOutChan'       env = HasOutChan       env (TChan B.ByteString)
 type HasContext'       env = HasContext       env (TVar  Context)
@@ -227,6 +235,10 @@ type HasOpenedFiles'   env = HasOpenedFiles   env (TVar  (Map Uri Version))
 type HasOtherHandles'  env = HasOtherHandles  env (TVar  OtherHandles)
 type HasServerHandles' env = HasServerHandles env (TVar  (Maybe ServerHandles))
 type HasLoggerName'    env = HasLoggerName    env String
+
+makeLenses ''Context
+makeLenses ''OtherState
+makeLenses ''LspConfig
 
 useTV :: (MonadReader r m, MonadIO m) => Lens' r (TVar a) -> m a
 useTV getter = liftIO . readTVarIO =<< view getter
@@ -282,6 +294,7 @@ initializeLsp cmd args = do
   registerAsyncHandle "sender" =<< async (liftIO (sender hin outCh))
   registerAsyncHandle "receiver" =<< async (liftIO (receiver hout inCh))
   registerAsyncHandle "herr-watcher" =<< async (watcher herr)
+  loadLspConfig
   infoM $ unlines
       [ ""
       , "＿人人人人人人＿"
@@ -301,6 +314,25 @@ initializeLsp cmd args = do
         liftIO $ L.errorM topLoggerName msg
         vim_report_error' msg
 
+loadLspConfig :: HasContext' env => Neovim env ()
+loadLspConfig = do
+  before <- readContext $ view lspConfig
+  after <- updateLspConfig before
+  modifyContext $ lspConfig .~ after
+
+updateLspConfig :: LspConfig -> Neovim env LspConfig
+updateLspConfig =
+    update "NvimHsLsp_autoLoadQuickfix" (\o -> autoLoadQuickfix .~ toBool o) >=>
+    return
+  where
+    update var f before = vim_get_var var >>= \case
+      Right o -> return $ f o before
+      Left _ -> return before
+
+    toBool (fromObject @Bool -> Right b) = b
+    toBool (fromObject @Int  -> Right 0) = False
+    toBool _ = True
+
 isInitialized :: NeovimLsp Bool
 isInitialized = usesTV serverHandles isJust
 
@@ -311,7 +343,6 @@ registerAsyncHandle :: (MonadReader env m, MonadIO m, HasOtherHandles' env)
                     => String -> Async () -> m ()
 registerAsyncHandle name a =
   otherHandles %== (\(OtherHandles hs) -> OtherHandles ((name,a):hs))
-
 
 -------------------------------------------------------------------------------
 -- Finalize
@@ -501,16 +532,16 @@ dispatch hs = do
       return inCh
 
     dispatcher <- async $ loggingError $ forever $ do
-        rawInput <- atomically (readTChan inChG)
-        let Just !v = J.decode rawInput
-        idMap <- view lspIdMap <$> readTVarIO ctx
-        case toInMessage idMap v of
-          Right !msg -> forM_ inChs $ atomically . flip writeTChan msg
-          Left e -> errorM $ init $ unlines
-              [ "dispatcher: could not parse input."
-              , "input: " ++ B.unpack rawInput
-              , "error: " ++ e
-              ]
+      rawInput <- atomically (readTChan inChG)
+      let Just !v = J.decode rawInput
+      idMap <- view lspIdMap <$> readTVarIO ctx
+      case toInMessage idMap v of
+        Right !msg -> forM_ inChs $ atomically . flip writeTChan msg
+        Left e -> errorM $ init $ unlines
+            [ "dispatcher: could not parse input."
+            , "input: " ++ B.unpack rawInput
+            , "error: " ++ e
+            ]
     registerAsyncHandle "dispatcher" dispatcher
 
 -------------------------------------------------------------------------------

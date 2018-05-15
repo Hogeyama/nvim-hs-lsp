@@ -16,14 +16,12 @@ module Neovim.LSP.LspPlugin.Notification
 
 import           Control.Lens
 import           Control.Monad            (forever)
-import           Data.Extensible
-import           Data.Function            (on)
-import           Data.List                (sortBy)
-import qualified Data.Text                as T
+import qualified Data.Map                 as M
 import qualified System.Log.Logger        as L
 
 import           Neovim                   hiding (Plugin)
 import           Neovim.LSP.Base
+import           Neovim.LSP.Util
 import           Neovim.LSP.Protocol.Type
 
 notificationHandler :: Plugin
@@ -60,53 +58,16 @@ showDiagnotics (Notification noti) = do
     let params      = noti^. #params
         uri         = params^. #uri
         diagnostics = params^. #diagnostics
-        qfItems     = concatMap (diagnosticToQfItems uri)
-                        $ sortBy (compare `on` (^. #severity)) diagnostics
-    replaceQfList qfItems
+    modifyContext $
+      over (lspOtherState.diagnosticsMap) $
+      M.insert uri diagnostics
 
--------------------------------------------------------------------------------
-
-type QfItem = Record
-  '[ "filename" >: Option String
-   , "lnum"     >: Option Int
-   , "col"      >: Option Int
-   , "type"     >: Option String
-   , "text"     >: String
-   , "valid"    >: Option Bool
-   ]
-
-replaceQfList :: [QfItem] -> Neovim env ()
-replaceQfList qs = void $ vim_call_function "setqflist" $ qs +: ['r'] +: []
-
-diagnosticToQfItems :: Uri -> Diagnostic -> [QfItem]
-diagnosticToQfItems uri d = header : rest
-  where
-    header = #filename @= Some (uriToFilePath uri)
-          <! #lnum     @= Some lnum
-          <! #col      @= Some col
-          <! #type     @= Some errorType
-          <! #text     @= text
-          <! #valid    @= Some True
-          <! nil
-      where
-        start = d^. (#range :: FieldOptic "range") . #start
-        lnum = 1 + start^. #line
-        col  = 1 + start^. #character
-        errorType = case d^. #severity of
-            Some Error        -> "E"
-            Some Warning      -> "W"
-            Some Information  -> "I"
-            Some Hint         -> "I"
-            _                 -> "W"
-        text = case d^. #source of
-            None   -> ""
-            Some n -> "[" ++ n ++ "]"
-    rest = flip map (T.lines (d^. #message)) $ \msg ->
-             #filename @= None
-          <! #lnum     @= None
-          <! #col      @= None
-          <! #type     @= None
-          <! #text     @= T.unpack msg
-          <! #valid    @= Some False
-          <! nil
+    -- 今開いてるBufferは優先的に表示する
+    -- curiとuriは必ずしも一致しないことに注意
+    --    e.g. hieではapp/Main.hsを編集するとsrc/Lib.hsのdiagも送られてくることがある
+    whenM (readContext (view (lspConfig.autoLoadQuickfix))) $ do
+      allDiagnostics <- readContext $ view (lspOtherState.diagnosticsMap)
+      curi <- getBufUri =<< nvim_get_current_buf'
+      let qfItems = diagnosticsToQfItems curi allDiagnostics
+      replaceQfList qfItems
 

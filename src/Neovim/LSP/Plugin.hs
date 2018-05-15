@@ -60,10 +60,13 @@ nvimHsLspInitialize _ = loggingError $ do
                               pat (nvimHsLspChangeBuffer arg)
             Just Right{} <- addAutocmd "BufWrite"
                               pat (nvimHsLspSaveBuffer arg)
+            nvimHsLspOpenBuffer def
+            whenM (readContext $ view (lspConfig.autoLoadQuickfix)) $
+              vim_command' "botright copen"
+            b <- readContext $ view (lspConfig.autoLoadQuickfix)
+            debugM $ "autoLoadQuickfix: " ++ show b
             vim_out_write' $
               "nvim-hs-lsp: Initialized for filetype `" ++ ft ++ "`\n"
-            nvimHsLspOpenBuffer def
-            void $ vim_command_output "botright copen"
           _ ->
             vim_report_error' $
               "no language server registered for filetype `" ++ ft ++ "`"
@@ -224,4 +227,25 @@ nvimHsLspAsyncComplete lnum col = do
 
 nvimHsCompleteResultVar :: String
 nvimHsCompleteResultVar = "NvimHsLspCompleteResult"
+
+-------------------------------------------------------------------------------
+-- ?
+-------------------------------------------------------------------------------
+
+nvimHsLspLoadQuickfix :: CommandArguments -> NeovimLsp ()
+nvimHsLspLoadQuickfix arg = do
+    allDiagnostics <- readContext $ view (lspOtherState.diagnosticsMap)
+    curi <- getBufUri =<< nvim_get_current_buf'
+    let qfItems = if showAll
+                  then diagnosticsToQfItems curi allDiagnostics
+                  else diagnosticsToQfItems curi $
+                          M.singleton curi
+                          (M.findWithDefault [] curi allDiagnostics)
+                  -- TODO
+    replaceQfList qfItems
+    if null qfItems
+      then vim_command' "cclose" >> nvimEcho "nvim-hs-lsp: no diagnostics"
+      else vim_command' "botright copen"
+  where
+    showAll = Just True == bang arg
 

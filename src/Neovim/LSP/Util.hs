@@ -14,11 +14,16 @@
 
 module Neovim.LSP.Util where
 
+import           Control.Lens                 (view)
 import           Control.Lens.Operators
 import           Data.Extensible
-import           Data.Singletons
+import           Data.Function                (on)
+import           Data.List                    (sortBy)
 import           Data.Text                    (Text)
 import qualified Data.Text                    as T
+import           Data.Map                     (Map)
+import qualified Data.Map                     as M
+import           Data.Singletons
 import           UnliftIO
 
 import           Neovim
@@ -77,8 +82,8 @@ catchAndDisplay = handleAny $ \e -> errorM (show e) >> vim_report_error' (show e
 -- "OK"
 --
 -- TODO これをユーザーに見せるのはどうなのか．でもtype checkはして欲しいしなあ
-pushRequest :: forall (m :: ClientRequestMethodK) env a
-            .  (ImplRequest m, HasOutChan' env, HasContext' env)
+pushRequest :: forall (m :: ClientRequestMethodK) env a.
+               (ImplRequest m, HasOutChan' env, HasContext' env)
             => RequestParam m
             -> Maybe (CallbackOf m a)
             -> Neovim env (Maybe (TMVar a))
@@ -124,6 +129,8 @@ nvimEchom :: String -> Neovim env ()
 nvimEchom s = vim_command' $ "echom " ++ show s
 
 -------------------------------------------------------------------------------
+-- Completion
+-------------------------------------------------------------------------------
 
 type VimCompleteItem = Record
   '[ "word"      >: String        -- the text that will be inserted
@@ -136,4 +143,63 @@ type VimCompleteItem = Record
    , "empty"     >: Option Int
    , "user_data" >: Option String -- TODO Value is not an instance of NvimObject
    ]
+
+-------------------------------------------------------------------------------
+-- Diagnostics
+-------------------------------------------------------------------------------
+
+diagnosticsToQfItems :: Uri -> Map Uri [Diagnostic] -> [QfItem]
+diagnosticsToQfItems prior diagMap = pripri ++ rest
+  where
+    pripri = toQfItems prior (M.findWithDefault [] prior diagMap)
+    rest   = M.foldMapWithKey toQfItems (M.delete prior diagMap)
+    toQfItems uri diagnostics =
+        concatMap (diagnosticToQfItems uri) $
+          sortBy (compare `on` view #severity) diagnostics
+
+-------------------------------------------------------------------------------
+
+type QfItem = Record
+  '[ "filename" >: Option String
+   , "lnum"     >: Option Int
+   , "col"      >: Option Int
+   , "type"     >: Option String
+   , "text"     >: String
+   , "valid"    >: Option Bool
+   ]
+
+replaceQfList :: [QfItem] -> Neovim env ()
+replaceQfList qs = void $ vim_call_function "setqflist" $ qs +: ['r'] +: []
+
+diagnosticToQfItems :: Uri -> Diagnostic -> [QfItem]
+diagnosticToQfItems uri d = header : rest
+  where
+    header = #filename @= Some (uriToFilePath uri)
+          <! #lnum     @= Some lnum
+          <! #col      @= Some col
+          <! #type     @= Some errorType
+          <! #text     @= text
+          <! #valid    @= Some True
+          <! nil
+      where
+        start = d^. (#range :: FieldOptic "range") . #start
+        lnum = 1 + start^. #line
+        col  = 1 + start^. #character
+        errorType = case d^. #severity of
+            Some Error        -> "E"
+            Some Warning      -> "W"
+            Some Information  -> "I"
+            Some Hint         -> "I"
+            _                 -> "W"
+        text = case d^. #source of
+            None   -> ""
+            Some n -> "[" ++ n ++ "]"
+    rest = flip map (T.lines (d^. #message)) $ \msg ->
+             #filename @= None
+          <! #lnum     @= None
+          <! #col      @= None
+          <! #type     @= None
+          <! #text     @= T.unpack msg
+          <! #valid    @= Some False
+          <! nil
 

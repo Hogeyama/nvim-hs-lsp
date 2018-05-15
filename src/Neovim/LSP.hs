@@ -27,6 +27,8 @@ plugin = do
             , $(command' 'nvimHsLspInfo)           ["async"]
             , $(command' 'nvimHsLspDefinition)     ["async"]
             , $(command' 'nvimHsLspApplyRefactOne) ["async"]
+            -- Other
+            , $(command' 'nvimHsLspLoadQuickfix)   ["async"]
             --
             , $(function' 'nvimHsLspComplete)      Sync
             , $(function' 'nvimHsLspAsyncComplete) Async

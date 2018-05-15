@@ -176,7 +176,7 @@ type NotificationMessageF m a =
 -- Number
 -------------------------------------------------------------------------------
 type Number = Double
-type Version = Integer
+type Version = Int
 
 -- ID
 ----------------------------------------

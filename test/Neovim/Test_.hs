@@ -1,6 +1,6 @@
 
-{-# LANGUAGE LambdaCase        #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Neovim.Test_ where
 
@@ -15,6 +15,7 @@ import           Control.Monad.Trans.Resource              (runResourceT)
 import           System.Exit                               (ExitCode (..))
 import           System.Process                            hiding (env)
 import           UnliftIO
+import Control.Concurrent (threadDelay)
 
 newtype Seconds = Seconds Word
 
@@ -46,24 +47,39 @@ testNeovim (Seconds sec) env action = do
     --------------------
     let testCfg = Internal.retypeConfig env cfg
         run a   = runReaderT (runResourceT (Internal.unNeovim a)) testCfg
-        cleanUp = --do debug "cleanUp"
-                     mapM_ cancel [socketReader, eventHandler]
-        close   = --do debug "close nvim"
-                     liftIO (terminateProcess ph)
+        cleanUp :: MonadIO m => m ()
+        cleanUp = mapM_ cancel [socketReader, eventHandler]
+        close :: MonadIO m => m ()
+        close   = debug "close" >> liftIO (terminateProcess ph)
     m <- run $
           timeout (fromIntegral sec * 1000 * 1000) $
-          finally `flip` cleanUp $
-          onException `flip` close $
-            action <* async (vim_command "qa!")
+            onException `flip` close $
+              (,) <$> action <*> async (vim_command "qa!")
+              -- nvimの正しい殺し方:
+              -- + asyncで "qa!"を送る
+              --    + "qa!"が成功した場合，async processは残り続ける
+              -- + waitForProcessで実際に死んだことを確認する
+              -- + asyncをcancelする
 
     case m of
       Nothing -> fail "testNeovim: timeout"
-      Just x  -> waitForProcess ph >>= \case
-        ExitFailure i ->
-            fail $ "testNeovim: Neovim returned with an exit status of: " ++ show i
-        ExitSuccess -> return x
+      Just (x,a) -> do
+        exitCode <- waitForProcess' ph
+        --exitCode <- waitForProcess  ph -- this hangs. HELPME
+        cleanUp >> cancel a
+        case exitCode of
+          ExitFailure i ->
+              fail $ "testNeovim: Neovim returned with an exit status of: " ++ show i
+          ExitSuccess -> do
+              return x
+
+waitForProcess' :: ProcessHandle -> IO ExitCode
+waitForProcess' ph = getProcessExitCode ph >>= \case
+  Nothing -> threadDelay (1000 * 100) >> waitForProcess' ph
+  Just exitCode -> return exitCode
+
 
 debug :: MonadIO m => String -> m ()
-debug = const $ return ()
-{-debug s = liftIO $ putStrLn s >> hFlush stdout-}
+{-debug = const $ return ()-}
+debug s = liftIO $ putStrLn s >> hFlush stdout
 
