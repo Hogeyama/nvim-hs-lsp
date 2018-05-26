@@ -9,11 +9,11 @@ import           RIO.List.Partial         (head)
 import           Data.Extensible
 import qualified Data.Text                as T
 
-import           Neovim                   hiding (Plugin, range)
+import           Neovim                   hiding (Plugin, range, (<>))
 import           Neovim.LSP.Base
 import           Neovim.LSP.Protocol.Type
 import           Neovim.LSP.Util
-import Data.Either.Combinators (whenLeft)
+import           Data.Either.Combinators  (whenLeft)
 
 -------------------------------------------------------------------------------
 -- Hover
@@ -21,7 +21,7 @@ import Data.Either.Combinators (whenLeft)
 
 callbackHoverPreview :: CallbackOf 'TextDocumentHoverK ()
 callbackHoverPreview (Response resp) = do
-  debugM $ "responseHover: " ++ show resp
+  logDebug $ "responseHover: " <> displayShow resp
   void $ withResult resp $ \case
     Nothing -> nvimEcho textDocumentHoverNoInfo
     Just r -> do
@@ -40,7 +40,7 @@ callbackHoverOneLine = callbackHoverWith $
 
 callbackHoverWith :: (String -> String) -> CallbackOf 'TextDocumentHoverK ()
 callbackHoverWith process (Response resp) = do
-  debugM $ "responseHover: " ++ show resp
+  logDebug $ "responseHover: " <> displayShow resp
   void $ withResult resp $ \case
     Nothing -> nvimEcho textDocumentHoverNoInfo
     Just r  -> nvimEcho $ process $ stringOfHoverContents (r^. #contents)
@@ -72,30 +72,25 @@ textDocumentHoverNoInfo = "textDocument/hover: no info"
 
 callbackDefinition :: CallbackOf 'TextDocumentDefinitionK ()
 callbackDefinition (Response resp) = do
-  debugM $ "responseDefinition: " ++ show resp
+  logDebug $ "responseDefinition: " <> displayShow resp
   void $ withResult resp $ \case
     Nothing -> nvimEcho textDocumentDefinitionNoInfo
     Just [] -> nvimEcho textDocumentDefinitionNoInfo
     Just r  -> jumpToLocation $ head r
 
-jumpToLocation ::  (HasLoggerName' env) => Location -> Neovim env ()
+jumpToLocation ::  (HasLogFunc env) => Location -> Neovim env ()
 jumpToLocation loc = do
   let uri        = loc^. #uri
       range      = loc^. #range
       start      = range^. #start
       (lnum,col) = positionToNvimPos start
   vim_command' "normal! m`"
-  debugM $ unwords
-              [ "edit"
-              , "+call\\ cursor(" ++ show lnum ++ "," ++ show col ++ ")"
-              , uriToFilePath uri
-              ]
   m <- vim_command $ unwords
               [ "edit"
               , "+call\\ cursor(" ++ show lnum ++ "," ++ show col ++ ")"
               , uriToFilePath uri
               ]
-  whenLeft m (\e -> errorM (show e) >> nvimEcho (show e))
+  whenLeft m (\e -> logError (displayShow e) >> nvimEcho (show e))
 
 textDocumentDefinitionNoInfo ::  String
 textDocumentDefinitionNoInfo = "textDocument/definition: no info"
@@ -167,7 +162,7 @@ removeNewline = map (\c -> if c == '\n' then ' ' else c)
 -- Util
 -------------------------------------------------------------------------------
 
-withResult :: (HasLoggerName' env)
+withResult :: (HasLogFunc env)
            => ResponseMessage a e
            -> (a -> Neovim env ret)
            -> Neovim env (Maybe ret)
@@ -175,7 +170,7 @@ withResult resp k =
   case resp^. #error of
     Some e -> vim_report_error' (T.unpack (e^. #message)) >> return Nothing
     None -> case resp^. #result of
-      None   -> errorM "withResult: wrong input" >> return Nothing
+      None   -> logError "withResult: wrong input" >> return Nothing
       Some x -> Just <$> k x
 
 waitCallback :: MonadIO m => m (TMVar a) -> m a

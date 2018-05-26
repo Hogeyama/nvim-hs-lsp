@@ -13,7 +13,7 @@ import           Data.Char                         (isAlphaNum)
 import           Data.List                         (isPrefixOf, partition)
 import qualified Data.Map                          as M
 
-import           Neovim                            hiding (whenM, unlessM)
+import           Neovim                            hiding (whenM, unlessM, (<>))
 
 import           Neovim.LSP.Action.Notification
 import           Neovim.LSP.Action.Request
@@ -43,7 +43,7 @@ nvimHsLspInitialize _ = loggingError $ do
         case M.lookup ft map' of
           Just (cmd:args) -> do
             initializeLsp cmd args
-            fileType .== Just ft
+            #fileType .== Just ft
             dispatch [notificationHandler, requestHandler, callbackHandler]
             cwd <- getCWD
             pushRequest' @'InitializeK (initializeParam Nothing (Just cwd))
@@ -56,10 +56,10 @@ nvimHsLspInitialize _ = loggingError $ do
             Just Right{} <- addAutocmd "BufWrite"
                               pat (nvimHsLspSaveBuffer arg)
             nvimHsLspOpenBuffer def
-            whenM (readContext $ view (lspConfig.autoLoadQuickfix)) $
+            whenM (readContext $ view (#lspConfig.autoLoadQuickfix)) $
               vim_command' "botright copen"
-            b <- readContext $ view (lspConfig.autoLoadQuickfix)
-            debugM $ "autoLoadQuickfix: " ++ show b
+            b <- readContext $ view (#lspConfig.autoLoadQuickfix)
+            logDebug $ "autoLoadQuickfix: " <> displayShow b
             vim_out_write' $
               "nvim-hs-lsp: Initialized for filetype `" ++ ft ++ "`\n"
           _ ->
@@ -91,18 +91,18 @@ whenAlreadyOpened :: NeovimLsp () -> NeovimLsp ()
 whenAlreadyOpened = whenAlreadyOpened' False
 
 alreadyOpened :: Uri -> NeovimLsp Bool
-alreadyOpened uri = M.member uri <$> useTV openedFiles
+alreadyOpened uri = M.member uri <$> useTV #openedFiles
 
 nvimHsLspOpenBuffer :: CommandArguments -> NeovimLsp ()
 nvimHsLspOpenBuffer arg = whenInitialized' silent $ do
   b   <- vim_get_current_buffer'
   mft <- getBufLanguage b
   whenJust mft $ \ft -> do
-    serverFT <- useTV fileType
+    serverFT <- useTV #fileType
     when (Just ft == serverFT) $ do
       uri <- getBufUri b
       unlessM (alreadyOpened uri) $ do
-        openedFiles %== M.insert uri 0
+        #openedFiles %== M.insert uri 0
         didOpenBuffer b
   where silent = Just True == bang arg
 
@@ -111,7 +111,7 @@ nvimHsLspCloseBuffer _ = whenInitialized $ do
   b <- vim_get_current_buffer'
   uri <- getBufUri b
   ifM (not <$> alreadyOpened uri) (vim_out_write' "nvim-hs-lsp: Not opened yet\n") $ do
-    openedFiles %== M.delete uri
+    #openedFiles %== M.delete uri
     didCloseBuffer b
 
 nvimHsLspChangeBuffer :: CommandArguments -> NeovimLsp ()
@@ -214,8 +214,8 @@ nvimHsLspAsyncComplete lnum col = do
   if initialized then do
     b <- vim_get_current_buffer'
     s <- nvim_get_current_line'
-    debugM $ "COMPLETION: async: col = " ++ show col
-    debugM $ "COMPLETION: async: s   = " ++ show (take col s)
+    logDebug $ "COMPLETION: async: col = " <> displayShow col
+    logDebug $ "COMPLETION: async: s   = " <> displayShow (take col s)
     xs <- waitCallback $ completionRequest b (lnum,col) callbackComplete
     nvim_set_var' nvimHsCompleteResultVar (toObject xs)
   else do
@@ -230,7 +230,7 @@ nvimHsCompleteResultVar = "NvimHsLspCompleteResult"
 
 nvimHsLspLoadQuickfix :: CommandArguments -> NeovimLsp ()
 nvimHsLspLoadQuickfix arg = do
-    allDiagnostics <- readContext $ view (lspOtherState.diagnosticsMap)
+    allDiagnostics <- readContext $ view (#otherState.diagnosticsMap)
     curi <- getBufUri =<< nvim_get_current_buf'
     let qfItems = if showAll
                   then diagnosticsToQfItems curi allDiagnostics

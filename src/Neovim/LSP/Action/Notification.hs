@@ -27,7 +27,7 @@ import           Neovim.LSP.Util
 
 -- TextDocumentDidOpen Notification
 ---------------------------------------
-didOpenBuffer :: (HasOutChan' env, HasContext' env, HasLoggerName' env)
+didOpenBuffer :: (HasOutChan env, HasContext env, HasLogFunc env)
               => Buffer -> Neovim env ()
 didOpenBuffer b = do
     uri      <- getBufUri b
@@ -45,7 +45,7 @@ didOpenBuffer b = do
 
 -- TextDocumentDidClose Notification
 ---------------------------------------
-didCloseBuffer :: (HasOutChan' env, HasContext' env) => Buffer -> Neovim env ()
+didCloseBuffer :: (HasOutChan env, HasContext env) => Buffer -> Neovim env ()
 didCloseBuffer b = do
     uri <- getBufUri b
     let param = #textDocument @= textDocumentIdentifier uri
@@ -55,7 +55,7 @@ didCloseBuffer b = do
 
 -- TextDocumentDidSave Notification
 ---------------------------------------
-didSaveBuffer :: (HasOutChan' env, HasContext' env) => Buffer -> Neovim env ()
+didSaveBuffer :: (HasOutChan env, HasContext env) => Buffer -> Neovim env ()
 didSaveBuffer b = do
     uri  <- getBufUri b
     let param = #textDocument @= textDocumentIdentifier uri
@@ -66,7 +66,7 @@ didSaveBuffer b = do
 
 -- TextDocumentDidChange Notification
 ---------------------------------------
-didChangeBuffer :: (HasOutChan' env, HasContext' env) => Buffer -> Neovim env ()
+didChangeBuffer :: (HasOutChan env, HasContext env) => Buffer -> Neovim env ()
 didChangeBuffer b = do
     uri      <- getBufUri b
     contents <- getBufContents b
@@ -81,7 +81,7 @@ didChangeBuffer b = do
     push $ notification @'TextDocumentDidChangeK param
     resetDiagnostics uri
 
-resetDiagnostics :: HasContext' env => Uri -> Neovim env ()
+resetDiagnostics :: HasContext env => Uri -> Neovim env ()
 resetDiagnostics uri =
-  modifyContext $ over (lspOtherState.diagnosticsMap) $ M.delete uri
+  modifyContext $ over (#otherState.diagnosticsMap) $ M.delete uri
 

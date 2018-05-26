@@ -1,4 +1,5 @@
 
+{-# LANGUAGE PartialTypeSignatures #-}
 {-# OPTIONS_GHC -Wall #-}
 
 module Neovim.LSP.LspPlugin.Request
@@ -22,21 +23,21 @@ import           Neovim.LSP.Protocol.Type
 import           Neovim.LSP.Util
 
 requestHandler :: Plugin
-requestHandler = Plugin "req " requestPluginAction
+requestHandler = Plugin "req" requestPluginAction
 
 requestPluginAction :: PluginAction ()
 requestPluginAction = forever @_ @() @() $ do
   msg <- pull
   case msg of
     SomeReq req -> case singByProxy req of
-      SWindowShowMessageRequest   -> errorM "requestHandler: not implemented"
+      SWindowShowMessageRequest   -> logError "requestHandler: not implemented"
         -- これ大変そう
-      SClientRegisterCapability   -> errorM "requestHandler: not implemented"
+      SClientRegisterCapability   -> logError "requestHandler: not implemented"
         -- これは対応する必要性が低そう
-      SClientUnregisterCapability -> errorM "requestHandler: not implemented"
+      SClientUnregisterCapability -> logError "requestHandler: not implemented"
         -- これも
       SWorkspaceApplyEdit         -> respondWorkspaceAplyEdit req
-      SServerRequestMisc _        -> errorM "requestHandler: Misc: not implemented"
+      SServerRequestMisc _        -> logError "requestHandler: Misc: not implemented"
     _ -> return ()
 
 -- WorkspaceApplyEdit
@@ -45,12 +46,11 @@ requestPluginAction = forever @_ @() @() $ do
 -- TODO ask whether to apply or not
 respondWorkspaceAplyEdit :: Request 'WorkspaceApplyEditK -> PluginAction ()
 respondWorkspaceAplyEdit (Request req) = do
-  let params = req^. #params
-      edit   = params^. #edit
-  debugM $ show edit
+  let edit = req^. 訊#params.訊#edit
+  logDebug $ displayShow edit
   case edit^. #changes of
     None -> case edit^. #documentChanges of
-      None    -> errorM "respondWorkspaceAplyEdit: Wrong Input!"
+      None    -> logError "respondWorkspaceAplyEdit: Wrong Input!"
       Some cs -> applyDocumentChanges cs >>= ret
     Some cs -> applyChanges cs >>= ret
   where
@@ -78,6 +78,6 @@ applyChanges cs = do
 
 -- hieが対応していないので後回しで良い
 applyDocumentChanges :: [TextDocumentEdit] -> PluginAction Bool
-applyDocumentChanges _ = errorM "WorkspaceApplyEdit: not implemented for versioned changes"
+applyDocumentChanges _ = logError "WorkspaceApplyEdit: not implemented for versioned changes"
                       >> return False
 

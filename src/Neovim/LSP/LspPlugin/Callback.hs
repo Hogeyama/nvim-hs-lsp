@@ -5,7 +5,6 @@ module Neovim.LSP.LspPlugin.Callback where
 
 import           RIO
 
---import           Control.Lens
 import           Control.Monad            (forever)
 import           Data.Typeable            (cast, typeOf)
 
@@ -25,11 +24,11 @@ callbackPluginAction = do
           removeCallback id'
           case cast resp of
             Just resp' -> do
-              debugM $ "run callback function for id: " ++ show id'
+              logDebug $ "run callback function for id: " <> displayShow id'
               x <- callback resp'
               atomically $ putTMVar var x
             Nothing -> do
-              errorM $ unlines
+              logError . fromString $ unlines
                   [ "input type does not match for id: " ++ show id'
                   , "Expected: " ++ show (typeOf expected)
                   , "Actual:   " ++ show (typeOf resp)
@@ -37,6 +36,6 @@ callbackPluginAction = do
               vim_report_error' "nvim-hs-lsp: error: callback function type mismatched"
               where expected = let _ = callback expected in expected
         Nothing ->
-          debugM $ "no callback set for id: " ++ show id'
+          logDebug $ "no callback set for id: " <> displayShow id'
     _ -> return ()
 

@@ -16,7 +16,7 @@ import Data.Maybe (fromJust)
 
 -- TextDocumentHover
 ---------------------------------------
-hoverRequest :: (HasOutChan' env, HasContext' env)
+hoverRequest :: (HasOutChan env, HasContext env)
              => Buffer
              -> NvimPos
              -> CallbackOf 'TextDocumentHoverK a
@@ -27,7 +27,7 @@ hoverRequest b p callback = do
 
 -- TextDocumentSignatureHelp
 ---------------------------------------
-signatureHelpRequest :: (HasOutChan' env, HasContext' env)
+signatureHelpRequest :: (HasOutChan env, HasContext env)
                      => Buffer
                      -> NvimPos
                      -> CallbackOf 'TextDocumentSignatureHelpK a
@@ -38,7 +38,7 @@ signatureHelpRequest b p callback = do
 
 -- TextDocumentDefinition
 ---------------------------------------
-definitionRequest :: (HasOutChan' env, HasContext' env)
+definitionRequest :: (HasOutChan env, HasContext env)
                   => Buffer
                   -> NvimPos
                   -> CallbackOf 'TextDocumentDefinitionK a
@@ -49,7 +49,7 @@ definitionRequest b p callback = do
 
 -- WorkspaceExecuteCommand
 ---------------------------------------
-executeCommandRequest :: (HasOutChan' env, HasContext' env)
+executeCommandRequest :: (HasOutChan env, HasContext env)
                       => String
                       -> Option [Value]
                       -> Maybe (CallbackOf 'WorkspaceExecuteCommandK a)
@@ -62,7 +62,7 @@ executeCommandRequest cmd margs mcallback = do
 
 -- TextDocumentCompletion
 ---------------------------------------
-completionRequest :: (HasOutChan' env, HasContext' env)
+completionRequest :: (HasOutChan env, HasContext env)
                   => Buffer
                   -> NvimPos
                   -> CallbackOf 'TextDocumentCompletionK a

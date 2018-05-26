@@ -24,7 +24,7 @@ import           Neovim.LSP.Protocol.Type
 getCWD :: Neovim env Uri
 getCWD = filePathToUri <$> errOnInvalidResult (vim_call_function "getcwd" [])
 
-getBufLanguage :: (HasLoggerName' env)
+getBufLanguage :: (HasLogFunc env)
                => Buffer -> Neovim env (Maybe String)
 getBufLanguage b = nvim_buf_get_var b "current_syntax" >>= \case
     Right (fromObject -> Right x) ->
@@ -34,10 +34,10 @@ getBufLanguage b = nvim_buf_get_var b "current_syntax" >>= \case
 getBufUri :: Buffer -> Neovim env Uri
 getBufUri b = filePathToUri <$> nvim_buf_get_name' b
 
-getNvimPos :: (HasLoggerName' env) => Neovim env NvimPos
+getNvimPos :: (HasLogFunc env) => Neovim env NvimPos
 getNvimPos = vim_call_function "getpos" [ObjectString "."] >>= \case
   Right (fromObject -> Right [_bufnum, lnum, col, _off]) -> return (lnum,col)
-  e -> errorM (show e) >> error "getNvimPos"
+  e -> logError (displayShow e) >> error "getNvimPos"
 
 getBufContents :: Buffer -> Neovim env Text
 getBufContents b = T.pack.unlines <$> nvim_buf_get_lines' b 0 maxBound False
@@ -51,8 +51,8 @@ getTextDocumentPositionParams b p = do
          <! nil
   return pos
 
-catchAndDisplay :: (HasLoggerName' env) => Neovim env () -> Neovim env ()
-catchAndDisplay = handleAny $ \e -> errorM (show e) >> vim_report_error' (show e)
+catchAndDisplay :: (HasLogFunc env) => Neovim env () -> Neovim env ()
+catchAndDisplay = handleAny $ \e -> logError (displayShow e) >> vim_report_error' (show e)
 
 -------------------------------------------------------------------------------
 -- TODO To be moved
@@ -73,7 +73,7 @@ catchAndDisplay = handleAny $ \e -> errorM (show e) >> vim_report_error' (show e
 --
 -- TODO これをユーザーに見せるのはどうなのか．でもtype checkはして欲しいしなあ
 pushRequest :: forall (m :: ClientRequestMethodK) env a.
-               (ImplRequest m, HasOutChan' env, HasContext' env)
+               (ImplRequest m, HasOutChan env, HasContext env)
             => RequestParam m
             -> Maybe (CallbackOf m a)
             -> Neovim env (Maybe (TMVar a))
@@ -90,13 +90,13 @@ pushRequest param mcallback = do
       Nothing -> return Nothing
 
 pushRequest' :: forall (m :: ClientRequestMethodK) env
-             .  (ImplRequest m, HasOutChan' env, HasContext' env)
+             .  (ImplRequest m, HasOutChan env, HasContext env)
              => RequestParam m
              -> Neovim env ()
 pushRequest' param = void $ pushRequest @m param Nothing
 
 pushNotification :: forall (m :: ClientNotificationMethodK) env
-                 .  (ImplNotification m, HasOutChan' env)
+                 .  (ImplNotification m, HasOutChan env)
                  => NotificationParam m -> Neovim env ()
 pushNotification param = push $ notification @m param
 

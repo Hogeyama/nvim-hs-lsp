@@ -1,6 +1,8 @@
 
+{-# LANGUAGE ImplicitParams  #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# OPTIONS_GHC -Wall        #-}
+{-# OPTIONS_GHC -Wno-orphans #-}
 
 module Neovim.LSP.Base where
 
@@ -10,11 +12,11 @@ import qualified RIO.ByteString.Lazy        as BL
 import           RIO.List.Partial           (init)
 import           Prelude                    (read, succ)
 
-import           Control.Lens               hiding (Context)--(makeLenses, makeLensesWith, camelCaseFields, Lens')
+import           Control.Lens               hiding (Context)
 import           Control.Monad              ((>=>), forM, forM_, forever)
 import           Control.Monad.IO.Class     (MonadIO, liftIO)
-import           Control.Monad.Reader.Class (MonadReader, ask)
 import qualified Data.Aeson                 as J
+import           Data.Extensible
 import           Data.Constraint            (withDict)
 import qualified Data.HashMap.Strict        as HM
 import           Data.List                  (isPrefixOf)
@@ -24,20 +26,18 @@ import           Data.Maybe                 (isJust)
 import           Data.Singletons            (Sing, SomeSing (..), fromSing,
                                              singByProxy, toSing)
 import           System.Exit                (exitSuccess)
-import           System.IO                  (hGetLine)
+import           System.IO                  (IOMode(..), hGetLine, openFile)
 import           System.IO.Error            (isEOFError)
-import           System.Log.Formatter       (simpleLogFormatter)
-import           System.Log.Handler         (setFormatter)
-import           System.Log.Handler.Simple  (fileHandler)
-import qualified System.Log.Logger          as L
 import           System.Process             (CreateProcess (..), ProcessHandle,
                                              StdStream (..), createProcess,
                                              proc, terminateProcess)
 
-import           Neovim                     hiding (Plugin)
+import           Neovim                     hiding (Plugin, (<>))
 import qualified Neovim.Context.Internal    as Internal
 import           Neovim.LSP.Protocol.Type
 
+--import           GHC.Stack
+import           GHC.TypeLits
 
 -------------------------------------------------------------------------------
 -- Env
@@ -46,75 +46,79 @@ import           Neovim.LSP.Protocol.Type
 type NeovimLsp = Neovim LspEnv
 
 -- | Enviroment of the main thread.
-data LspEnv = LspEnv
-  { _lspEnvServerHandles :: TVar (Maybe ServerHandles)
-  , _lspEnvFileType      :: TVar (Maybe String)
-  , _lspEnvOtherHandles  :: TVar OtherHandles
-  ,  lspEnvInChan        :: TChan ByteString
-  , _lspEnvOutChan       :: TChan ByteString
-  , _lspEnvOpenedFiles   :: TVar (Map Uri Version)
-  , _lspEnvContext       :: TVar Context
-  , _lspEnvLoggerName    :: String
-  }
+type LspEnv = Record
+  '[ "serverHandles" >: TVar (Maybe ServerHandles)
+   , "logFileHandle" >: Handle
+   , "fileType"      >: TVar (Maybe String)
+   , "otherHandles"  >: TVar OtherHandles
+   , "inChan"        >: TChan ByteString
+   , "outChan"       >: TChan ByteString
+   , "openedFiles"   >: TVar (Map Uri Version)
+   , "context"       >: TVar Context
+   , "logFunc"       >: LogFunc
+   ]
 
 initialEnvM :: MonadIO m => m LspEnv
-initialEnvM = liftIO $ do
-  _lspEnvServerHandles <- newTVarIO Nothing
-  _lspEnvOtherHandles  <- newTVarIO (OtherHandles [])
-  lspEnvInChan         <- newTChanIO
-  _lspEnvOutChan       <- newTChanIO
-  _lspEnvOpenedFiles   <- newTVarIO M.empty
-  _lspEnvContext       <- newTVarIO initialContext
-  _lspEnvLoggerName    <- return topLoggerName
-  _lspEnvFileType      <- newTVarIO Nothing
-  return LspEnv {..}
-
-topLoggerName :: String
-topLoggerName = "nvim-hs-lsp"
-
-senderLoggerName :: String
-senderLoggerName = topLoggerName ++ "." ++ "send"
-
-receiverLoggerName :: String
-receiverLoggerName = topLoggerName ++ "." ++ "receive"
+initialEnvM = do
+  h <- liftIO $ openFile "/tmp/nvim-hs-lsp.log" AppendMode
+  hsequence $ #serverHandles <@=> newTVarIO Nothing
+           <! #logFileHandle <@=> return h
+           <! #fileType      <@=> newTVarIO Nothing
+           <! #otherHandles  <@=> newTVarIO (OtherHandles [])
+           <! #inChan        <@=> newTChanIO
+           <! #outChan       <@=> newTChanIO
+           <! #openedFiles   <@=> newTVarIO M.empty
+           <! #context       <@=> newTVarIO initialContext
+           <! #logFunc       <@=> makeLogFunc h
+           <! nil
+  where
+    makeLogFunc h = liftIO $ do
+      hSetBuffering h LineBuffering
+      opts <- setLogTerminal False .
+              setLogUseColor False <$>
+              logOptionsHandle h True
+      withLogFunc opts return
+      -- TODO 'withLogFunc opts return'は普通にまずいけど
+      --      'setLogTerminal False'しておけば
+      --      リソースの取得はしないので大丈夫そう
 
 -- | Enviroment of each plugin.
-data PluginEnv = PluginEnv
-  { _pluginEnvInChan     :: TChan InMessage
-  , _pluginEnvOutChan    :: TChan ByteString
-  , _pluginEnvContext    :: TVar Context
-  , _pluginEnvLoggerName :: String
-  }
+type PluginEnv = Record
+  '[ "inChan"  >: TChan InMessage
+   , "outChan" >: TChan ByteString
+   , "context" >: TVar Context
+   , "logFunc" >: LogFunc
+   ]
 
 -- | Context shared with main thread and all plugins.
-data Context = Context
-  { _lspIdMap         :: Map ID ClientRequestMethod
-  , _lspUniqueID      :: Int
-  , _lspUniqueVersion :: Version
-  , _lspVersionMap    :: Map Uri Version
-  , _lspCallbacks     :: Map ID Callback
-  , _lspConfig        :: LspConfig
-  , _lspOtherState    :: OtherState
-  }
+type Context = Record
+  '[ "idMethodMap"   >: Map ID ClientRequestMethod
+   , "uniqueID"      >: Int
+   , "uniqueVersion" >: Version
+   , "versionMap"    >: Map Uri Version
+   , "callbacks"     >: Map ID Callback
+   , "lspConfig"     >: LspConfig
+   , "otherState"    >: OtherState
+   ]
 
 data Callback where
   Callback :: Typeable m => TMVar a -> CallbackOf m a -> Callback
 type CallbackOf m a = ServerResponse m -> PluginAction a
 
 initialContext :: Context
-initialContext = Context
-  { _lspIdMap         = M.empty
-  , _lspUniqueID      = 0
-  , _lspUniqueVersion = 0
-  , _lspVersionMap    = M.empty
-  , _lspCallbacks     = M.empty
-  , _lspConfig        = LspConfig
-                      { _autoLoadQuickfix = False
-                      }
-  , _lspOtherState    = OtherState
-                      { _diagnosticsMap = M.empty
-                      }
-  }
+initialContext =
+     #idMethodMap   @= M.empty
+  <! #uniqueID      @= 0
+  <! #uniqueVersion @= 0
+  <! #versionMap    @= M.empty
+  <! #callbacks     @= M.empty
+  <! #lspConfig     @= LspConfig
+                     { _autoLoadQuickfix = False
+                     }
+  <! #otherState    @= OtherState
+                     { _diagnosticsMap = M.empty
+                     }
+  <! nil
 
 data ServerHandles = ServerHandles
   { serverIn  :: Handle
@@ -206,35 +210,47 @@ resultEither (J.Error e)   = Left e
 -------------------------------------------------------------------------------
 -- Lens
 -------------------------------------------------------------------------------
-makeLensesWith camelCaseFields ''LspEnv
-makeLensesWith camelCaseFields ''PluginEnv
-type HasInChan'        env = HasInChan        env (TChan InMessage)
-type HasOutChan'       env = HasOutChan       env (TChan ByteString)
-type HasContext'       env = HasContext       env (TVar  Context)
-type HasOpenedFiles'   env = HasOpenedFiles   env (TVar  (Map Uri Version))
-type HasOtherHandles'  env = HasOtherHandles  env (TVar  OtherHandles)
-type HasServerHandles' env = HasServerHandles env (TVar  (Maybe ServerHandles))
-type HasLoggerName'    env = HasLoggerName    env String
 
-makeLenses ''Context
 makeLenses ''OtherState
 makeLenses ''LspConfig
 
+type family UnRecord env :: [Assoc Symbol *] where UnRecord (Record xs) = xs
+type IsRealRecord env = Record (UnRecord env) ~ env
+type Associate' k v env = (IsRealRecord env, Associate k v (UnRecord env))
+type HasContext env = Associate' "context" (TVar Context)     env
+type HasInChan  env = Associate' "inChan"  (TChan InMessage)  env
+type HasOutChan env = Associate' "outChan" (TChan ByteString) env
+instance Associate "logFunc" LogFunc xs
+  => HasLogFunc (Record xs) where logFuncL = #logFunc
+-- #context :: HasContext env => Lens' env (TVar Context)
+
+{-
+-- ExtensibleのIsRecordが使えるかも
+instance IsRecord (Record (xs :: [Assoc Symbol *])) where
+  type RecFields (Record xs) = xs
+  recordToList = toHList
+  recordFromList = fromHList
+type HasContext env = (IsRecord env, Associate "context" (TVar Context)     (RecFields env))
+type HasInChan  env = (IsRecord env, Associate "inChan"  (TChan InMessage)  (RecFields env))
+type HasOutChan env = (IsRecord env, Associate "outChan" (TChan ByteString) (RecFields env))
+-- (record . #context) :: HasContext env => Lens' env (TVar Context)
+-}
+
 useTV :: (MonadReader r m, MonadIO m) => Lens' r (TVar a) -> m a
-useTV getter = liftIO . readTVarIO =<< view getter
+useTV l = readTVarIO =<< view l
 
 usesTV :: (MonadReader r m, MonadIO m) => Lens' r (TVar a) -> (a -> b) -> m b
-usesTV getter f = f <$> useTV getter
+usesTV l f = f <$> useTV l
 
 assignTV :: (MonadReader r m, MonadIO m) => Lens' r (TVar a) -> a -> m ()
-assignTV getter x = do
-  v <- view getter
-  liftIO $ atomically $ writeTVar v x
+assignTV l x = do
+  v <- view l
+  atomically $ writeTVar v x
 
 modifyOverTV :: (MonadReader r m, MonadIO m) => Lens' r (TVar a) -> (a -> a) -> m ()
-modifyOverTV getter f = do
-  v <- view getter
-  liftIO $ atomically $ modifyTVar' v f
+modifyOverTV l f = do
+  v <- view l
+  atomically $ modifyTVar' v f
 
 (.==) :: (MonadReader r m, MonadIO m) => Lens' r (TVar a) -> a -> m ()
 (.==) = assignTV
@@ -244,61 +260,57 @@ infix 4 .==
 (%==) = modifyOverTV
 infix 4 %==
 
-
 -------------------------------------------------------------------------------
 -- Initialize
 -------------------------------------------------------------------------------
 
 initializeLsp :: String -> [String] -> NeovimLsp ()
 initializeLsp cmd args = do
-  (Just hin, Just hout, Just herr, ph) <-
-      liftIO $ createProcess $ (proc cmd args)
-        { cwd     = Nothing
-        , std_in  = CreatePipe
-        , std_out = CreatePipe
-        , std_err = CreatePipe
-        }
-  serverHandles .== Just ServerHandles
-        { serverIn  = hin
-        , serverOut = hout
-        , serverErr = herr
-        , serverPH  = ph
-        }
-  liftIO $ do
-    hSetBuffering hin  NoBuffering
-    hSetBuffering hout NoBuffering
-    hSetBuffering herr NoBuffering
-    setupLogger
-  inCh  <- asks lspEnvInChan
-  outCh <- asks _lspEnvOutChan
-  registerAsyncHandle "sender" =<< async (liftIO (sender hin outCh))
-  registerAsyncHandle "receiver" =<< async (liftIO (receiver hout inCh))
-  registerAsyncHandle "herr-watcher" =<< async (watcher herr)
-  loadLspConfig
-  infoM $ unlines
-      [ ""
-      , "＿人人人人人人＿"
-      , "＞　__init__　＜"
-      , "￣Y^Y^Y^Y^Y^Y^Y￣"
-      ]
+    (Just hin, Just hout, Just herr, ph) <-
+        liftIO $ createProcess $ (proc cmd args)
+          { cwd     = Nothing
+          , std_in  = CreatePipe
+          , std_out = CreatePipe
+          , std_err = CreatePipe
+          }
+    #serverHandles .== Just ServerHandles
+          { serverIn  = hin
+          , serverOut = hout
+          , serverErr = herr
+          , serverPH  = ph
+          }
+    liftIO $ do
+      hSetBuffering hin  NoBuffering
+      hSetBuffering hout NoBuffering
+      hSetBuffering herr NoBuffering
+    inCh <- view #inChan
+    outCh <- view #outChan
+    registerAsyncHandle "sender" =<< async (sender hin outCh)
+    registerAsyncHandle "receiver" =<< async (receiver hout inCh)
+    registerAsyncHandle "herr-watcher" =<< async (watcher herr)
+    loadLspConfig
+    logInfo $ fromString $ unlines
+        [ ""
+        , "＿人人人人人人＿"
+        , "＞　__init__　＜"
+        , "￣Y^Y^Y^Y^Y^Y^Y￣"
+        ]
   where
-    watcher :: Handle -> Neovim env ()
     watcher herr = forever $ catchIO
       (liftIO (hGetLine herr) >>= showAndLog . ("STDERR: "++))
       (\e ->  if isEOFError e
               then throwIO e
               else showAndLog $ "STDERR: Exception: " ++ show e)
 
-    showAndLog :: String -> Neovim env ()
     showAndLog msg = do
-        liftIO $ L.errorM topLoggerName msg
+        logError (fromString msg)
         vim_report_error' msg
 
-loadLspConfig :: HasContext' env => Neovim env ()
+loadLspConfig :: HasContext env => Neovim env ()
 loadLspConfig = do
-  before <- readContext $ view lspConfig
-  after <- updateLspConfig before
-  modifyContext $ lspConfig .~ after
+    before <- readContext $ view #lspConfig
+    after <- updateLspConfig before
+    modifyContext $ #lspConfig .~ after
 
 updateLspConfig :: LspConfig -> Neovim env LspConfig
 updateLspConfig =
@@ -314,15 +326,14 @@ updateLspConfig =
     toBool _ = True
 
 isInitialized :: NeovimLsp Bool
-isInitialized = usesTV serverHandles isJust
+isInitialized = usesTV #serverHandles isJust
 
 uninitializedError :: a
 uninitializedError = error "not initialized (TODO: fabulous message)"
 
-registerAsyncHandle :: (MonadReader env m, MonadIO m, HasOtherHandles' env)
-                    => String -> Async () -> m ()
+registerAsyncHandle :: String -> Async () -> NeovimLsp ()
 registerAsyncHandle name a =
-  otherHandles %== (\(OtherHandles hs) -> OtherHandles ((name,a):hs))
+    #otherHandles %== (\(OtherHandles hs) -> OtherHandles ((name,a):hs))
 
 -------------------------------------------------------------------------------
 -- Finalize
@@ -330,79 +341,40 @@ registerAsyncHandle name a =
 
 finalizeLSP :: NeovimLsp ()
 finalizeLSP = do
-  mapM_ (cancel.snd) =<< usesTV otherHandles unOtherHandles
-  useTV serverHandles >>= \case
-    Nothing -> return ()
-    Just sh -> liftIO $ terminateProcess (serverPH sh)
-  liftIO L.removeAllHandlers
-
--------------------------------------------------------------------------------
--- Logger
--------------------------------------------------------------------------------
-
-setupLogger :: IO ()
-setupLogger = do
-  L.updateGlobalLogger L.rootLoggerName L.removeHandler
-  L.updateGlobalLogger L.rootLoggerName (L.setLevel L.DEBUG)
-  --L.updateGlobalLogger senderLoggerName   (L.setLevel L.WARNING)
-  --L.updateGlobalLogger receiverLoggerName (L.setLevel L.WARNING)
-  h <- do lh <- fileHandler "/tmp/nvim-hs-lsp.log" L.DEBUG
-          return $ setFormatter
-                      lh
-                      (simpleLogFormatter "[$time : $loggername : $prio] $msg")
-  L.updateGlobalLogger topLoggerName (L.addHandler h)
-
-debugM :: (MonadReader r m, MonadIO m, HasLoggerName' r) => String -> m ()
-debugM = withLoggerName L.debugM
-
-warningM :: (MonadReader r m, MonadIO m, HasLoggerName' r) => String -> m ()
-warningM = withLoggerName L.warningM
-
-errorM :: (MonadReader r m, MonadIO m, HasLoggerName' r) => String -> m ()
-errorM = withLoggerName L.errorM
-
-infoM :: (MonadReader r m, MonadIO m, HasLoggerName' r) => String -> m ()
-infoM = withLoggerName L.infoM
-
-withLoggerName :: (MonadReader r m, MonadIO m, HasLoggerName' r)
-               => (String -> String -> IO ()) -> String -> m ()
-withLoggerName logger s = view loggerName >>= liftIO . (logger `flip` s)
-
-setLogLevel :: (MonadReader r m, MonadIO m, HasLoggerName' r)
-            => L.Priority -> m ()
-setLogLevel p = view loggerName >>= liftIO . (L.updateGlobalLogger `flip` L.setLevel p)
-
+    mapM_ (cancel.snd) =<< usesTV #otherHandles unOtherHandles
+    useTV #serverHandles >>= \case
+      Nothing -> return ()
+      Just sh -> liftIO $ terminateProcess (serverPH sh)
+    hClose =<< view #logFileHandle
 
 -------------------------------------------------------------------------------
 -- Communication with Server
 -------------------------------------------------------------------------------
 
-sender :: Handle -> TChan ByteString -> IO ()
+sender :: (MonadIO m, MonadReader env m, HasLogFunc env)
+       => Handle -> TChan ByteString -> m ()
 sender serverIn chan = forever $ do
-  bs <- atomically $ readTChan chan
-  hPutBuilder serverIn $ getUtf8Builder $ mconcat
-      [ "Content-Length: "
-      , displayShow $ BS.length bs
-      , "\r\n\r\n"
-      , displayBytesUtf8 bs
-      ]
-  --L.debugM senderLoggerName $ "=> " ++ B.unpack bs TODO
-  L.debugM senderLoggerName $ "=> " ++ show bs
+    bs <- atomically $ readTChan chan
+    hPutBuilder serverIn $ getUtf8Builder $ mconcat
+        [ "Content-Length: "
+        , displayShow $ BS.length bs
+        , "\r\n\r\n"
+        , displayBytesUtf8 bs
+        ]
+    logDebug $ "=> " <> displayBytesUtf8 bs
 
-receiver :: Handle -> TChan ByteString -> IO ()
+receiver :: (MonadIO m, MonadReader env m, HasLogFunc env)
+         => Handle -> TChan ByteString -> m ()
 receiver serverOut chan = forever $ do
     v <- receive serverOut
     atomically $ writeTChan chan v
   where
-    receive :: Handle -> IO ByteString
     receive h = do
-      len <- contentLength <$> readHeader h
-      content <- BS.hGet h len
-      --L.debugM receiverLoggerName $ "<= " ++ B.unpack content
-      L.debugM receiverLoggerName $ "<= " ++ show content
-      return content
+        len <- liftIO $ contentLength <$> readHeader h
+        content <- BS.hGet h len
+        logDebug $ "<= " <> displayBytesUtf8 content
+        return content
 
-    readHeader :: Handle -> IO Header
     readHeader h = go Header { contentLength = error "broken header"
                              , contentType   = Nothing }
       where
@@ -426,68 +398,67 @@ data Header = Header
 -- Access Context
 -------------------------------------------------------------------------------
 
-pull :: (HasInChan' env) => Neovim env InMessage
-pull = liftIO . atomically . readTChan =<< view inChan
+pull :: (HasInChan env) => Neovim env InMessage
+pull = liftIO . atomically . readTChan =<< view #inChan
 
-push :: (HasOutChan' env, J.ToJSON a, Show a) => a -> Neovim env ()
+push :: (HasOutChan env, J.ToJSON a, Show a) => a -> Neovim env ()
 push x = do
-  outCh <- view outChan
-  liftIO $ atomically $ writeTChan outCh $ BL.toStrict (J.encode x)
+    outCh <- view #outChan
+    liftIO $ atomically $ writeTChan outCh $ BL.toStrict (J.encode x)
 
-modifyReadContext :: (MonadReader env m, MonadIO m, HasContext' env)
+modifyReadContext :: (MonadReader env m, MonadIO m, HasContext env)
                   => (Context -> Context) -> (Context -> a) -> m a
 modifyReadContext modifier reader = do
-  ctxV <- view context
-  ctx <- atomically $ do
-    ctx <- readTVar ctxV
-    writeTVar ctxV $! modifier ctx
-    return ctx
-  return $ reader ctx
+    ctxV <- view #context
+    ctx <- atomically $ do
+      ctx <- readTVar ctxV
+      writeTVar ctxV $! modifier ctx
+      return ctx
+    return $ reader ctx
 
 ---
 
-modifyContext :: (MonadReader env m, MonadIO m, HasContext' env)
+modifyContext :: (MonadReader env m, MonadIO m, HasContext env)
                => (Context -> Context) -> m ()
 modifyContext modifier = modifyReadContext modifier (const ())
 
-readContext :: (MonadReader env m, MonadIO m, HasContext' env)
+readContext :: (MonadReader env m, MonadIO m, HasContext env)
             => (Context -> a) -> m a
 readContext reader = modifyReadContext id reader
 
 ---
 
-genUniqueID :: (MonadReader env m, MonadIO m, HasContext' env) => m ID
+genUniqueID :: (MonadReader env m, MonadIO m, HasContext env) => m ID
 genUniqueID = modifyReadContext
-  (lspUniqueID %~ succ)
-  (views lspUniqueID (IDNum . fromIntegral))
+    (#uniqueID %~ succ)
+    (views #uniqueID (IDNum . fromIntegral))
 
-genUniqueVersion :: (MonadReader env m, MonadIO m, HasContext' env)
+genUniqueVersion :: (MonadReader env m, MonadIO m, HasContext env)
                  => m Version
 genUniqueVersion = modifyReadContext
-  (lspUniqueVersion %~ succ)
-  (view lspUniqueVersion)
+    (#uniqueVersion %~ succ)
+    (view #uniqueVersion)
 
-addIdMethodMap :: (MonadReader env m, MonadIO m, HasContext' env)
+addIdMethodMap :: (MonadReader env m, MonadIO m, HasContext env)
                => ID -> ClientRequestMethod -> m ()
-addIdMethodMap id' m = modifyContext (lspIdMap %~ M.insert id' m)
+addIdMethodMap id' m = modifyContext (#idMethodMap %~ M.insert id' m)
 
-registerCallback :: (MonadReader env m, MonadIO m, HasContext' env)
+registerCallback :: (MonadReader env m, MonadIO m, HasContext env)
                  => ID -> Callback -> m ()
-registerCallback id' callback = modifyContext (lspCallbacks %~ M.insert id' callback)
+registerCallback id' callback = modifyContext (#callbacks %~ M.insert id' callback)
 
-getCallback :: (MonadReader env m, MonadIO m, HasContext' env)
+getCallback :: (MonadReader env m, MonadIO m, HasContext env)
             => ID -> m (Maybe Callback)
-getCallback id' = readContext (views lspCallbacks (M.lookup id'))
+getCallback id' = readContext (views #callbacks (M.lookup id'))
 
-removeCallback :: (MonadReader env m, MonadIO m, HasContext' env)
+removeCallback :: (MonadReader env m, MonadIO m, HasContext env)
                => ID -> m ()
-removeCallback id' = modifyContext (lspCallbacks %~ M.delete id')
+removeCallback id' = modifyContext (#callbacks %~ M.delete id')
 
 -------------------------------------------------------------------------------
 -- Dispatcher
 -------------------------------------------------------------------------------
 
--- TODO
 asyncNeovim :: NFData a => iEnv -> Neovim iEnv a -> Neovim env (Async ())
 asyncNeovim r a = do
     cfg <- Internal.ask'
@@ -496,30 +467,29 @@ asyncNeovim r a = do
 
 dispatch :: [Plugin] -> NeovimLsp ()
 dispatch hs = do
-    LspEnv {  lspEnvInChan  = inChG
-           , _lspEnvOutChan = outCh
-           , _lspEnvContext = ctx
-           } <- ask
+    inChG   <- view #inChan
+    outCh   <- view #outChan
+    ctx     <- view #context
+    logFunc <- view #logFunc
 
     inChs <- forM hs $ \(Plugin name action) -> do
       inCh <- liftIO newTChanIO
-      let config = PluginEnv
-                   { _pluginEnvInChan     = inCh
-                   , _pluginEnvOutChan    = outCh
-                   , _pluginEnvContext    = ctx
-                   , _pluginEnvLoggerName = topLoggerName ++ "." ++ name
-                   }
-      a <- asyncNeovim config $ loggingError action
+      let pluginEnv = #inChan  @= inCh
+                   <! #outChan @= outCh
+                   <! #context @= ctx
+                   <! #logFunc @= logFunc
+                   <! nil
+      a <- asyncNeovim pluginEnv $ loggingError action
       registerAsyncHandle name a
       return inCh
 
     dispatcher <- async $ loggingError $ forever $ do
       rawInput <- atomically (readTChan inChG)
       let Just !v = J.decode (BL.fromStrict rawInput)
-      idMap <- view lspIdMap <$> readTVarIO ctx
-      case toInMessage idMap v of
+      idMethodMap <- view #idMethodMap <$> readTVarIO ctx
+      case toInMessage idMethodMap v of
         Right !msg -> forM_ inChs $ atomically . flip writeTChan msg
-        Left e -> errorM $ init $ unlines
+        Left e -> logError $ fromString $ init $ unlines
             [ "dispatcher: could not parse input."
             --, "input: " ++ B.unpack rawInput
             , "error: " ++ e
@@ -530,7 +500,7 @@ dispatch hs = do
 -- Util
 -------------------------------------------------------------------------------
 
-loggingError :: (MonadReader r m, MonadUnliftIO m, HasLoggerName' r)
+loggingError :: (MonadReader r m, MonadUnliftIO m, HasLogFunc r)
              => m a -> m a
-loggingError = handleAny $ \e -> errorM (show e) >> throwIO e
+loggingError = handleAny $ \e -> logError (displayShow e) >> throwIO e
 

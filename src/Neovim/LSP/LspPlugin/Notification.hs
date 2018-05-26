@@ -9,8 +9,8 @@ module Neovim.LSP.LspPlugin.Notification
 import           RIO
 
 import           Control.Monad            (forever)
+import           Data.Extensible
 import qualified Data.Map                 as M
-import qualified System.Log.Logger        as L
 
 import           Neovim                   hiding (Plugin, whenM)
 import           Neovim.LSP.Base
@@ -22,7 +22,6 @@ notificationHandler = Plugin "noti" notificationPluginAction
 
 notificationPluginAction :: PluginAction ()
 notificationPluginAction = do
-  setLogLevel L.WARNING
   forever $ do
     msg <- pull
     case msg of
@@ -30,15 +29,15 @@ notificationPluginAction = do
         STextDocumentPublishDiagnostics -> do
           showDiagnotics noti
         SWindowShowMessage -> do
-          errorM "notificationHandler: WindowShowMessage: not implemented"
+          logError "notificationHandler: WindowShowMessage: not implemented"
         SWindowLogMessage -> do
-          errorM "notificationHandler: WindowLogMessage: not implemented"
+          logError "notificationHandler: WindowLogMessage: not implemented"
         STelemetryEvent -> do
-          errorM "notificationHandler: TelemetryEvent: not implemented"
+          logError "notificationHandler: TelemetryEvent: not implemented"
         SServerCancel -> do
-          errorM "notificationHandler: ServerCancel: not implemented"
+          logError "notificationHandler: ServerCancel: not implemented"
         SServerNotificationMisc _ -> do
-          errorM "notificationHandler: Misc: not implemented"
+          logError "notificationHandler: Misc: not implemented"
       _ -> return ()
 
 -------------------------------------------------------------------------------
@@ -48,18 +47,16 @@ notificationPluginAction = do
 showDiagnotics :: ServerNotification 'TextDocumentPublishDiagnosticsK
                -> PluginAction ()
 showDiagnotics (Notification noti) = do
-    let params      = noti^. #params
-        uri         = params^. #uri
-        diagnostics = params^. #diagnostics
+    let uri         = noti^. 訊#params . #uri
+        diagnostics = noti^. 訊#params . #diagnostics
     modifyContext $
-      over (lspOtherState.diagnosticsMap) $
+      over (#otherState.diagnosticsMap) $
       M.insert uri diagnostics
-
     -- 今開いてるBufferは優先的に表示する
     -- curiとuriは必ずしも一致しないことに注意
     --    e.g. hieではapp/Main.hsを編集するとsrc/Lib.hsのdiagも送られてくることがある
-    whenM (readContext (view (lspConfig.autoLoadQuickfix))) $ do
-      allDiagnostics <- readContext $ view (lspOtherState.diagnosticsMap)
+    whenM (readContext . view $ #lspConfig.autoLoadQuickfix) $ do
+      allDiagnostics <- readContext . view $ #otherState.diagnosticsMap
       curi <- getBufUri =<< nvim_get_current_buf'
       let qfItems = diagnosticsToQfItems curi allDiagnostics
       replaceQfList qfItems
