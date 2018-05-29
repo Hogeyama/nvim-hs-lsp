@@ -6,13 +6,14 @@
 
 module Neovim.LSP.Base where
 
-import           RIO                        hiding(Lens', view)
-import qualified RIO.ByteString             as BS
-import qualified RIO.ByteString.Lazy        as BL
+import           RIO
+import qualified RIO.ByteString             as B
+import qualified RIO.Text                   as T
 import           RIO.List.Partial           (init)
 import           Prelude                    (read, succ)
 
-import           Control.Lens               hiding (Context)
+import           Control.Lens               (makeLenses, views)
+import           Control.Lens.Operators
 import           Control.Monad              ((>=>), forM, forM_, forever)
 import           Control.Monad.IO.Class     (MonadIO, liftIO)
 import qualified Data.Aeson                 as J
@@ -25,6 +26,7 @@ import qualified Data.Map                   as M
 import           Data.Maybe                 (isJust)
 import           Data.Singletons            (Sing, SomeSing (..), fromSing,
                                              singByProxy, toSing)
+import           GHC.TypeLits               (Symbol)
 import           System.Exit                (exitSuccess)
 import           System.IO                  (IOMode(..), hGetLine, openFile)
 import           System.IO.Error            (isEOFError)
@@ -35,9 +37,6 @@ import           System.Process             (CreateProcess (..), ProcessHandle,
 import           Neovim                     hiding (Plugin, (<>))
 import qualified Neovim.Context.Internal    as Internal
 import           Neovim.LSP.Protocol.Type
-
---import           GHC.Stack
-import           GHC.TypeLits
 
 -------------------------------------------------------------------------------
 -- Env
@@ -296,15 +295,30 @@ initializeLsp cmd args = do
         , "￣Y^Y^Y^Y^Y^Y^Y￣"
         ]
   where
-    watcher herr = forever $ catchIO
-      (liftIO (hGetLine herr) >>= showAndLog . ("STDERR: "++))
-      (\e ->  if isEOFError e
-              then throwIO e
-              else showAndLog $ "STDERR: Exception: " ++ show e)
+    --watcher herr = forever $ catchIO
+    --  (liftIO (hGetLine herr) >>= showAndLog . ("STDERR: "++))
+    --  (\e ->  if isEOFError e
+    --          then throwIO e
+    --          else showAndLog $ "STDERR: Exception: " ++ show e)
 
+    --showAndLog msg = do
+    --    logError (fromString msg)
+    --    vim_report_error' msg
+
+    watcher :: HasLogFunc env => Handle -> Neovim env b
+    watcher herr = forever $
+        do s <- B.hGetLine herr
+           showAndLog $ "STDERR: " <> displayBytesUtf8 s
+      `catchIO` \e ->
+        if isEOFError e
+        then throwIO e
+        else showAndLog $ "STDERR: Exception: " <> displayShow e
+
+    showAndLog :: HasLogFunc env => Utf8Builder -> Neovim env ()
     showAndLog msg = do
-        logError (fromString msg)
-        vim_report_error' msg
+        logError msg
+        vim_report_error' $ T.unpack $ utf8BuilderToText msg
+        -- なんでRIOには'Utf8Builder -> String'の関数がないんだ
 
 loadLspConfig :: HasContext env => Neovim env ()
 loadLspConfig = do
@@ -357,7 +371,7 @@ sender serverIn chan = forever $ do
     bs <- atomically $ readTChan chan
     hPutBuilder serverIn $ getUtf8Builder $ mconcat
         [ "Content-Length: "
-        , displayShow $ BS.length bs
+        , displayShow $ B.length bs
         , "\r\n\r\n"
         , displayBytesUtf8 bs
         ]
@@ -371,7 +385,7 @@ receiver serverOut chan = forever $ do
   where
     receive h = do
         len <- liftIO $ contentLength <$> readHeader h
-        content <- BS.hGet h len
+        content <- B.hGet h len
         logDebug $ "<= " <> displayBytesUtf8 content
         return content
 
@@ -404,7 +418,7 @@ pull = liftIO . atomically . readTChan =<< view #inChan
 push :: (HasOutChan env, J.ToJSON a, Show a) => a -> Neovim env ()
 push x = do
     outCh <- view #outChan
-    liftIO $ atomically $ writeTChan outCh $ BL.toStrict (J.encode x)
+    liftIO $ atomically $ writeTChan outCh $ toStrictBytes (J.encode x)
 
 modifyReadContext :: (MonadReader env m, MonadIO m, HasContext env)
                   => (Context -> Context) -> (Context -> a) -> m a
@@ -485,7 +499,7 @@ dispatch hs = do
 
     dispatcher <- async $ loggingError $ forever $ do
       rawInput <- atomically (readTChan inChG)
-      let Just !v = J.decode (BL.fromStrict rawInput)
+      let Just !v = J.decode (fromStrictBytes rawInput)
       idMethodMap <- view #idMethodMap <$> readTVarIO ctx
       case toInMessage idMethodMap v of
         Right !msg -> forM_ inChs $ atomically . flip writeTChan msg
