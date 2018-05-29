@@ -295,17 +295,6 @@ initializeLsp cmd args = do
         , "￣Y^Y^Y^Y^Y^Y^Y￣"
         ]
   where
-    --watcher herr = forever $ catchIO
-    --  (liftIO (hGetLine herr) >>= showAndLog . ("STDERR: "++))
-    --  (\e ->  if isEOFError e
-    --          then throwIO e
-    --          else showAndLog $ "STDERR: Exception: " ++ show e)
-
-    --showAndLog msg = do
-    --    logError (fromString msg)
-    --    vim_report_error' msg
-
-    watcher :: HasLogFunc env => Handle -> Neovim env b
     watcher herr = forever $
         do s <- B.hGetLine herr
            showAndLog $ "STDERR: " <> displayBytesUtf8 s
@@ -314,7 +303,6 @@ initializeLsp cmd args = do
         then throwIO e
         else showAndLog $ "STDERR: Exception: " <> displayShow e
 
-    showAndLog :: HasLogFunc env => Utf8Builder -> Neovim env ()
     showAndLog msg = do
         logError msg
         vim_report_error' $ T.unpack $ utf8BuilderToText msg
