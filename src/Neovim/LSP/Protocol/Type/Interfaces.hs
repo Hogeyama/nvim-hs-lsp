@@ -454,7 +454,7 @@ type ImplResponse (m :: k) =
   ,IsMethodKind k
   ,Eq        (ResResult m)
   ,Show      (ResResult m)
-  ,ToJSON    (ResResult m) -- TOOD: ResultはOptionで包むのでFieldJSONではダメ
+  ,ToJSON    (ResResult m) -- TODO: ResultはOptionで包むのでFieldJSONではダメ
   ,FromJSON  (ResResult m) --       綺麗に書けないかなあ
   ,Eq        (ResError m)
   ,Show      (ResError m)
@@ -487,9 +487,6 @@ deriving instance ImplResponse m => Eq       (Response m)
 deriving instance ImplResponse m => Show     (Response m)
 deriving instance ImplResponse m => ToJSON   (Response m)
 deriving instance ImplResponse m => FromJSON (Response m)
-
--- proof
---------
 
 -------------------------------------------------------------------------------
 -- Request

@@ -56,10 +56,8 @@ nvimHsLspInitialize _ = loggingError $ do
             Just Right{} <- addAutocmd "BufWrite"
                               pat (nvimHsLspSaveBuffer arg)
             nvimHsLspOpenBuffer def
-            whenM (readContext $ view (#lspConfig.autoLoadQuickfix)) $
+            whenM (readContext . view $ #lspConfig.autoLoadQuickfix) $
               vim_command' "botright copen"
-            b <- readContext $ view (#lspConfig.autoLoadQuickfix)
-            logDebug $ "autoLoadQuickfix: " <> displayShow b
             vim_out_write' $
               "nvim-hs-lsp: Initialized for filetype `" ++ ft ++ "`\n"
           _ ->
