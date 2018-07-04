@@ -46,40 +46,40 @@ type NeovimLsp = Neovim LspEnv
 
 -- | Enviroment of the main thread.
 type LspEnv = Record
-  '[ "serverHandles" >: TVar (Maybe ServerHandles)
-   , "logFileHandle" >: Handle
-   , "fileType"      >: TVar (Maybe String)
-   , "otherHandles"  >: TVar OtherHandles
-   , "inChan"        >: TChan ByteString
-   , "outChan"       >: TChan ByteString
-   , "openedFiles"   >: TVar (Map Uri Version)
-   , "context"       >: TVar Context
-   , "logFunc"       >: LogFunc
+  '[ "serverHandles"    >: TVar (Maybe ServerHandles)
+   , "fileType"         >: TVar (Maybe String)
+   , "otherHandles"     >: TVar OtherHandles
+   , "inChan"           >: TChan ByteString
+   , "outChan"          >: TChan ByteString
+   , "openedFiles"      >: TVar (Map Uri Version)
+   , "context"          >: TVar Context
+   , "logFunc"          >: LogFunc
+   , "logFileHandle"    >: Handle
+   , "logFuncFinalizer" >: IO ()
    ]
 
 initialEnvM :: MonadIO m => m LspEnv
 initialEnvM = do
   h <- liftIO $ openFile "/tmp/nvim-hs-lsp.log" AppendMode
-  hsequence $ #serverHandles <@=> newTVarIO Nothing
-           <! #logFileHandle <@=> return h
-           <! #fileType      <@=> newTVarIO Nothing
-           <! #otherHandles  <@=> newTVarIO (OtherHandles [])
-           <! #inChan        <@=> newTChanIO
-           <! #outChan       <@=> newTChanIO
-           <! #openedFiles   <@=> newTVarIO M.empty
-           <! #context       <@=> newTVarIO initialContext
-           <! #logFunc       <@=> makeLogFunc h
+  (lf, lfFinalizer) <- liftIO $ makeLogFunc h
+  hsequence $ #serverHandles    <@=> newTVarIO Nothing
+           <! #fileType         <@=> newTVarIO Nothing
+           <! #otherHandles     <@=> newTVarIO (OtherHandles [])
+           <! #inChan           <@=> newTChanIO
+           <! #outChan          <@=> newTChanIO
+           <! #openedFiles      <@=> newTVarIO M.empty
+           <! #context          <@=> newTVarIO initialContext
+           <! #logFunc          <@=> return lf
+           <! #logFileHandle    <@=> return h
+           <! #logFuncFinalizer <@=> return lfFinalizer
            <! nil
   where
-    makeLogFunc h = liftIO $ do
-      hSetBuffering h LineBuffering
-      opts <- setLogTerminal False .
-              setLogUseColor False <$>
-              logOptionsHandle h True
-      withLogFunc opts return
-      -- TODO 'withLogFunc opts return'は普通にまずいけど
-      --      'setLogTerminal False'しておけば
-      --      リソースの取得はしないので大丈夫そう
+    makeLogFunc h = do
+        hSetBuffering h LineBuffering
+        opts <- setLogTerminal False .
+                setLogUseColor False <$>
+                logOptionsHandle h True
+        newLogFunc opts
 
 -- | Enviroment of each plugin.
 type PluginEnv = Record
@@ -347,6 +347,7 @@ finalizeLSP = do
     useTV #serverHandles >>= \case
       Nothing -> return ()
       Just sh -> liftIO $ terminateProcess (serverPH sh)
+    liftIO =<< view #logFuncFinalizer
     hClose =<< view #logFileHandle
 
 -------------------------------------------------------------------------------
