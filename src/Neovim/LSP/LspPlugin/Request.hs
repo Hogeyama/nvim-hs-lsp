@@ -21,6 +21,7 @@ import           Neovim.LSP.Base
 import           Neovim.LSP.Protocol.Messages
 import           Neovim.LSP.Protocol.Type
 import           Neovim.LSP.Util
+import Data.List (intercalate)
 
 requestHandler :: Plugin
 requestHandler = Plugin "req" requestPluginAction
@@ -46,11 +47,10 @@ requestPluginAction = forever @_ @() @() $ do
 -- TODO ask whether to apply or not
 respondWorkspaceAplyEdit :: Request 'WorkspaceApplyEditK -> PluginAction ()
 respondWorkspaceAplyEdit (Request req) = do
-  let edit = req^. 訊#params.訊#edit
+  let edit = req^. 訊#params. #edit
   logDebug $ displayShow edit
   case edit^. #changes of
     None -> case edit^. #documentChanges of
-      None    -> logError "respondWorkspaceAplyEdit: Wrong Input!"
       None -> logError "respondWorkspaceAplyEdit: Wrong Input!"
       Some cs -> applyDocumentChanges cs >>= ret
     Some cs -> applyChanges cs >>= ret
@@ -69,8 +69,20 @@ applyChanges cs = do
           (l1,_)  = positionToNvimPos (range^. #start)
           (l2,_)  = positionToNvimPos (range^. #end)
           newText = e^. #newText
-      vim_command' $ "edit " ++ uriToFilePath uri ++ " | "
+      let cmd1 = "edit " ++ uriToFilePath uri ++ " | "
                   ++ show l1 ++ "," ++ show (l2-1) ++ "d"
+          cmd2 = "setline(" ++
+                    intercalate ","
+                      [ show l1
+                      , show $ lines newText
+                      ]
+                  ++ ")"
+      logDebug "applyChanges"
+      logDebug $ fromString cmd2
+      unless (l1==l2) $ do
+        logDebug $ fromString cmd1
+        vim_command' $ "edit " ++ uriToFilePath uri ++ " | "
+                    ++ show l1 ++ "," ++ show (l2-1) ++ "d"
       void $ vim_call_function' "setline"
         [ ObjectInt (fromIntegral l1)
         , ObjectArray $ map (ObjectString . BS.pack) (lines newText)

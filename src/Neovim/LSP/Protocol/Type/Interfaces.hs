@@ -1060,7 +1060,6 @@ type instance RequestParam ('ServerRequestMiscK s) = Value
 type instance ResResult    ('ServerRequestMiscK s) = Value
 type instance ResError     ('ServerRequestMiscK s) = Value
 
-
 -------------------------------------------------------------------------------
 -- Util
 -------------------------------------------------------------------------------

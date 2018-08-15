@@ -9,10 +9,10 @@ module Neovim.LSP.LspPlugin.Notification
 import           RIO
 
 import           Control.Monad            (forever)
-import           Data.Extensible
+import           Control.Lens             ((%~))
 import qualified Data.Map                 as M
 
-import           Neovim                   hiding (Plugin, whenM)
+import           Neovim                   hiding (Plugin, whenM, (<>))
 import           Neovim.LSP.Base
 import           Neovim.LSP.Util
 import           Neovim.LSP.Protocol.Type
@@ -47,11 +47,10 @@ notificationPluginAction = do
 showDiagnotics :: ServerNotification 'TextDocumentPublishDiagnosticsK
                -> PluginAction ()
 showDiagnotics (Notification noti) = do
-    let uri         = noti^. 訊#params . #uri
-        diagnostics = noti^. 訊#params . #diagnostics
-    modifyContext $
-      over (#otherState.diagnosticsMap) $
-      M.insert uri diagnostics
+    let params      = noti^. #params
+        uri         = params^. #uri
+        diagnostics = params^. #diagnostics
+    modifyContext $ #otherState.diagnosticsMap %~ M.insert uri diagnostics
     -- 今開いてるBufferは優先的に表示する
     -- curiとuriは必ずしも一致しないことに注意
     --    e.g. hieではapp/Main.hsを編集するとsrc/Lib.hsのdiagも送られてくることがある
