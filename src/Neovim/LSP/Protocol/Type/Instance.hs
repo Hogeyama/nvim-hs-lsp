@@ -8,7 +8,7 @@
 
 module Neovim.LSP.Protocol.Type.Instance
   ( Option(..)
-  , (:|:)(..)
+  , (:|:)(..), pattern L, pattern R
   , Nullable
   , FieldJSON
   ) where
@@ -84,14 +84,29 @@ type family IsOptional a :: Bool where
 -- >>> encode (L 1 :: Int :|: Bool)
 -- "1"
 --
-data (:|:) a b = L a | R b
+newtype (:|:) a b = Sum (Either a b)
   deriving (Show, Eq, Ord, Generic, NFData)
 instance (FromJSON a, FromJSON b) => FromJSON (a :|: b) where
-  parseJSON o =  L <$> parseJSON o
-             <|> R <$> parseJSON o
+  parseJSON o =  Sum . Left  <$> parseJSON o
+             <|> Sum . Right <$> parseJSON o
 instance (ToJSON a, ToJSON b) => ToJSON (a :|: b) where
-  toJSON (L o) = toJSON o
-  toJSON (R o) = toJSON o
+  toJSON (Sum (Left  o)) = toJSON o
+  toJSON (Sum (Right o)) = toJSON o
+
+{-# COMPLETE L, R #-}
+pattern L :: a -> a :|: b
+pattern L a = Sum (Left a)
+pattern R :: b -> a :|: b
+pattern R b = Sum (Right b)
+
+--data (:|:) a b = L a | R b
+--  deriving (Show, Eq, Ord, Generic, NFData)
+--instance (FromJSON a, FromJSON b) => FromJSON (a :|: b) where
+--  parseJSON o =  L <$> parseJSON o
+--             <|> R <$> parseJSON o
+--instance (ToJSON a, ToJSON b) => ToJSON (a :|: b) where
+--  toJSON (L o) = toJSON o
+--  toJSON (R o) = toJSON o
 infixr 4 :|:
 
 -------------------------------------------------------------------------------
