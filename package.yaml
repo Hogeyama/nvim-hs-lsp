@@ -52,6 +52,7 @@ library:
   dependencies:
   - nvim-hs >= 1.0.0.0
     # 0.2.4の testWithEmbeddedNeovim は壊れている模様
+  - nvim-hs-contrib
   - aeson
   - constraints
   - containers
