@@ -4,16 +4,20 @@
 module Neovim.LSP.Action.Callback where
 
 import           RIO
-import           RIO.List.Partial         (head)
+import           RIO.List
+import           RIO.List.Partial         --(head, (!!))
 
 import           Data.Extensible
 import qualified Data.Text                as T
 
 import           Neovim                   hiding (Plugin, range, (<>))
+import qualified Neovim.User.Choice       as Choice
 import           Neovim.LSP.Base
 import           Neovim.LSP.Protocol.Type
 import           Neovim.LSP.Util
+import           Neovim.LSP.Action.Request
 import           Data.Either.Combinators  (whenLeft)
+import Data.Coerce (coerce)
 
 -------------------------------------------------------------------------------
 -- Hover
@@ -159,6 +163,42 @@ removeNewline = map (\c -> if c == '\n' then ' ' else c)
 -- ↩ U+21A9 LEFTWARDS ARROW WITH HOOK
 
 -------------------------------------------------------------------------------
+-- CodeAction
+-------------------------------------------------------------------------------
+
+callbackCodeAction :: CallbackOf 'TextDocumentCodeActionK ()
+callbackCodeAction (Response resp) = do
+    m <- withResult resp $ \case
+      Nothing -> do
+        logDebug "callbackCodeAction: got Nothing"
+        return ()
+      Just xs -> do
+        let cmds = lefts $ coerce @_ @[Either _ CodeAction] xs
+        case cmds of
+          [] -> nvimEchom "no code action"
+          [cmd] -> executeCommandOrNot cmd
+          _ -> chooseCommandAndExecute cmds
+    case m of
+      Nothing -> return ()
+      Just () -> return ()
+
+chooseCommandAndExecute :: [Command] -> Neovim PluginEnv ()
+chooseCommandAndExecute cmds = do
+    let titles = map (view #title) cmds
+    Choice.oneOf titles >>= \case
+      Nothing -> return ()
+      Just x -> case find (\cmd -> cmd^. #title == x) cmds of
+        Nothing -> error "impossible"
+        Just cmd -> executeCommand cmd
+
+executeCommandOrNot :: Command -> Neovim PluginEnv ()
+executeCommandOrNot cmd = do
+    b <- Choice.yesOrNo ("execute this command?: " ++ cmd ^. #title)
+    when b $ executeCommand cmd
+
+executeCommand :: Command -> Neovim PluginEnv ()
+executeCommand cmd = void $ executeCommandRequest (cmd ^. #command) (cmd ^. #arguments) Nothing
+
 -- Util
 -------------------------------------------------------------------------------
 

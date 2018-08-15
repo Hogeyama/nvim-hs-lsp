@@ -1,13 +1,14 @@
 
-{-# LANGUAGE DeriveGeneric          #-}
-{-# LANGUAGE DeriveAnyClass         #-}
-{-# LANGUAGE EmptyCase              #-}
-{-# LANGUAGE UndecidableInstances   #-}
-{-# OPTIONS_GHC -Wall               #-}
+{-# LANGUAGE AllowAmbiguousTypes  #-}
+{-# LANGUAGE DeriveGeneric        #-}
+{-# LANGUAGE DeriveAnyClass       #-}
+{-# LANGUAGE EmptyCase            #-}
+{-# LANGUAGE UndecidableInstances #-}
+{-# OPTIONS_GHC -Wall             #-}
 
 module Neovim.LSP.Protocol.Type.Interfaces
   ( Nullable
-  , (:|:)(..)
+  , (:|:)(..), pattern L, pattern R
   , ID(..)
   , Number
   , Version
@@ -82,6 +83,14 @@ module Neovim.LSP.Protocol.Type.Interfaces
   , versionedTextDocmentIdentifier
   -- reexport
   , Option(..)
+
+  -- TODO
+  , Enum'(..)
+  , mkEnum
+  , mkEnum'
+  , mkEnum''
+  , CodeAction
+  , CodeActionKind
   )
   where
 
@@ -104,6 +113,9 @@ import           GHC.Generics                      (Generic)
 import           Neovim.LSP.Protocol.Type.Instance
 import           Neovim.LSP.Protocol.Type.Method
 import           Safe                              (lookupJust)
+
+import           Data.Proxy
+import           GHC.TypeLits
 
 -- Interfaces defined in
 -- https://github.com/Microsoft/language-server-protocol/blob/master/protocol.md
@@ -518,8 +530,23 @@ type instance ResError 'InitializeK = Record
 -- Other Data
 --------------
 
+--アホみたいにコンパイルに時間かかる
+--type Trace = Enum' '[ "off", "messages", "verbose" ]
+--traceOff, traceMessages, traceVerbose :: Trace
+--traceOff = mkEnum' #off
+--traceMessages = mkEnum' #messages
+--traceVerbose = mkEnum' #verbose
 data Trace = TraceOff | TraceMessages | TraceVerbose
   deriving (Show, Eq, Ord)
+instance FromJSON Trace where
+  parseJSON (String "off")      = return TraceOff
+  parseJSON (String "messages") = return TraceMessages
+  parseJSON (String "verbose")  = return TraceVerbose
+  parseJSON _                   = mzero
+instance ToJSON Trace where
+  toJSON TraceOff      = String "off"
+  toJSON TraceMessages = String "messages"
+  toJSON TraceVerbose  = String "verbose"
 
 type ClientCapabilities = Record
   '[ "workspace"    >: Option WorkspaceClientCapabilities
@@ -712,20 +739,6 @@ type DocumentLinkOptions = Record
 type ExecuteCommandOptions = Record
   '[ "commands" >: [String]
    ]
-
--- instances
--------------
--- (To|From)JSON Trace{{{
-instance FromJSON Trace where
-  parseJSON (String "off")      = return TraceOff
-  parseJSON (String "messages") = return TraceMessages
-  parseJSON (String "verbose")  = return TraceVerbose
-  parseJSON _                   = mzero
-instance ToJSON Trace where
-  toJSON TraceOff      = String "off"
-  toJSON TraceMessages = String "messages"
-  toJSON TraceVerbose  = String "verbose"
--- }}}
 
 --(To|From)JSON TextDocumentSync{{{
 instance FromJSON TextDocumentSync where
@@ -948,12 +961,80 @@ type ReferenceContext = Record
   '[ "includeDeclaration" >: Bool
    ]
 
+-- TextDocumentCodeAction
+---------------------------------------
+
+type instance RequestParam 'TextDocumentCodeActionK = CodeActionParams
+type instance ResResult 'TextDocumentCodeActionK = Nullable [Command :|: CodeAction]
+type instance ResError  'TextDocumentCodeActionK = CodeActionParams
+
+type CodeActionParams = Record
+  '[ "textDocument" >: TextDocumentIdentifier
+   , "range"        >: Range
+   , "context"      >: CodeActionContext
+   ]
+type CodeActionContext = Record
+  '[ "diagnostics" >: [Diagnostic]
+   , "only"        >: Option [CodeActionKind]
+   ]
+
+type CodeActionKind = Enum'
+  '[ "quickfix"
+   , "refactor"
+   , "refactor.extract"
+   , "refactor.inline"
+   , "refactor.rewrite"
+   , "source"
+   ]
+
+type CodeAction = Record
+  '[ "title"       >: String
+   , "kind"        >: Option CodeActionKind
+   , "diagnostics" >: Option [Diagnostic]
+   , "edit"        >: Option WorkspaceEdit
+   , "command"     >: Command
+   ]
+
+newtype Enum' (xs :: [Symbol]) = Enum' (Proxy :| xs)
+deriving instance Forall (Instance1 Eq   Proxy) xs => Eq   (Enum' xs)
+deriving instance (Forall (Instance1 Eq   Proxy) xs, Forall (Instance1 Ord  Proxy) xs) => Ord  (Enum' xs)
+deriving instance Forall (Instance1 Show Proxy) xs => Show (Enum' xs)
+instance Forall KnownSymbol xs => ToJSON (Enum' xs) where
+  toJSON (Enum' v) = matchWith
+      (\c _ -> toJSON $ getConst' c)
+      (htabulateFor (Proxy @KnownSymbol) (Const' . symbolVal))
+      v
+instance Forall KnownSymbol xs => FromJSON (Enum' xs) where
+  parseJSON = withText "Enum" $ \s ->
+      hfoldMapWithIndexFor @_ @xs (Proxy @KnownSymbol)
+        (\i x -> if s == fromString (symbolVal x)
+                 then return (remember i (mkEnum x))
+                 else mempty)
+        vacancy
+
+mkEnum :: forall x xs proxy. Member xs x => proxy x -> Enum' xs
+mkEnum _ = Enum' (embed (Proxy @x))
+
+-- | use with overloaded labels:
+--
+-- >>> mkEnum' #refactor :: CodeActionKind
+-- Enum' (EmbedAt $(mkMembership 1) Proxy)
+mkEnum' :: Member xs x => Proxy x -> Enum' xs
+mkEnum' p = Enum' (embed p)
+
+-- | use with type application:
+--
+-- >>> mkEnum'' @"refactor.inline" :: CodeActionKind
+-- Enum' (EmbedAt $(mkMembership 3) Proxy)
+mkEnum'' :: forall x xs. Member xs x => Enum' xs
+mkEnum'' = Enum' (embed (Proxy @x))
+
 -- Misc
 ---------------------------------------
 
-type instance RequestParam      ('ClientRequestMiscK      s) = Value
-type instance ResResult         ('ClientRequestMiscK      s) = Value
-type instance ResError          ('ClientRequestMiscK      s) = Value
+type instance RequestParam ('ClientRequestMiscK s) = Value
+type instance ResResult    ('ClientRequestMiscK s) = Value
+type instance ResError     ('ClientRequestMiscK s) = Value
 
 ---------------------------------------
 -- Server                            --

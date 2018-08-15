@@ -51,6 +51,7 @@ respondWorkspaceAplyEdit (Request req) = do
   case edit^. #changes of
     None -> case edit^. #documentChanges of
       None    -> logError "respondWorkspaceAplyEdit: Wrong Input!"
+      None -> logError "respondWorkspaceAplyEdit: Wrong Input!"
       Some cs -> applyDocumentChanges cs >>= ret
     Some cs -> applyChanges cs >>= ret
   where

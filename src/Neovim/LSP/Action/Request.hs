@@ -6,13 +6,15 @@ module Neovim.LSP.Action.Request where
 import           RIO
 
 import           Data.Aeson
+import qualified Data.Map                 as M
+import           Data.Maybe               (fromJust)
 import           Data.Extensible
+import           Control.Lens             (views)
 
 import           Neovim
 import           Neovim.LSP.Base
 import           Neovim.LSP.Protocol.Type
 import           Neovim.LSP.Util
-import Data.Maybe (fromJust)
 
 -- TextDocumentHover
 ---------------------------------------
@@ -74,4 +76,34 @@ completionRequest b p callback = do
             <! #context      @= None
             <! nil
   fromJust <$> pushRequest params (Just callback)
+
+-- TextDocumentCodeAction
+---------------------------------------
+
+codeAction :: (HasOutChan env, HasContext env)
+           => Buffer
+           -> (NvimPos, NvimPos)
+           -> CallbackOf 'TextDocumentCodeActionK a
+           -> Neovim env (TMVar a)
+codeAction b (start,end) callback = do
+  uri <- getBufUri b
+  allDiagnostics <- readContext $
+    views (#otherState.diagnosticsMap) (fromMaybe [] . M.lookup uri)
+  let params = #textDocument @= textDocumentIdentifier uri
+            <! #range        @= ( #start @= nvimPosToPosition start
+                               <! #end   @= nvimPosToPosition end
+                               <! nil)
+            <! #context      @= context
+            <! nil
+      context = #diagnostics @= diags
+             <! #only @= None
+             <! nil
+      diags = filter `flip` allDiagnostics $ \diag ->
+        let start' = positionToNvimPos $ diag^. 訊#range. #start
+            end'   = positionToNvimPos $ diag^. 訊#range. #end
+            line   = fst
+        in line start' <= line start && line start <= line end'
+
+  fromJust <$> pushRequest params (Just callback)
+
 

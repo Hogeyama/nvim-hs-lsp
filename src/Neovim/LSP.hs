@@ -16,24 +16,23 @@ plugin = do
     , exports =
             [
             -- Notification
-              $(command' 'nvimHsLspInitialize)     ["async"]
-            , $(command' 'nvimHsLspOpenBuffer)     ["async","!"]
-            , $(command' 'nvimHsLspCloseBuffer)    ["async"]
-            , $(command' 'nvimHsLspChangeBuffer)   ["async","!"]
-            , $(command' 'nvimHsLspSaveBuffer)     ["async","!"]
-            , $(command' 'nvimHsLspExit)           ["async"]
+              $(command' 'nvimHsLspInitialize) ["async"]
+            , $(command' 'nvimHsLspOpenBuffer) ["async","!"]
+            , $(command' 'nvimHsLspCloseBuffer) ["async"]
+            , $(command' 'nvimHsLspChangeBuffer) ["async","!"]
+            , $(command' 'nvimHsLspSaveBuffer) ["async","!"]
+            , $(command' 'nvimHsLspExit) ["async"]
             -- Request
-            , $(command' 'nvimHsLspHover)          ["async"]
-            , $(command' 'nvimHsLspInfo)           ["async"]
-            , $(command' 'nvimHsLspDefinition)     ["async"]
-            , $(command' 'nvimHsLspApplyRefactOne) ["async"]
+            , $(command' 'nvimHsLspHover) ["async"]
+            , $(command' 'nvimHsLspInfo) ["async"]
+            , $(command' 'nvimHsLspDefinition) ["async"]
+            , $(command' 'nvimHsLspCodeAction) ["async"]
+            , $(command' 'nvimHsLspHieCaseSplit) ["async"]
             -- Other
-            , $(command' 'nvimHsLspLoadQuickfix)   ["async"]
+            , $(command' 'nvimHsLspLoadQuickfix) ["async",  "!"]
             --
-            , $(function' 'nvimHsLspComplete)      Sync
+            , $(function' 'nvimHsLspComplete) Sync
             , $(function' 'nvimHsLspAsyncComplete) Async
             ]
     }
-
-
 

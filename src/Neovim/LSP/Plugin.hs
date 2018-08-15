@@ -8,6 +8,7 @@ import           RIO
 import           Control.Monad                     (unless, void, when)
 import           Control.Monad.Extra               (ifM, whenJust)
 import           Data.Aeson                        hiding (Object)
+import           Data.Extensible
 import qualified Data.ByteString.Char8             as B
 import           Data.Char                         (isAlphaNum)
 import           Data.List                         (isPrefixOf, partition)
@@ -153,20 +154,6 @@ nvimHsLspDefinition _ = whenInitialized $ whenAlreadyOpened $ do
   pos <- getNvimPos
   void $ definitionRequest b pos callbackDefinition
 
--- HIE ApplyRefact
-------------------
-
--- argument: {file: Uri, start_pos: Position}
-nvimHsLspApplyRefactOne :: CommandArguments -> NeovimLsp ()
-nvimHsLspApplyRefactOne _ = whenInitialized $ whenAlreadyOpened $ do
-  b <- vim_get_current_buffer'
-  uri <- getBufUri b
-  pos <- getNvimPos
-  let  arg = toJSON $ object [ "file" .= uri
-                             , "start_pos" .= nvimPosToPosition pos
-                             ]
-  void $ executeCommandRequest "applyrefact:applyOne" (Some [arg]) Nothing
-
 -- Completion
 -------------
 
@@ -223,7 +210,7 @@ nvimHsCompleteResultVar :: String
 nvimHsCompleteResultVar = "NvimHsLspCompleteResult"
 
 -------------------------------------------------------------------------------
--- ?
+-- Load Quickfix (not a command)
 -------------------------------------------------------------------------------
 
 nvimHsLspLoadQuickfix :: CommandArguments -> NeovimLsp ()
@@ -242,4 +229,29 @@ nvimHsLspLoadQuickfix arg = do
       else vim_command' "botright copen"
   where
     showAll = Just True == bang arg
+
+-------------------------------------------------------------------------------
+-- CodeAction
+-------------------------------------------------------------------------------
+
+nvimHsLspCodeAction :: CommandArguments -> NeovimLsp ()
+nvimHsLspCodeAction _ = whenInitialized $ whenAlreadyOpened $ do
+    b <- vim_get_current_buffer'
+    pos <- getNvimPos
+    waitCallback $ codeAction b (pos,pos) callbackCodeAction
+
+-- HIE
+-------
+
+nvimHsLspHieCaseSplit :: CommandArguments -> NeovimLsp ()
+nvimHsLspHieCaseSplit _ = hiePointCommand "ghcmod:casesplit"
+
+hiePointCommand :: String -> NeovimLsp ()
+hiePointCommand cmd =  whenInitialized $ whenAlreadyOpened $ do
+    uri <- getBufUri =<< vim_get_current_buffer'
+    pos <- getNvimPos
+    let arg = toJSON $ #file @= uri
+                    <! #pos  @= nvimPosToPosition pos
+                    <! nil @(Field Identity)
+    void $ executeCommandRequest cmd (Some [arg]) Nothing
 

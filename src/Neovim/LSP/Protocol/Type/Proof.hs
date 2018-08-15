@@ -33,7 +33,7 @@ prfClientReq = \case -- {{{
     STextDocumentRangeFormatting     -> notImplemented
     STextDocumentOnTypeFormatting    -> notImplemented
     STextDocumentDefinition          -> notImplemented
-    STextDocumentCodeAction          -> notImplemented
+    STextDocumentCodeAction          -> Dict
     STextDocumentCodeLens            -> notImplemented
     SCodeLensResolve                 -> notImplemented
     STextDocumentDocumentLink        -> notImplemented
@@ -75,7 +75,7 @@ prfServerResp = \case  -- {{{
     STextDocumentRangeFormatting     -> notImplemented
     STextDocumentOnTypeFormatting    -> notImplemented
     STextDocumentDefinition          -> Dict
-    STextDocumentCodeAction          -> notImplemented
+    STextDocumentCodeAction          -> Dict
     STextDocumentCodeLens            -> notImplemented
     SCodeLensResolve                 -> notImplemented
     STextDocumentDocumentLink        -> notImplemented
