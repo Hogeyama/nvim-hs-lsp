@@ -128,7 +128,8 @@ data ServerHandles = ServerHandles
 
 -- sender, receiver, watcher of serverErr, dispatcher, plugins
 newtype OtherHandles = OtherHandles
-  { unOtherHandles :: [(String, Async ())] } -- (name,_)
+  { unOtherHandles :: [(String, Async ())] }
+  -- 'String' refers to the name of Handle
 
 data OtherState = OtherState
   { _diagnosticsMap :: Map Uri [Diagnostic]
