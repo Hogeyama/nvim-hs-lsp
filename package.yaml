@@ -59,7 +59,6 @@ library:
   - unordered-containers
   - extensible
   - hashable
-  - hslogger
   - lens
   - process
   - safe
@@ -100,14 +99,11 @@ tests:
     - nvim-hs
     - nvim-hs-lsp
     - hspec
-    - QuickCheck
     - unliftio
-    - prettyprinter
     - process
     - directory
     - resourcet
     - extensible
-    - prettyprinter-ansi-terminal
     - transformers
     - mtl
 

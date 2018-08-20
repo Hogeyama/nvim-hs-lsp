@@ -99,8 +99,9 @@ codeAction b (start,end) callback = do
              <! #only @= None
              <! nil
       diags = filter `flip` allDiagnostics $ \diag ->
-        let start' = positionToNvimPos $ diag^. 訊#range. #start
-            end'   = positionToNvimPos $ diag^. 訊#range. #end
+        let range  = diag^. #range
+            start' = positionToNvimPos $ range^. #start
+            end'   = positionToNvimPos $ range^. #end
             line   = fst
         in line start' <= line start && line start <= line end'
 

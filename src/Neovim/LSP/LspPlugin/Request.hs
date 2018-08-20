@@ -1,6 +1,5 @@
 
 {-# LANGUAGE PartialTypeSignatures #-}
-{-# OPTIONS_GHC -Wall #-}
 
 module Neovim.LSP.LspPlugin.Request
   ( requestHandler
@@ -47,7 +46,8 @@ requestPluginAction = forever @_ @() @() $ do
 -- TODO ask whether to apply or not
 respondWorkspaceAplyEdit :: Request 'WorkspaceApplyEditK -> PluginAction ()
 respondWorkspaceAplyEdit (Request req) = do
-  let edit = req^. 訊#params. #edit
+  let params = req^. #params
+      edit = params ^. #edit
   logDebug $ displayShow edit
   case edit^. #changes of
     None -> case edit^. #documentChanges of

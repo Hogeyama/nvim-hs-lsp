@@ -12,7 +12,7 @@ import           Control.Monad            (forever)
 import           Control.Lens             ((%~))
 import qualified Data.Map                 as M
 
-import           Neovim                   hiding (Plugin, whenM, (<>))
+import           Neovim                   hiding (Plugin, whenM)
 import           Neovim.LSP.Base
 import           Neovim.LSP.Util
 import           Neovim.LSP.Protocol.Type
