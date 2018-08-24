@@ -5,15 +5,12 @@
 module Neovim.LSP.Util where
 
 import           RIO                          hiding ((^.))
+import           RIO.List                     (sortBy)
+import qualified RIO.Text                     as T
+import qualified RIO.Map                      as M
 
-import           Control.Lens.Operators
+import           Control.Lens                 ((^.))
 import           Data.Extensible
-import           Data.Function                (on)
-import           Data.List                    (sortBy)
-import           Data.Text                    (Text)
-import qualified Data.Text                    as T
-import           Data.Map                     (Map)
-import qualified Data.Map                     as M
 import           Data.Singletons
 
 import           Neovim

@@ -4,10 +4,10 @@
 module Neovim.LSP.Action.Request where
 
 import           RIO
+import qualified RIO.Map                  as M
+import           RIO.Partial              (fromJust)
 
 import           Data.Aeson
-import qualified Data.Map                 as M
-import           Data.Maybe               (fromJust)
 import           Data.Extensible
 import           Control.Lens             (views)
 

@@ -7,10 +7,10 @@ module Neovim.LSP.Action.Notification
   where
 
 import           RIO
+import qualified RIO.Map                      as M
+import           RIO.Partial                  (fromJust)
 
 import           Data.Extensible              (nil, (<!), (@=))
-import           Data.Maybe                   (fromJust)
-import qualified Data.Map                     as M
 
 import           Neovim
 import           Neovim.LSP.Base

@@ -4,18 +4,16 @@
 module Neovim.LSP.Plugin where
 
 import           RIO
+import           RIO.Char                          (isAlphaNum)
+import           RIO.List                          (isPrefixOf, partition)
+import qualified RIO.Map                           as M
 
-import           Control.Monad                     (unless, void, when)
 import           Control.Monad.Extra               (ifM, whenJust)
 import           Data.Aeson                        hiding (Object)
 import           Data.Extensible
 import qualified Data.ByteString.Char8             as B
-import           Data.Char                         (isAlphaNum)
-import           Data.List                         (isPrefixOf, partition)
-import qualified Data.Map                          as M
 
 import           Neovim                            hiding (whenM, unlessM, (<>))
-
 import           Neovim.LSP.Action.Notification
 import           Neovim.LSP.Action.Request
 import           Neovim.LSP.Action.Callback

@@ -6,21 +6,17 @@ module Neovim.LSP.LspPlugin.Request
   )
   where
 
-import           RIO                          hiding ((^.))
+import           RIO
+import qualified RIO.Map                      as M
+import           RIO.List                     (intercalate)
 
-import           Control.Lens.Operators
-import           Control.Monad                (forM_, forever)
-import qualified Data.ByteString.Char8        as BS
 import           Data.Extensible
-import           Data.Map                     (Map)
-import qualified Data.Map                     as M
 
 import           Neovim                       hiding (Plugin, range)
 import           Neovim.LSP.Base
 import           Neovim.LSP.Protocol.Messages
 import           Neovim.LSP.Protocol.Type
 import           Neovim.LSP.Util
-import Data.List (intercalate)
 
 requestHandler :: Plugin
 requestHandler = Plugin "req" requestPluginAction
@@ -85,7 +81,8 @@ applyChanges cs = do
                     ++ show l1 ++ "," ++ show (l2-1) ++ "d"
       void $ vim_call_function' "setline"
         [ ObjectInt (fromIntegral l1)
-        , ObjectArray $ map (ObjectString . BS.pack) (lines newText)
+        , ObjectArray $
+            map (ObjectString . encodeUtf8 . fromString) (lines newText)
         ]
   return True
 

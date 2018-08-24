@@ -14,16 +14,12 @@ module Neovim.LSP.Protocol.Type.Instance
   ) where
 
 import           RIO
+import qualified RIO.HashMap           as HM
+import qualified RIO.Map               as M
 
-import           Control.Applicative   ((<|>))
 import           Data.Aeson            hiding (KeyValue, Object)
 import qualified Data.Aeson.Types      as J
 import           Data.Extensible       hiding (Nullable)
-import           Data.Functor.Identity (Identity (..))
-import qualified Data.HashMap.Strict   as HM
-import qualified Data.Map              as M
-import           Data.Proxy
-import           Data.String           (fromString)
 import           GHC.Generics          (Generic)
 import           GHC.TypeLits          (KnownSymbol, symbolVal)
 

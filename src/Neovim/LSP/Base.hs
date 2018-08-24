@@ -7,35 +7,34 @@
 module Neovim.LSP.Base where
 
 import           RIO
-import qualified RIO.ByteString             as B
-import qualified RIO.Text                   as T
-import           RIO.List.Partial           (init)
-import           Prelude                    (read, succ)
+import qualified RIO.ByteString           as B
+import qualified RIO.HashMap              as HM
+import           RIO.List                 (isPrefixOf)
+import           RIO.List.Partial         (init)
+import qualified RIO.Map                  as M
+import           RIO.Partial              (read)
+--import qualified RIO.Text                 as T
 
-import           Control.Lens               (makeLenses, views)
+import           Control.Lens             (makeLenses, views)
 import           Control.Lens.Operators
-import           Control.Monad              ((>=>), forM, forM_, forever)
-import           Control.Monad.IO.Class     (MonadIO, liftIO)
-import qualified Data.Aeson                 as J
+import           Control.Monad            (forM, forM_, forever, (>=>))
+import           Control.Monad.IO.Class   (MonadIO, liftIO)
+import qualified Data.Aeson               as J
+import           Data.Constraint          (withDict)
 import           Data.Extensible
-import           Data.Constraint            (withDict)
-import qualified Data.HashMap.Strict        as HM
-import           Data.List                  (isPrefixOf)
-import           Data.Map                   (Map)
-import qualified Data.Map                   as M
-import           Data.Maybe                 (isJust)
-import           Data.Singletons            (Sing, SomeSing (..), fromSing,
-                                             singByProxy, toSing)
-import           GHC.TypeLits               (Symbol)
-import           System.Exit                (exitSuccess)
-import           System.IO                  (IOMode(..), hGetLine, openFile)
-import           System.IO.Error            (isEOFError)
-import           System.Process             (CreateProcess (..), ProcessHandle,
-                                             StdStream (..), createProcess,
-                                             proc, terminateProcess)
+import           Data.Maybe               (isJust)
+import           Data.Singletons          (Sing, SomeSing (..), fromSing,
+                                           singByProxy, toSing)
+import           GHC.TypeLits             (Symbol)
+import           System.Exit              (exitSuccess)
+import           System.IO                (IOMode (..), hGetLine, openFile)
+import           System.IO.Error          (isEOFError)
+import           System.Process           (CreateProcess (..), ProcessHandle,
+                                           StdStream (..), createProcess, proc,
+                                           terminateProcess)
 
-import           Neovim                     hiding (Plugin, (<>))
-import qualified Neovim.Context.Internal    as Internal
+import           Neovim                   hiding (Plugin, (<>))
+import qualified Neovim.Context.Internal  as Internal
 import           Neovim.LSP.Protocol.Type
 
 -------------------------------------------------------------------------------
@@ -306,8 +305,9 @@ initializeLsp cmd args = do
 
     showAndLog msg = do
         logError msg
-        vim_report_error' $ T.unpack $ utf8BuilderToText msg
+        --vim_report_error' $ T.unpack $ utf8BuilderToText msg
         -- なんでRIOには'Utf8Builder -> String'の関数がないんだ
+        -- rlsがうるさいのでreportやめます
 
 loadLspConfig :: HasContext env => Neovim env ()
 loadLspConfig = do
@@ -435,13 +435,13 @@ readContext reader = modifyReadContext id reader
 
 genUniqueID :: (MonadReader env m, MonadIO m, HasContext env) => m ID
 genUniqueID = modifyReadContext
-    (#uniqueID %~ succ)
+    (#uniqueID %~ (+1))
     (views #uniqueID (IDNum . fromIntegral))
 
 genUniqueVersion :: (MonadReader env m, MonadIO m, HasContext env)
                  => m Version
 genUniqueVersion = modifyReadContext
-    (#uniqueVersion %~ succ)
+    (#uniqueVersion %~ (+1))
     (view #uniqueVersion)
 
 addIdMethodMap :: (MonadReader env m, MonadIO m, HasContext env)

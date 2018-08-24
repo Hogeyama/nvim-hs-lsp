@@ -5,7 +5,6 @@ module Neovim.LSP.LspPlugin.Callback where
 
 import           RIO
 
-import           Control.Monad            (forever)
 import           Data.Typeable            (cast, typeOf)
 
 import           Neovim                   (vim_report_error')

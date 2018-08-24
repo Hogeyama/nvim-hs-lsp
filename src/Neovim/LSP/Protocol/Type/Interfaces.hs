@@ -1,7 +1,7 @@
 
 {-# LANGUAGE AllowAmbiguousTypes  #-}
-{-# LANGUAGE DeriveGeneric        #-}
 {-# LANGUAGE DeriveAnyClass       #-}
+{-# LANGUAGE DeriveGeneric        #-}
 {-# LANGUAGE EmptyCase            #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wall             #-}
@@ -95,27 +95,22 @@ module Neovim.LSP.Protocol.Type.Interfaces
   where
 
 import           RIO                               hiding (Void)
+import           RIO.Char                          (toLower)
+import           RIO.Char.Partial                  (digitToInt)
 import           RIO.List.Partial                  (tail)
-import           Prelude                           (Enum(toEnum))
+import qualified RIO.Text                          as T
+import           Prelude                           (Enum (toEnum))
 
-import           Control.Monad                     (mzero)
 import           Data.Aeson                        hiding (Error)
 import           Data.Aeson.Types                  (toJSONKeyText)
-import           Data.Char                         (digitToInt, toLower)
 import           Data.Extensible                   hiding (Nullable)
-import           Data.Function                     (on)
-import           Data.Hashable                     (Hashable)
-import           Data.Map                          (Map)
 import           Data.Singletons                   (SingI, SingKind (..))
-import           Data.Text                         (Text)
-import qualified Data.Text                         as T
-import           GHC.Generics                      (Generic)
-import           Neovim.LSP.Protocol.Type.Instance
-import           Neovim.LSP.Protocol.Type.Method
+import           GHC.TypeLits
 import           Safe                              (lookupJust)
 
-import           Data.Proxy
-import           GHC.TypeLits
+import           Neovim.LSP.Protocol.Type.Instance
+import           Neovim.LSP.Protocol.Type.Method
+
 
 -- Interfaces defined in
 -- https://github.com/Microsoft/language-server-protocol/blob/master/protocol.md
@@ -185,7 +180,7 @@ data ID = IDNum Number | IDString String
 instance FromJSON ID where
   parseJSON (Number n) = return $ IDNum $ realToFrac n
   parseJSON (String s) = return $ IDString $ T.unpack s
-  parseJSON _          = mzero
+  parseJSON _          = mempty
 instance ToJSON ID where
   toJSON (IDNum n)    = toJSON n
   toJSON (IDString s) = toJSON s

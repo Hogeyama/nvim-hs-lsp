@@ -5,10 +5,10 @@ module Neovim.LSP.Action.Callback where
 
 import           RIO
 import           RIO.List
-import           RIO.List.Partial         --(head, (!!))
+import           RIO.List.Partial         (head)
+import qualified RIO.Text                 as T
 
 import           Data.Extensible
-import qualified Data.Text                as T
 
 import           Neovim                   hiding (Plugin, range, (<>))
 import qualified Neovim.User.Choice       as Choice
