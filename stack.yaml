@@ -1,8 +1,8 @@
 
-resolver: lts-11.0
+resolver: lts-11.17
 
 extra-deps:
-- nvim-hs-1.0.0.0
+- nvim-hs-1.0.0.2
 - nvim-hs-contrib-1.0.0.0
 - xformat-0.1.2.1
 - extensible-0.4.7
