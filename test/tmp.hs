@@ -39,7 +39,7 @@ main = do
   let f = "test-file/hoge.hs"
   testWithEmbeddedNeovim (Just f) (Seconds 10000) initialEnv $ do
     vim_command' "source ./test-file/init.vim"
-    initializeLsp "hie" ["--lsp", "-d", "-l", "/tmp/LanguageServer.log"]
+    initializeLsp "./" "hie" ["--lsp", "-d", "-l", "/tmp/LanguageServer.log"]
     dispatch [ notificationHandler , requestHandler, callbackHandler ]
     wait =<< async handler2
     finalizeLSP

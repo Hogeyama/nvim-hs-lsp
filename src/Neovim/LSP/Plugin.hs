@@ -41,11 +41,12 @@ nvimHsLspInitialize _ = loggingError $ do
         map' <- errOnInvalidResult $ vim_get_var "NvimHsLsp_serverCommands"
         case M.lookup ft map' of
           Just (cmd:args) -> do
-            initializeLsp cmd args
+            cwd <- errOnInvalidResult (vim_call_function "getcwd" [])
+            let cwdUri = filePathToUri cwd
+            initializeLsp cwd cmd args
             #fileType .== Just ft
             dispatch [notificationHandler, requestHandler, callbackHandler]
-            cwd <- getCWD
-            pushRequest' @'InitializeK (initializeParam Nothing (Just cwd))
+            pushRequest' @'InitializeK (initializeParam Nothing (Just cwdUri))
             let pat = def { acmdPattern = "*" }
                 arg = def { bang = Just True }
             Just Right{} <- addAutocmd "BufRead,BufNewFile"

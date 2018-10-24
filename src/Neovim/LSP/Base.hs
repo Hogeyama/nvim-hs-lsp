@@ -263,11 +263,12 @@ infix 4 %==
 -- Initialize
 -------------------------------------------------------------------------------
 
-initializeLsp :: String -> [String] -> NeovimLsp ()
-initializeLsp cmd args = do
+initializeLsp :: FilePath -> String -> [String] -> NeovimLsp ()
+initializeLsp cwd cmd args = do
+    logInfo $ "cwd: " <> displayShow cwd
     (Just hin, Just hout, Just herr, ph) <-
         liftIO $ createProcess $ (proc cmd args)
-          { cwd     = Nothing
+          { cwd     = Just cwd
           , std_in  = CreatePipe
           , std_out = CreatePipe
           , std_err = CreatePipe

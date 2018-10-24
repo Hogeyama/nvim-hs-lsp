@@ -119,7 +119,7 @@ testNeovimLsp time file action = do
     finally `flip` finalizeLSP $ do
       vim_command' "source ./test-file/init.vim"
 
-      initializeLsp "hie" ["--lsp", "-d", "-l", "/tmp/hie.log"]
+      initializeLsp "./" "hie" ["--lsp", "-d", "-l", "/tmp/hie.log"]
       #fileType .== Just "haskell"
       cwd <- getCWD
       pushRequest' @'InitializeK (initializeParam Nothing (Just cwd))
