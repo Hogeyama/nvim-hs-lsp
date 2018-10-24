@@ -30,7 +30,7 @@ import           Neovim.LSP.Util
 -------------------------------------------------------------------------------
 
 nvimHsLspInitialize :: CommandArguments -> NeovimLsp ()
-nvimHsLspInitialize _ = loggingError $ do
+nvimHsLspInitialize _ = loggingErrorImmortal $ do
   initialized <- isInitialized
   if initialized then do
     vim_out_write' $ "nvim-hs-lsp: Already initialized" ++ "\n"

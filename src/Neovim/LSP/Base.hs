@@ -25,6 +25,7 @@ import           Data.Extensible
 import           Data.Maybe               (isJust)
 import           Data.Singletons          (Sing, SomeSing (..), fromSing,
                                            singByProxy, toSing)
+import           GHC.Stack
 import           GHC.TypeLits             (Symbol)
 import           System.Exit              (exitSuccess)
 import           System.IO                (IOMode (..), hGetLine, openFile)
@@ -506,7 +507,15 @@ dispatch hs = do
 -- Util
 -------------------------------------------------------------------------------
 
-loggingError :: (MonadReader r m, MonadUnliftIO m, HasLogFunc r)
-             => m a -> m a
+loggingErrorImmortal
+  :: (HasCallStack, MonadReader r m, MonadUnliftIO m, HasLogFunc r)
+  => m () -> m ()
+loggingErrorImmortal = handleAny $ \e -> logError (displayShow e)
+  where ?callstack = popCallStack ?callstack
+
+loggingError
+  :: (HasCallStack, MonadReader r m, MonadUnliftIO m, HasLogFunc r)
+  => m a -> m a
 loggingError = handleAny $ \e -> logError (displayShow e) >> throwIO e
+  where ?callstack = popCallStack ?callstack
 

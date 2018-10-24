@@ -16,7 +16,6 @@ import           Control.Monad.Reader                      (runReaderT)
 import           Control.Monad.Trans.Resource              (runResourceT)
 import           System.Exit                               (ExitCode (..))
 import           System.Process                            hiding (env)
-import           UnliftIO
 
 newtype Seconds = Seconds Word
 

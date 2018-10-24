@@ -48,6 +48,7 @@ library:
   source-dirs: src
   ghc-options:
   - -Wall
+  - -fobject-code
     #- -fprint-explicit-kinds
   dependencies:
   - nvim-hs >= 1.0.0.0
