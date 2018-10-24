@@ -10,16 +10,13 @@ import qualified RIO.Text                     as T
 import qualified RIO.Map                      as M
 
 import           Control.Lens                 ((^.))
-import           Data.Extensible
+import           Data.Extensible.Rexport
 import           Data.Singletons
 
 import           Neovim
 import           Neovim.LSP.Base
 import           Neovim.LSP.Protocol.Messages
 import           Neovim.LSP.Protocol.Type
-
-getCWD :: Neovim env Uri
-getCWD = filePathToUri <$> errOnInvalidResult (vim_call_function "getcwd" [])
 
 getBufLanguage :: (HasLogFunc env)
                => Buffer -> Neovim env (Maybe String)
@@ -32,7 +29,7 @@ getBufUri :: Buffer -> Neovim env Uri
 getBufUri b = filePathToUri <$> nvim_buf_get_name' b
 
 getNvimPos :: (HasLogFunc env) => Neovim env NvimPos
-getNvimPos = vim_call_function "getpos" [ObjectString "."] >>= \case
+getNvimPos = vim_call_function_ "getpos" [ObjectString "."] >>= \case
   Right (fromObject -> Right [_bufnum, lnum, col, _off]) -> return (lnum,col)
   e -> logError (displayShow e) >> error "getNvimPos"
 
@@ -43,7 +40,8 @@ getTextDocumentPositionParams :: Buffer -> NvimPos
                               -> Neovim env TextDocumentPositionParams
 getTextDocumentPositionParams b p = do
   uri <- getBufUri b
-  let pos = #textDocument @= textDocumentIdentifier uri
+  let pos = Record
+          $ #textDocument @= textDocumentIdentifier uri
          <! #position     @= nvimPosToPosition p
          <! nil
   return pos
@@ -101,13 +99,13 @@ pushNotification param = push $ notification @m param
 type NvimPos = (Int,Int)
 
 nvimPosToPosition :: NvimPos -> Position
-nvimPosToPosition (line,char) =
+nvimPosToPosition (line,char) = Record $
     #line      @= line - 1
  <! #character @= char - 1
  <! nil
 
 positionToNvimPos :: Position -> NvimPos
-positionToNvimPos pos = (1 + pos^. #line, 1 + pos^. #character)
+positionToNvimPos pos = (1 + pos^.__#line, 1 + pos^.__#character)
 
 nvimEcho :: String -> Neovim env ()
 nvimEcho s = vim_command' $ "echo " ++ show s
@@ -142,11 +140,11 @@ diagnosticsToQfItems prior diagMap = pripri ++ rest
     rest   = M.foldMapWithKey toQfItems (M.delete prior diagMap)
     toQfItems uri diagnostics =
         concatMap (diagnosticToQfItems uri) $
-          sortBy (compare `on` view #severity) diagnostics
+          sortBy (compare `on` view #severity . fields) diagnostics
 
 -------------------------------------------------------------------------------
 
-type QfItem = Record
+type QfItem = OrigRecord
   '[ "filename" >: Option String
    , "lnum"     >: Option Int
    , "col"      >: Option Int
@@ -155,8 +153,20 @@ type QfItem = Record
    , "valid"    >: Option Bool
    ]
 
-replaceQfList :: [QfItem] -> Neovim env ()
-replaceQfList qs = void $ vim_call_function "setqflist" $ qs +: ['r'] +: []
+replaceQfList :: HasLogFunc env => [QfItem] -> Neovim env ()
+replaceQfList qs = void $ vim_call_function_ "setqflist" $! qs +: ['r'] +: []
+
+vim_call_function_ :: String -> [Object] -> Neovim env (Either NeovimException Object)
+vim_call_function_ func args = do
+  func' <- evaluate (force func)
+  args' <- evaluate (force args)
+  vim_call_function func' args'
+
+vim_call_function_' :: String -> [Object] -> Neovim env Object
+vim_call_function_' func args = do
+  func' <- evaluate (force func)
+  args' <- evaluate (force args)
+  vim_call_function' func' args'
 
 diagnosticToQfItems :: Uri -> Diagnostic -> [QfItem]
 diagnosticToQfItems uri d = header : rest
@@ -167,21 +177,21 @@ diagnosticToQfItems uri d = header : rest
           <! #type     @= Some errorType
           <! #text     @= text
           <! #valid    @= Some True
-          <! nil
+          <! nil @(Field Identity)
       where
-        start = d^. (#range :: FieldOptic "range") . #start
-        lnum = 1 + start^. #line
-        col  = 1 + start^. #character
-        errorType = case d^. #severity of
+        start = d^.__#range.__#start
+        lnum = 1 + start^.__#line
+        col  = 1 + start^.__#character
+        errorType = case d^.__#severity of
             Some Error        -> "E"
             Some Warning      -> "W"
             Some Information  -> "I"
             Some Hint         -> "I"
             _                 -> "W"
-        text = case d^. #source of
+        text = case d^.__#source of
             None   -> ""
             Some n -> "[" ++ n ++ "]"
-    rest = flip map (T.lines (d^. #message)) $ \msg ->
+    rest = flip map (T.lines (d^.__#message)) $ \msg ->
              #filename @= None
           <! #lnum     @= None
           <! #col      @= None

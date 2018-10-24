@@ -21,7 +21,7 @@ import           Control.Monad            (forM, forM_, forever, (>=>))
 import           Control.Monad.IO.Class   (MonadIO, liftIO)
 import qualified Data.Aeson               as J
 import           Data.Constraint          (withDict)
-import           Data.Extensible
+import           Data.Extensible.Rexport
 import           Data.Maybe               (isJust)
 import           Data.Singletons          (Sing, SomeSing (..), fromSing,
                                            singByProxy, toSing)
@@ -45,7 +45,7 @@ import           Neovim.LSP.Protocol.Type
 type NeovimLsp = Neovim LspEnv
 
 -- | Enviroment of the main thread.
-type LspEnv = Record
+type LspEnv = OrigRecord
   '[ "serverHandles"    >: TVar (Maybe ServerHandles)
    , "fileType"         >: TVar (Maybe String)
    , "otherHandles"     >: TVar OtherHandles
@@ -82,7 +82,7 @@ initialEnvM = do
         newLogFunc opts
 
 -- | Enviroment of each plugin.
-type PluginEnv = Record
+type PluginEnv = OrigRecord
   '[ "inChan"  >: TChan InMessage
    , "outChan" >: TChan ByteString
    , "context" >: TVar Context
@@ -90,7 +90,7 @@ type PluginEnv = Record
    ]
 
 -- | Context shared with main thread and all plugins.
-type Context = Record
+type Context = OrigRecord
   '[ "idMethodMap"   >: Map ID ClientRequestMethod
    , "uniqueID"      >: Int
    , "uniqueVersion" >: Version
@@ -214,14 +214,14 @@ resultEither (J.Error e)   = Left e
 makeLenses ''OtherState
 makeLenses ''LspConfig
 
-type family UnRecord env :: [Assoc Symbol *] where UnRecord (Record xs) = xs
-type IsRealRecord env = Record (UnRecord env) ~ env
+type family UnRecord env :: [Assoc Symbol *] where UnRecord (OrigRecord xs) = xs
+type IsRealRecord env = OrigRecord (UnRecord env) ~ env
 type Associate' k v env = (IsRealRecord env, Associate k v (UnRecord env))
 type HasContext env = Associate' "context" (TVar Context)     env
 type HasInChan  env = Associate' "inChan"  (TChan InMessage)  env
 type HasOutChan env = Associate' "outChan" (TChan ByteString) env
 instance Associate "logFunc" LogFunc xs
-  => HasLogFunc (Record xs) where logFuncL = #logFunc
+  => HasLogFunc (OrigRecord xs) where logFuncL = #logFunc
 -- #context :: HasContext env => Lens' env (TVar Context)
 
 {-
@@ -266,7 +266,6 @@ infix 4 %==
 
 initializeLsp :: FilePath -> String -> [String] -> NeovimLsp ()
 initializeLsp cwd cmd args = do
-    logInfo $ "cwd: " <> displayShow cwd
     (Just hin, Just hout, Just herr, ph) <-
         liftIO $ createProcess $ (proc cmd args)
           { cwd     = Just cwd
@@ -357,9 +356,9 @@ finalizeLSP = do
 -- Communication with Server
 -------------------------------------------------------------------------------
 
-sender :: (MonadIO m, MonadReader env m, HasLogFunc env)
+sender :: (MonadUnliftIO m, MonadReader env m, HasLogFunc env)
        => Handle -> TChan ByteString -> m ()
-sender serverIn chan = forever $ do
+sender serverIn chan = forever $ loggingErrorDeep $ do
     bs <- atomically $ readTChan chan
     hPutBuilder serverIn $ getUtf8Builder $ mconcat
         [ "Content-Length: "
@@ -370,9 +369,9 @@ sender serverIn chan = forever $ do
     logDebug $ "=> " <> displayBytesUtf8 bs
 
 
-receiver :: (MonadIO m, MonadReader env m, HasLogFunc env)
+receiver :: (MonadUnliftIO m, MonadReader env m, HasLogFunc env)
          => Handle -> TChan ByteString -> m ()
-receiver serverOut chan = forever $ do
+receiver serverOut chan = forever $ loggingErrorDeep $ do
     v <- receive serverOut
     atomically $ writeTChan chan v
   where
@@ -486,11 +485,11 @@ dispatch hs = do
                    <! #context @= ctx
                    <! #logFunc @= logFunc
                    <! nil
-      a <- asyncNeovim pluginEnv $ loggingError action
+      a <- asyncNeovim pluginEnv $ loggingErrorImmortal action
       registerAsyncHandle name a
       return inCh
 
-    dispatcher <- async $ loggingError $ forever $ do
+    dispatcher <- async $ forever $ loggingErrorImmortal $ do
       rawInput <- atomically (readTChan inChG)
       let Just !v = J.decode (fromStrictBytes rawInput)
       idMethodMap <- view #idMethodMap <$> readTVarIO ctx
@@ -510,12 +509,18 @@ dispatch hs = do
 loggingErrorImmortal
   :: (HasCallStack, MonadReader r m, MonadUnliftIO m, HasLogFunc r)
   => m () -> m ()
-loggingErrorImmortal = handleAny $ \e -> logError (displayShow e)
+loggingErrorImmortal = handleAnyDeep $ \e -> logError (displayShow e)
   where ?callstack = popCallStack ?callstack
 
 loggingError
   :: (HasCallStack, MonadReader r m, MonadUnliftIO m, HasLogFunc r)
   => m a -> m a
 loggingError = handleAny $ \e -> logError (displayShow e) >> throwIO e
+  where ?callstack = popCallStack ?callstack
+
+loggingErrorDeep
+  :: (HasCallStack, MonadReader r m, MonadUnliftIO m, HasLogFunc r, NFData a)
+  => m a -> m a
+loggingErrorDeep = handleAnyDeep $ \e -> logError (displayShow e) >> throwIO e
   where ?callstack = popCallStack ?callstack
 

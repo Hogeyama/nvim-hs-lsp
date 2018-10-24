@@ -11,24 +11,38 @@ module Neovim.LSP.Protocol.Type.Instance
   , (:|:)(..), pattern L, pattern R
   , Nullable
   , FieldJSON
+  , Record(..)
+  , __
   ) where
 
 import           RIO
-import qualified RIO.HashMap           as HM
-import qualified RIO.Map               as M
+import qualified RIO.HashMap             as HM
+import qualified RIO.Map                 as M
 
-import           Data.Aeson            hiding (KeyValue, Object)
-import qualified Data.Aeson.Types      as J
-import           Data.Extensible       hiding (Nullable)
-import           GHC.Generics          (Generic)
-import           GHC.TypeLits          (KnownSymbol, symbolVal)
+import           Data.Aeson              hiding (KeyValue, Object)
+import qualified Data.Aeson.Types        as J
+import qualified Data.Extensible         as E
+import           Data.Extensible.Rexport
+import           GHC.Generics            (Generic)
+import           GHC.TypeLits            (KnownSymbol, symbolVal)
 
-import           Neovim                (NvimObject (..))
-import qualified Neovim                as N (Object (..))
+import           Neovim                  (NvimObject (..))
+import qualified Neovim                  as N (Object (..))
+import Data.Coerce (coerce)
 
 -------------------------------------------------------------------------------
 -- Some data types
 -------------------------------------------------------------------------------
+
+newtype Record xs = Record { fields :: E.Record xs } deriving (Generic)
+deriving instance (Forall (Instance1 NFData (Field Identity)) xs) => NFData (Record xs)
+deriving instance (Forall (Instance1 Show (Field Identity)) xs) => Show (Record xs)
+deriving instance (Forall (Instance1 Eq   (Field Identity)) xs) => Eq   (Record xs)
+deriving instance ((Forall (Instance1 Eq   (Field Identity)) xs),
+                   (Forall (Instance1 Ord  (Field Identity)) xs)) => Ord  (Record xs)
+
+__ :: Lens' (OrigRecord xs) a -> Lens' (Record xs) a
+__ l  f t = coerce <$> l f (coerce t)
 
 type Nullable = Maybe
 
@@ -38,9 +52,10 @@ type Nullable = Maybe
 -- it will be omit with its key when converted by 'toJSON':
 --
 -- >>> :set -XDataKinds -XTypeOperators -XOverloadedStrings -XOverloadedLabels
+-- >>> import RIO
 -- >>> import qualified Data.ByteString.Lazy.Char8 as BL
--- >>> let recordMay = #id @= Nothing <! nil :: Record '["id" >: Maybe  Char]
--- >>> let recordOpt = #id @= None    <! nil :: Record '["id" >: Option Char]
+-- >>> let recordMay = Record $ #id @= Nothing <! nil :: Record '["id" >: Maybe  Char]
+-- >>> let recordOpt = Record $ #id @= None    <! nil :: Record '["id" >: Option Char]
 -- >>> BL.putStrLn $ encode $ toJSON recordMay
 -- {"id":null}
 -- >>> BL.putStrLn $ encode $ toJSON recordOpt
@@ -49,21 +64,21 @@ type Nullable = Maybe
 -- Inversely,
 --
 -- >>> decode "{\"id\":null}" :: Maybe (Record '["id" >: Maybe  Int])
--- Just (id @= Nothing <: nil)
+-- Just (Record {fields = id @= Nothing <: nil})
 -- >>> decode "{}" :: Maybe (Record '["id" >: Maybe  Int])
 -- Nothing
 -- >>> decode "{\"id\":null}" :: Maybe (Record '["id" >: Option Int])
--- Just (id @= None <: nil)
+-- Just (Record {fields = id @= None <: nil})
 -- >>> decode "{}" :: Maybe (Record '["id" >: Option Int])
--- Just (id @= None <: nil)
+-- Just (Record {fields = id @= None <: nil})
 --
 -- If you want a both nullable and ommitable field, use '(Option (Maybe a))':
 --
 -- >>> type Rec = Record '["id" >: Option (Maybe Int)]
 -- >>> decode "{\"id\":null}" :: Maybe Rec
--- Just (id @= Some Nothing <: nil)
+-- Just (Record {fields = id @= Some Nothing <: nil})
 -- >>> decode "{}" :: Maybe Rec
--- Just (id @= None <: nil)
+-- Just (Record {fields = id @= None <: nil})
 --
 data Option a = Some a | None
   deriving (Show, Eq, Ord, Generic, NFData, Functor)
@@ -134,7 +149,7 @@ class    (FieldFromJSON' (IsOptional a) a) => FieldFromJSON a
 instance (FieldFromJSON' (IsOptional a) a) => FieldFromJSON a
 
 instance Forall (KeyValue KnownSymbol FieldFromJSON) xs => FromJSON (Record xs) where
-  parseJSON = withObject "Object" $ \v ->
+  parseJSON = withObject "Object" $ \v -> fmap Record $
     hgenerateFor (Proxy @(KeyValue KnownSymbol FieldFromJSON))
     $ \(m :: Membership xs x) ->
             let k = symbolVal (proxyAssocKey m)
@@ -157,7 +172,7 @@ toJSON_ :: forall a. FieldToJSON a => a -> Maybe Value
 toJSON_ = toJSON' (Proxy @(IsOptional a))
 
 instance Forall (KeyValue KnownSymbol FieldToJSON) xs => ToJSON (Record xs) where
-  toJSON xs = J.Object $ hfoldlWithIndexFor
+  toJSON (Record xs) = J.Object $ hfoldlWithIndexFor
     (Proxy @(KeyValue KnownSymbol FieldToJSON))
     (\_ m kv ->
       let key  = fromString $ symbolVal $ proxyAssocKey kv
@@ -187,6 +202,19 @@ toObject_ = toObject' (Proxy @(IsOptional a))
 
 instance (NFData (Record xs), Forall (KeyValue KnownSymbol FieldNvimObject) xs)
           => NvimObject (Record xs) where
+  toObject (Record xs) = N.ObjectMap $ hfoldlWithIndexFor
+    (Proxy @(KeyValue KnownSymbol FieldNvimObject))
+    (\_ m kv ->
+      let key  = N.ObjectString $ fromString $ symbolVal $ proxyAssocKey kv
+          mval = toObject_ $ runIdentity $ getField kv
+      in case mval of
+        Nothing  -> m
+        Just val -> M.insert key val m)
+    M.empty
+    xs
+
+instance (NFData (E.Record xs), Forall (KeyValue KnownSymbol FieldNvimObject) xs)
+          => NvimObject (E.Record xs) where
   toObject xs = N.ObjectMap $ hfoldlWithIndexFor
     (Proxy @(KeyValue KnownSymbol FieldNvimObject))
     (\_ m kv ->

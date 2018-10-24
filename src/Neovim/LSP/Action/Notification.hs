@@ -35,7 +35,8 @@ didOpenBuffer b = do
     language <- fromJust <$> getBufLanguage b
     contents <- getBufContents b
     let textDocumentItem :: TextDocumentItem
-                         = #uri        @= uri
+                         = Record
+                         $ #uri        @= uri
                         <! #languageId @= language
                         <! #version    @= version
                         <! #text       @= contents
@@ -48,7 +49,8 @@ didOpenBuffer b = do
 didCloseBuffer :: (HasOutChan env, HasContext env) => Buffer -> Neovim env ()
 didCloseBuffer b = do
     uri <- getBufUri b
-    let param = #textDocument @= textDocumentIdentifier uri
+    let param = Record
+              $ #textDocument @= textDocumentIdentifier uri
              <! nil
     push $ notification @'TextDocumentDidCloseK param
     resetDiagnostics uri
@@ -58,7 +60,8 @@ didCloseBuffer b = do
 didSaveBuffer :: (HasOutChan env, HasContext env) => Buffer -> Neovim env ()
 didSaveBuffer b = do
     uri  <- getBufUri b
-    let param = #textDocument @= textDocumentIdentifier uri
+    let param = Record
+              $ #textDocument @= textDocumentIdentifier uri
              <! #text         @= None --Some contents
              <! nil
     push $ notification @'TextDocumentDidSaveK param
@@ -71,11 +74,13 @@ didChangeBuffer b = do
     uri      <- getBufUri b
     contents <- getBufContents b
     version  <- genUniqueVersion
-    let change = #range       @= None
+    let change = Record
+               $ #range       @= None
               <! #rangeLength @= None
               <! #text        @= contents
               <! nil
-        param = #textDocument   @= versionedTextDocmentIdentifier uri version
+        param = Record
+              $ #textDocument   @= versionedTextDocmentIdentifier uri version
              <! #contentChanges @= [change]
              <! nil
     push $ notification @'TextDocumentDidChangeK param

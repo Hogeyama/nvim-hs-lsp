@@ -3,8 +3,7 @@
 
 module Neovim.LSP.LspPlugin.Notification
   ( notificationHandler
-  )
-  where
+  ) where
 
 import           RIO
 import qualified RIO.Map                  as M
@@ -20,8 +19,7 @@ notificationHandler :: Plugin
 notificationHandler = Plugin "noti" notificationPluginAction
 
 notificationPluginAction :: PluginAction ()
-notificationPluginAction = do
-  forever $ do
+notificationPluginAction = forever $ loggingErrorImmortal $ do
     msg <- pull
     case msg of
       SomeNoti (noti :: ServerNotification m) -> case singByProxy noti of
@@ -46,9 +44,9 @@ notificationPluginAction = do
 showDiagnotics :: ServerNotification 'TextDocumentPublishDiagnosticsK
                -> PluginAction ()
 showDiagnotics (Notification noti) = do
-    let params      = noti^. #params
-        uri         = params^. #uri
-        diagnostics = params^. #diagnostics
+    let uri         = noti^.__#params.__#uri
+        diagnostics = noti^.__#params.__#diagnostics
+    logError $ displayShow diagnostics
     modifyContext $ #otherState.diagnosticsMap %~ M.insert uri diagnostics
     -- 今開いてるBufferは優先的に表示する
     -- curiとuriは必ずしも一致しないことに注意
@@ -56,6 +54,5 @@ showDiagnotics (Notification noti) = do
     whenM (readContext . view $ #lspConfig.autoLoadQuickfix) $ do
       allDiagnostics <- readContext . view $ #otherState.diagnosticsMap
       curi <- getBufUri =<< nvim_get_current_buf'
-      let qfItems = diagnosticsToQfItems curi allDiagnostics
-      replaceQfList qfItems
+      replaceQfList $ diagnosticsToQfItems curi allDiagnostics
 

@@ -18,7 +18,6 @@ import           Neovim
 
 import           Neovim.LSP.Action.Notification    (didChangeBuffer, didOpenBuffer)
 import           Neovim.LSP.Action.Request
-import           Neovim.LSP.Action.Callback
 import           Neovim.LSP.Base
 import           Neovim.LSP.Plugin
 import           Neovim.LSP.LspPlugin.Callback     (callbackHandler)
@@ -69,14 +68,16 @@ spec = do
               threadDelaySec 1 -- wait for loading
               b <- vim_get_current_buffer'
               waitCallback $ definitionRequest b (8,11) return
-          expected = Response
+          expected = Response . Record
               $  #jsonrpc @= "2.0"
               <: #id @= Just (IDNum 1.0)
               <: #result @= Some (Just
-                    [  #uri @= filePathToUri (baseDirectory ++ tail src)
-                    <: #range @= (#start @= (#line @= 11 <: #character @= 0 <: nil)
-                               <: #end   @= (#line @= 11 <: #character @= 4 <: nil)
-                               <: nil)
+                    [  Record $
+                       #uri @= filePathToUri (baseDirectory ++ tail src)
+                    <: #range @= Record { fields =
+                                  #start @= Record (#line @= 11 <: #character @= 0 <: nil)
+                               <: #end   @= Record (#line @= 11 <: #character @= 4 <: nil)
+                               <: nil }
                     <: nil])
               <: #error @= None <: nil
       definition1 `shouldReturn` expected
@@ -88,14 +89,16 @@ spec = do
               threadDelaySec 1 -- wait for loading
               b <- vim_get_current_buffer'
               waitCallback $ definitionRequest b (9,3) return
-          expected = Response
+          expected = Response . Record
               $  #jsonrpc @= "2.0"
               <: #id @= Just (IDNum 1.0)
               <: #result @= Some (Just
-                    [  #uri @= filePathToUri (baseDirectory ++ tail tgt)
-                    <: #range @= (#start @= (#line @= 4 <: #character @= 0 <: nil)
-                               <: #end   @= (#line @= 4 <: #character @= 12 <: nil)
-                               <: nil)
+                    [  Record $
+                       #uri @= filePathToUri (baseDirectory ++ tail tgt)
+                    <: #range @= Record { fields =
+                                  #start @= Record (#line @= 4 <: #character @= 0 <: nil)
+                               <: #end   @= Record (#line @= 4 <: #character @= 12 <: nil)
+                               <: nil }
                     <: nil])
               <: #error @= None <: nil
       definition2 `shouldReturn` expected
@@ -121,7 +124,7 @@ testNeovimLsp time file action = do
 
       initializeLsp "./" "hie" ["--lsp", "-d", "-l", "/tmp/hie.log"]
       #fileType .== Just "haskell"
-      cwd <- getCWD
+      cwd <- filePathToUri <$> errOnInvalidResult (vim_call_function_ "getcwd" [])
       pushRequest' @'InitializeK (initializeParam Nothing (Just cwd))
 
       dispatch [ callbackHandler ]

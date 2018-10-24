@@ -91,6 +91,9 @@ module Neovim.LSP.Protocol.Type.Interfaces
   , mkEnum''
   , CodeAction
   , CodeActionKind
+
+  , Record(..)
+  , __
   )
   where
 
@@ -103,7 +106,7 @@ import           Prelude                           (Enum (toEnum))
 
 import           Data.Aeson                        hiding (Error)
 import           Data.Aeson.Types                  (toJSONKeyText)
-import           Data.Extensible                   hiding (Nullable)
+import           Data.Extensible                   hiding (Nullable, Record, record)
 import           Data.Singletons                   (SingI, SingKind (..))
 import           GHC.TypeLits
 import           Safe                              (lookupJust)
@@ -293,10 +296,11 @@ type VersionedTextDocmentIdentifierF =
    ]
 
 textDocumentIdentifier :: Uri -> TextDocumentIdentifier
-textDocumentIdentifier uri = #uri @= uri <! nil
+textDocumentIdentifier uri = Record $ #uri @= uri <! nil
 
 versionedTextDocmentIdentifier :: Uri -> Version -> VersionedTextDocmentIdentifier
-versionedTextDocmentIdentifier uri version = #uri @= uri
+versionedTextDocmentIdentifier uri version = Record
+                                           $ #uri @= uri
                                           <! #version @= Some version
                                           <! nil
 

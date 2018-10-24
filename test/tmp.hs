@@ -21,8 +21,8 @@ import           Neovim.Context                    (quit)
 import           Neovim.Test
 
 import           Neovim.LSP.Action.Callback
-import           Neovim.LSP.Action.Notification    (didChangeBuffer, didOpenBuffer)
-import           Neovim.LSP.Action.Request         (hoverRequest)
+import           Neovim.LSP.Action.Notification    --(didChangeBuffer, didOpenBuffer)
+import           Neovim.LSP.Action.Request         --(hoverRequest)
 import           Neovim.LSP.Base
 import           Neovim.LSP.LspPlugin.Notification
 import           Neovim.LSP.LspPlugin.Request
@@ -51,7 +51,7 @@ handler2 = do
 
   -- Initialize
   -------------
-  let cwd = filePathToUri "/home/hogeyama/.config/nvim/nvim-hs-libs/nvim-hs-lsp/test-file"
+  let cwd = filePathToUri "/home/hogeyama/.config/nvim/nvim-hs-libs/nvim-hs-lsp/test-file" -- TODO
       params' = initializeParam Nothing (Just cwd)
   pushRequest' @'InitializeK params'
 

@@ -22,7 +22,7 @@ requestHandler :: Plugin
 requestHandler = Plugin "req" requestPluginAction
 
 requestPluginAction :: PluginAction ()
-requestPluginAction = forever @_ @() @() $ do
+requestPluginAction = forever $ loggingErrorImmortal $ do
   msg <- pull
   case msg of
     SomeReq req -> case singByProxy req of
@@ -42,17 +42,16 @@ requestPluginAction = forever @_ @() @() $ do
 -- TODO ask whether to apply or not
 respondWorkspaceAplyEdit :: Request 'WorkspaceApplyEditK -> PluginAction ()
 respondWorkspaceAplyEdit (Request req) = do
-  let params = req^. #params
-      edit = params ^. #edit
+  let edit = req^.__#params.__#edit
   logDebug $ displayShow edit
-  case edit^. #changes of
-    None -> case edit^. #documentChanges of
+  case edit^.__#changes of
+    None -> case edit^.__#documentChanges of
       None -> logError "respondWorkspaceAplyEdit: Wrong Input!"
       Some cs -> applyDocumentChanges cs >>= ret
     Some cs -> applyChanges cs >>= ret
   where
     ret x = push $ response @'WorkspaceApplyEditK
-              (Just (req^. #id)) (Some (result x)) None
+              (Just (req^.__#id)) (Some Record { fields = result x }) None
     result b = #applied @= b <! nil
 
 -- just apply edits from bottom to top.
@@ -61,10 +60,10 @@ applyChanges :: Map Uri [TextEdit] -> PluginAction Bool
 applyChanges cs = do
   forM_ (M.toList cs) $ \(uri,es) -> do
     forM_ es $ \e -> catchAndDisplay $ do
-      let range   = e^. #range
-          (l1,_)  = positionToNvimPos (range^. #start)
-          (l2,_)  = positionToNvimPos (range^. #end)
-          newText = e^. #newText
+      let range = e^.__#range
+          (l1,_)  = positionToNvimPos (range^.__#start)
+          (l2,_)  = positionToNvimPos (range^.__#end)
+          newText = e^.__#newText
       let cmd1 = "edit " ++ uriToFilePath uri ++ " | "
                   ++ show l1 ++ "," ++ show (l2-1) ++ "d"
           cmd2 = "setline(" ++
@@ -79,7 +78,7 @@ applyChanges cs = do
         logDebug $ fromString cmd1
         vim_command' $ "edit " ++ uriToFilePath uri ++ " | "
                     ++ show l1 ++ "," ++ show (l2-1) ++ "d"
-      void $ vim_call_function' "setline"
+      void $ vim_call_function_' "setline"
         [ ObjectInt (fromIntegral l1)
         , ObjectArray $
             map (ObjectString . encodeUtf8 . fromString) (lines newText)

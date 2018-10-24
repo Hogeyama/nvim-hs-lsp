@@ -33,6 +33,7 @@ plugin = do
             --
             , $(function' 'nvimHsLspComplete) Sync
             , $(function' 'nvimHsLspAsyncComplete) Async
+            , $(function' 'nvimHsLspHieHsImport) Sync
             ]
     }
 

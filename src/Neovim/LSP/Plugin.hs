@@ -16,7 +16,6 @@ import qualified Data.ByteString.Char8             as B
 import           Neovim                            hiding (whenM, unlessM, (<>))
 import           Neovim.LSP.Action.Notification
 import           Neovim.LSP.Action.Request
-import           Neovim.LSP.Action.Callback
 import           Neovim.LSP.Base
 import           Neovim.LSP.LspPlugin.Callback
 import           Neovim.LSP.LspPlugin.Notification (notificationHandler)
@@ -41,7 +40,7 @@ nvimHsLspInitialize _ = loggingErrorImmortal $ do
         map' <- errOnInvalidResult $ vim_get_var "NvimHsLsp_serverCommands"
         case M.lookup ft map' of
           Just (cmd:args) -> do
-            cwd <- errOnInvalidResult (vim_call_function "getcwd" [])
+            cwd <- errOnInvalidResult (vim_call_function_ "getcwd" [])
             let cwdUri = filePathToUri cwd
             initializeLsp cwd cmd args
             #fileType .== Just ft
@@ -134,13 +133,13 @@ nvimHsLspExit _ = whenInitialized $ do
 -- Hover
 --------
 nvimHsLspInfo :: CommandArguments -> NeovimLsp ()
-nvimHsLspInfo _ = whenInitialized $ whenAlreadyOpened $ do
+nvimHsLspInfo _ = whenInitialized . whenAlreadyOpened . loggingError $ do
   b <- vim_get_current_buffer'
   pos <- getNvimPos
   void $ hoverRequest b pos callbackHoverOneLine
 
 nvimHsLspHover :: CommandArguments -> NeovimLsp ()
-nvimHsLspHover _ = whenInitialized $ whenAlreadyOpened $ do
+nvimHsLspHover _ = whenInitialized . whenAlreadyOpened $ do
   b <- vim_get_current_buffer'
   pos <- getNvimPos
   void $ hoverRequest b pos callbackHoverPreview
@@ -148,7 +147,7 @@ nvimHsLspHover _ = whenInitialized $ whenAlreadyOpened $ do
 -- Definition
 -------------
 nvimHsLspDefinition :: CommandArguments -> NeovimLsp ()
-nvimHsLspDefinition _ = whenInitialized $ whenAlreadyOpened $ do
+nvimHsLspDefinition _ = whenInitialized . whenAlreadyOpened $ do
   b <- vim_get_current_buffer'
   pos <- getNvimPos
   void $ definitionRequest b pos callbackDefinition
@@ -178,7 +177,7 @@ nvimHsLspComplete findstart base = do
       let compPos = completionPos base curPos
       b <- vim_get_current_buffer'
       xs <- waitCallback $ completionRequest b compPos callbackComplete
-      let sorted = uncurry (++) $ partition (isPrefixOf base . view #word)  xs
+      let sorted = uncurry (++) $ partition (isPrefixOf base . view #word . fields)  xs
       return (Right sorted)
 
 completionFindStart :: String -> Int -> Int
@@ -234,23 +233,32 @@ nvimHsLspLoadQuickfix arg = do
 -------------------------------------------------------------------------------
 
 nvimHsLspCodeAction :: CommandArguments -> NeovimLsp ()
-nvimHsLspCodeAction _ = whenInitialized $ whenAlreadyOpened $ do
+nvimHsLspCodeAction _ = whenInitialized . whenAlreadyOpened $ do
     b <- vim_get_current_buffer'
     pos <- getNvimPos
     waitCallback $ codeAction b (pos,pos) callbackCodeAction
 
--- HIE
--------
+-- HIE specific
+---------------
 
 nvimHsLspHieCaseSplit :: CommandArguments -> NeovimLsp ()
 nvimHsLspHieCaseSplit _ = hiePointCommand "ghcmod:casesplit"
 
 hiePointCommand :: String -> NeovimLsp ()
-hiePointCommand cmd =  whenInitialized $ whenAlreadyOpened $ do
+hiePointCommand cmd =  whenInitialized . whenAlreadyOpened $ do
     uri <- getBufUri =<< vim_get_current_buffer'
     pos <- getNvimPos
     let arg = toJSON $ #file @= uri
                     <! #pos  @= nvimPosToPosition pos
                     <! nil @(Field Identity)
     void $ executeCommandRequest cmd (Some [arg]) Nothing
+
+nvimHsLspHieHsImport :: String -> NeovimLsp ()
+nvimHsLspHieHsImport moduleToImport = do
+  uri <- getBufUri =<< vim_get_current_buffer'
+  let arg = toJSON $ #file @= uri
+                  <! #moduleToImport @= moduleToImport
+                  <! nil @(Field Identity)
+  void $ executeCommandRequest "hsimport:import" (Some [arg]) Nothing
+
 
