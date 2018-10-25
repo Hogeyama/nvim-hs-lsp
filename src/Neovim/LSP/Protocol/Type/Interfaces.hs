@@ -1,9 +1,9 @@
 
 {-# LANGUAGE AllowAmbiguousTypes  #-}
-{-# LANGUAGE DeriveAnyClass       #-}
 {-# LANGUAGE DeriveGeneric        #-}
 {-# LANGUAGE EmptyCase            #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# OPTIONS_GHC -Wall             #-}
 
 module Neovim.LSP.Protocol.Type.Interfaces
@@ -107,7 +107,6 @@ import qualified RIO.Text                          as T
 import           Prelude                           (Enum (toEnum))
 
 import           Data.Aeson                        hiding (Error)
-import           Data.Aeson.Types                  (toJSONKeyText)
 import           Data.Extensible                   hiding (Nullable, Record, record)
 import           Data.Singletons                   (SingI, SingKind (..))
 import           GHC.TypeLits
@@ -181,7 +180,7 @@ type Version = Int
 -- ID
 ----------------------------------------
 data ID = IDNum Number | IDString String
-  deriving (Show, Eq, Ord, Generic, Hashable)
+  deriving (Show, Eq, Ord, Generic)
 instance FromJSON ID where
   parseJSON (Number n) = return $ IDNum $ realToFrac n
   parseJSON (String s) = return $ IDString $ T.unpack s
@@ -189,20 +188,13 @@ instance FromJSON ID where
 instance ToJSON ID where
   toJSON (IDNum n)    = toJSON n
   toJSON (IDString s) = toJSON s
+instance Hashable ID
 
 -- Uri
 ----------------------------------------
 
 newtype Uri = Uri { getUri :: Text }
-  deriving (Eq,Ord,Read,Show,Generic,Hashable)
-instance ToJSON Uri where
-  toJSON = toJSON . getUri
-instance FromJSON Uri where
-  parseJSON o = Uri <$> parseJSON o
-instance ToJSONKey Uri where
-  toJSONKey = toJSONKeyText getUri
-instance FromJSONKey Uri where
-  fromJSONKey = FromJSONKeyText Uri
+  deriving (Eq, Ord, Read, Show, Generic, Hashable, ToJSON, FromJSON, ToJSONKey, FromJSONKey)
 
 -- TODO test
 uriToFilePath :: Uri -> FilePath
