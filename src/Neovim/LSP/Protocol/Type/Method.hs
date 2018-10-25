@@ -20,7 +20,7 @@ import qualified RIO.Text                          as T
 import           Data.Aeson
 import           Data.Singletons.TH
 import           Data.Singletons.TypeLits
-import           Neovim.LSP.Protocol.Type.Instance
+import           Neovim.LSP.Protocol.Type.Record
 
 -------------------------------------------------------------------------------
 -- Method

@@ -113,7 +113,7 @@ import           Data.Singletons                   (SingI, SingKind (..))
 import           GHC.TypeLits
 import           Safe                              (lookupJust)
 
-import           Neovim.LSP.Protocol.Type.Instance
+import           Neovim.LSP.Protocol.Type.Record
 import           Neovim.LSP.Protocol.Type.Method
 
 
