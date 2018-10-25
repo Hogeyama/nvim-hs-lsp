@@ -58,6 +58,7 @@ library:
   - constraints
   - extensible >= 0.4.8
   - lens
+  - text
   - process
   - safe
   - singletons

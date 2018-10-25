@@ -25,10 +25,10 @@ import qualified Data.Extensible         as E
 import           Data.Extensible.Rexport
 import           GHC.Generics            (Generic)
 import           GHC.TypeLits            (KnownSymbol, symbolVal)
+import           Unsafe.Coerce           (unsafeCoerce)
 
 import           Neovim                  (NvimObject (..))
 import qualified Neovim                  as N (Object (..))
-import Data.Coerce (coerce)
 
 -------------------------------------------------------------------------------
 -- Some data types
@@ -42,7 +42,7 @@ deriving instance ((Forall (Instance1 Eq   (Field Identity)) xs),
                    (Forall (Instance1 Ord  (Field Identity)) xs)) => Ord  (Record xs)
 
 __ :: Lens' (OrigRecord xs) a -> Lens' (Record xs) a
-__ l  f t = coerce <$> l f (coerce t)
+__ l (x :: a -> f a) = unsafeCoerce (l @f) x
 
 type Nullable = Maybe
 

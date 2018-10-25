@@ -8,11 +8,13 @@ module Neovim.LSP.LspPlugin.Request
 
 import           RIO
 import qualified RIO.Map                      as M
+import qualified Data.Text                    as T
 import           RIO.List                     (intercalate)
 
 import           Data.Extensible
 
 import           Neovim                       hiding (Plugin, range)
+import           Neovim.User.Choice
 import           Neovim.LSP.Base
 import           Neovim.LSP.Protocol.Messages
 import           Neovim.LSP.Protocol.Type
@@ -26,15 +28,39 @@ requestPluginAction = forever $ loggingErrorImmortal $ do
   msg <- pull
   case msg of
     SomeReq req -> case singByProxy req of
-      SWindowShowMessageRequest   -> logError "requestHandler: not implemented"
-        -- これ大変そう
-      SClientRegisterCapability   -> logError "requestHandler: not implemented"
+      SWindowShowMessageRequest -> windowShowMessageRequest req
+      SClientRegisterCapability -> logError "requestHandler: not implemented"
         -- これは対応する必要性が低そう
       SClientUnregisterCapability -> logError "requestHandler: not implemented"
         -- これも
-      SWorkspaceApplyEdit         -> respondWorkspaceAplyEdit req
-      SServerRequestMisc _        -> logError "requestHandler: Misc: not implemented"
+      SWorkspaceApplyEdit -> respondWorkspaceAplyEdit req
+      SServerRequestMisc _ -> logError "requestHandler: Misc: not implemented"
     _ -> return ()
+
+-------------------------------------------------------------------------------
+-- WindowShowMessage
+-------------------------------------------------------------------------------
+
+windowShowMessageRequest :: Request 'WindowShowMessageRequestK -> PluginAction ()
+windowShowMessageRequest (Request req) = do
+    let type'   = req^.__#params.__#type
+        message = req^.__#params.__#message
+        actions = req^.__#params.__#actions
+    case type' of
+      MessageError -> nvimEchoe $ "LSP: Error: " <> T.unpack message
+      MessageWarning -> nvimEchoe $ "LSP: Warning: " <> T.unpack message
+      MessageInfo -> nvimEchom $ "LSP: Info: " <> T.unpack message
+      MessageLog -> nvimEchom $ "LSP: Log: " <> T.unpack message
+    -- ask action
+    mAction <- case actions of
+      None -> return Nothing
+      Some actions' -> oneOf $ map (view (__#title)) actions'
+    let result = fmap (\action -> Record (#title @= action <: nil)) mAction
+    push $
+      response @'WindowShowMessageRequestK
+        (Just (req^.__#id))
+        (Some result)
+        None
 
 -- WorkspaceApplyEdit
 ---------------------------------------
@@ -51,8 +77,9 @@ respondWorkspaceAplyEdit (Request req) = do
     Some cs -> applyChanges cs >>= ret
   where
     ret x = push $ response @'WorkspaceApplyEditK
-              (Just (req^.__#id)) (Some Record { fields = result x }) None
-    result b = #applied @= b <! nil
+              (Just (req^.__#id))
+              (Some (Record (#applied @= x <! nil)))
+              None
 
 -- just apply edits from bottom to top.
 -- TODO consider the case of multiple edits with the same start.

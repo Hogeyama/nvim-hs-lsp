@@ -7,6 +7,7 @@ module Neovim.LSP.LspPlugin.Notification
 
 import           RIO
 import qualified RIO.Map                  as M
+import qualified Data.Text                as T
 
 import           Control.Lens             ((%~))
 
@@ -22,19 +23,13 @@ notificationPluginAction :: PluginAction ()
 notificationPluginAction = forever $ loggingErrorImmortal $ do
     msg <- pull
     case msg of
-      SomeNoti (noti :: ServerNotification m) -> case singByProxy noti of
-        STextDocumentPublishDiagnostics -> do
-          showDiagnotics noti
-        SWindowShowMessage -> do
-          logError "notificationHandler: WindowShowMessage: not implemented"
-        SWindowLogMessage -> do
-          logError "notificationHandler: WindowLogMessage: not implemented"
-        STelemetryEvent -> do
-          logError "notificationHandler: TelemetryEvent: not implemented"
-        SServerCancel -> do
-          logError "notificationHandler: ServerCancel: not implemented"
-        SServerNotificationMisc _ -> do
-          logError "notificationHandler: Misc: not implemented"
+      SomeNoti noti -> case singByProxy noti of
+        STextDocumentPublishDiagnostics -> showDiagnotics noti
+        SWindowLogMessage -> windowLogMessage noti
+        STelemetryEvent -> telemetryEvent noti
+        SWindowShowMessage -> windowShowMessage noti
+        SServerCancel -> logError "notificationHandler: ServerCancel: not implemented"
+        SServerNotificationMisc _ -> logError "notificationHandler: Misc: not implemented"
       _ -> return ()
 
 -------------------------------------------------------------------------------
@@ -55,4 +50,45 @@ showDiagnotics (Notification noti) = do
       allDiagnostics <- readContext . view $ #otherState.diagnosticsMap
       curi <- getBufUri =<< nvim_get_current_buf'
       replaceQfList $ diagnosticsToQfItems curi allDiagnostics
+
+-------------------------------------------------------------------------------
+-- WindowLogMessage
+-------------------------------------------------------------------------------
+
+windowLogMessage :: ServerNotification 'WindowLogMessageK
+                 -> PluginAction ()
+windowLogMessage (Notification noti) = do
+    let type'   = noti^.__#params.__#type
+        message = noti^.__#params.__#message
+        log' l = l $ "window/logMessage: " <> displayShow message
+    case type' of
+      MessageError -> log' logError
+      MessageWarning -> log' logWarn
+      MessageInfo -> log' logInfo
+      MessageLog -> log' (logInfoS "log")
+
+-------------------------------------------------------------------------------
+-- WindowShowMessage
+-------------------------------------------------------------------------------
+
+windowShowMessage :: ServerNotification 'WindowShowMessageK
+                  -> PluginAction ()
+windowShowMessage (Notification noti) = do
+    let type'   = noti^.__#params.__#type
+        message = noti^.__#params.__#message
+    case type' of
+      MessageError -> nvimEchoe $ "LSP: Error: " <> T.unpack message
+      MessageWarning -> nvimEchoe $ "LSP: Warning: " <> T.unpack message
+      MessageInfo -> nvimEchom $ "LSP: Info: " <> T.unpack message
+      MessageLog -> nvimEchom $ "LSP: Log: " <> T.unpack message
+
+-------------------------------------------------------------------------------
+-- TelemetryEvent
+-------------------------------------------------------------------------------
+
+telemetryEvent :: ServerNotification 'TelemetryEventK
+               -> PluginAction ()
+telemetryEvent (Notification noti) = do
+    let params = noti^.__#params
+    logInfo $ "telemetry/event: " <> displayShow params
 

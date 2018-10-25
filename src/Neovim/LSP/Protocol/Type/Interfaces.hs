@@ -42,6 +42,8 @@ module Neovim.LSP.Protocol.Type.Interfaces
   , DocumentFilter
   , DocumentSelector
   , Trace(..)
+  , MessageType(..)
+  , MessageActionItem
 
   , RequestParam
   , NotificationParam
@@ -1053,11 +1055,26 @@ type ApplyWorkspaceEditResponse = Record
   '[ "applied" >: Bool
    ]
 
+-- WindowShowMessageRequest
+----------------------------------------
+type instance RequestParam 'WindowShowMessageRequestK = Record
+  '[ "type"    >: MessageType
+   , "message" >: Text
+   , "actions" >: Option [MessageActionItem]
+   ]
+type instance ResResult 'WindowShowMessageRequestK = Nullable MessageActionItem
+type instance ResError  'WindowShowMessageRequestK = Value -- TODO
+
+type MessageActionItem = Record
+  '[ "title" >: String ]
+
 -- Misc
----------------------------------------
+----------------------------------------
 type instance RequestParam ('ServerRequestMiscK s) = Value
 type instance ResResult    ('ServerRequestMiscK s) = Value
 type instance ResError     ('ServerRequestMiscK s) = Value
+
+--}}}
 
 -------------------------------------------------------------------------------
 -- Util
