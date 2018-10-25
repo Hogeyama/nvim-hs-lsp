@@ -24,7 +24,7 @@ import           Neovim.LSP.LspPlugin.Callback     (callbackHandler)
 import           Neovim.LSP.Protocol.Messages
 import           Neovim.LSP.Protocol.Type
 import           Neovim.LSP.Util
-import           System.Directory                  (getCurrentDirectory)
+import           System.Directory                  (getCurrentDirectory, removeDirectoryRecursive)
 
 neovimEnv :: IO (Config LspEnv)
 neovimEnv = newConfig (return Nothing) initialEnvM
@@ -35,6 +35,8 @@ testSpec = hspec spec
 spec :: Spec
 spec = do
   baseDirectory <- runIO getCurrentDirectory
+  let removeStackWorkDir =
+        runIO $ void $ tryIO $ removeDirectoryRecursive "./test-file/.stack-work"
 
 
 
@@ -62,6 +64,7 @@ spec = do
 
 
   describe "definition" $ do
+    removeStackWorkDir
     specify "simple" $ do
       let src = "./test-file/Definition.hs"
           definition1 = testNeovimLsp (Seconds 10) src $ do
@@ -82,6 +85,7 @@ spec = do
               <: #error @= None <: nil
       definition1 `shouldReturn` expected
 
+    removeStackWorkDir
     specify "other file" $ do
       let src = "./test-file/Definition.hs"
           tgt = "./test-file/Definition2.hs"
@@ -106,6 +110,7 @@ spec = do
 
 
   describe "tekito example" $ do
+    removeStackWorkDir
     specify "example 1" $ do
       example1 `shouldReturn` ()
 

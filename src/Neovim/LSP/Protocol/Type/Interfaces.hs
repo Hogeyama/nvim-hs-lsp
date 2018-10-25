@@ -502,11 +502,12 @@ deriving instance ImplResponse m => ToJSON   (Response m)
 deriving instance ImplResponse m => FromJSON (Response m)
 
 -------------------------------------------------------------------------------
--- Request
+-- Client Request --{{{
 -------------------------------------------------------------------------------
 
 -- Initialize
----------------------------------------
+----------------------------------------
+--{{{
 
 -- | Initialize Request
 type instance RequestParam 'InitializeK = Record
@@ -749,133 +750,17 @@ instance ToJSON TextDocumentSync where
   toJSON (SyncOption opt) = toJSON opt
   toJSON (SyncKind kind)  = toJSON kind
 -- }}}
-
--- Shutdown
----------------------------------------
-
--- Cancel
----------------------------------------
-type instance NotificationParam 'ClientCancelK = Record '[ "id" >: ID ]
-
-
--------------------------------------------------------------------------------
--- Notification
--------------------------------------------------------------------------------
-
----------------------------------------
--- Client                            --
----------------------------------------
-
--- Exit
----------------------------------------
-data Void
-instance Eq       Void where _ == _      = True
-instance Show     Void where show        = \case{}
-instance ToJSON   Void where toJSON      = \case{}
-instance FromJSON Void where parseJSON _ = mempty
-
-type instance NotificationParam 'ExitK = Option Void
-
--- TextDocumentDidOpen
----------------------------------------
-type instance NotificationParam 'TextDocumentDidOpenK = Record
-  '[ "textDocument" >: TextDocumentItem
-   ]
-
--- TextDocumentDidClose
----------------------------------------
-type instance NotificationParam 'TextDocumentDidCloseK = Record
-  '[ "textDocument" >: TextDocumentIdentifier
-   ]
-
--- TextDocumentDidChange
----------------------------------------
-type instance NotificationParam 'TextDocumentDidChangeK = Record
-  '[ "textDocument"   >: VersionedTextDocmentIdentifier
-   , "contentChanges" >: [TextDocumentContentChangeEvent]
-   ]
-type TextDocumentContentChangeEvent = Record
-  '[ "range"       >: Option Range
-   , "rangeLength" >: Option Number
-   , "text"        >: Text
-   ]
-  -- None,None,FullTextにすればよい
-
--- TextDocumentDidSave
----------------------------------------
-type instance NotificationParam 'TextDocumentDidSaveK = Record
-  '[ "textDocument" >: TextDocumentIdentifier
-   , "text"         >: Option Text
-   ]
-
--- Misc
----------------------------------------
-type instance NotificationParam ('ClientNotificationMiscK s) = Value
-
----------------------------------------
--- Server                            --
----------------------------------------
-
--- TextDocumentPublishDiagnostics
----------------------------------------
-type instance NotificationParam 'TextDocumentPublishDiagnosticsK = Record
-  '[ "uri"         >: Uri
-   , "diagnostics" >: [Diagnostic]
-   ]
-
--- WindowShowMessage
----------------------------------------
-type instance NotificationParam 'WindowShowMessageK = Record
-  '[ "type"    >: MessageType
-   , "message" >: Text
-   ]
-
-data MessageType
-  = MessageError
-  | MessageWarning
-  | MessageInfo
-  | MessageLog
-  deriving (Show,Eq,Ord)
-instance ToJSON MessageType where-- {{{
-  toJSON MessageError   = Number 1
-  toJSON MessageWarning = Number 2
-  toJSON MessageInfo    = Number 3
-  toJSON MessageLog     = Number 4
-instance FromJSON MessageType where
-  parseJSON (Number n) = case round @_ @Int n of
-    1 -> pure MessageError
-    2 -> pure MessageWarning
-    3 -> pure MessageInfo
-    4 -> pure MessageLog
-    _ -> mzero
-  parseJSON _ = mzero
 -- }}}
 
--- WindowLogMessage
----------------------------------------
-type instance NotificationParam 'WindowLogMessageK = Record
-  '[ "type"    >: MessageType
-   , "message" >: Text
-   ]
+-- Shutdown
+----------------------------------------
 
--- TelemetryEvent
----------------------------------------
-type instance NotificationParam 'TelemetryEventK = Value
-
--- Misc
----------------------------------------
-type instance NotificationParam ('ServerNotificationMiscK s) = Value
-
--------------------------------------------------------------------------------
--- Request
--------------------------------------------------------------------------------
-
----------------------------------------
--- Client                            --
----------------------------------------
+-- Cancel
+----------------------------------------
+type instance NotificationParam 'ClientCancelK = Record '[ "id" >: ID ]
 
 -- TextDocumentHover
----------------------------------------
+----------------------------------------
 type instance RequestParam 'TextDocumentHoverK = TextDocumentPositionParams
 type instance ResResult    'TextDocumentHoverK = Nullable Hover
 type instance ResError     'TextDocumentHoverK = Value
@@ -887,22 +772,22 @@ type Hover = Record
    ]
 
 -- TextDocumentSignatureHelp
----------------------------------------
+----------------------------------------
 type instance RequestParam 'TextDocumentSignatureHelpK = TextDocumentPositionParams
 type instance ResResult    'TextDocumentSignatureHelpK = SignatureHelp
 type instance ResError     'TextDocumentSignatureHelpK = Value
 
 type SignatureHelp = Value
--- HIEが対応していないので後回しで良い
+  -- HIEが対応していないので後回しで良い
 
 -- TextDocumentDefinition
----------------------------------------
+----------------------------------------
 type instance RequestParam 'TextDocumentDefinitionK = TextDocumentPositionParams
 type instance ResResult    'TextDocumentDefinitionK = Nullable [Location]
 type instance ResError     'TextDocumentDefinitionK = String
 
 -- WorkspaceExecuteCommand
----------------------------------------
+----------------------------------------
 type instance RequestParam 'WorkspaceExecuteCommandK = ExecuteCommandParams
 type instance ResResult    'WorkspaceExecuteCommandK = Nullable Value
 type instance ResError     'WorkspaceExecuteCommandK = String
@@ -913,7 +798,7 @@ type ExecuteCommandParams = Record
    ]
 
 -- TextDocumentCompletion
----------------------------------------
+----------------------------------------
 type instance RequestParam 'TextDocumentCompletionK = CompletionParams
 type instance ResResult    'TextDocumentCompletionK = Nullable ([CompletionItem] :|: CompletionList)
 type instance ResError     'TextDocumentCompletionK = String
@@ -948,7 +833,7 @@ type CompletionParamsF =
 type CompletionContext = Value
 
 -- TextDocumentReferences
----------------------------------------
+----------------------------------------
 type instance RequestParam 'TextDocumentReferencesK = ReferenceParams
 type instance ResResult    'TextDocumentReferencesK = Nullable [Location]
 type instance ResError     'TextDocumentReferencesK = String
@@ -963,7 +848,7 @@ type ReferenceContext = Record
    ]
 
 -- TextDocumentCodeAction
----------------------------------------
+----------------------------------------
 
 type instance RequestParam 'TextDocumentCodeActionK = CodeActionParams
 type instance ResResult 'TextDocumentCodeActionK = Nullable [Command :|: CodeAction]
@@ -1031,18 +916,128 @@ mkEnum'' :: forall x xs. Member xs x => Enum' xs
 mkEnum'' = Enum' (embed (Proxy @x))
 
 -- Misc
----------------------------------------
+----------------------------------------
 
 type instance RequestParam ('ClientRequestMiscK s) = Value
 type instance ResResult    ('ClientRequestMiscK s) = Value
 type instance ResError     ('ClientRequestMiscK s) = Value
 
----------------------------------------
--- Server                            --
----------------------------------------
+--}}}
+
+-------------------------------------------------------------------------------
+-- Client Notification --{{{
+-------------------------------------------------------------------------------
+
+-- Exit
+----------------------------------------
+data Void
+instance Eq       Void where _ == _      = True
+instance Show     Void where show        = \case{}
+instance ToJSON   Void where toJSON      = \case{}
+instance FromJSON Void where parseJSON _ = mempty
+
+type instance NotificationParam 'ExitK = Option Void
+
+-- TextDocumentDidOpen
+----------------------------------------
+type instance NotificationParam 'TextDocumentDidOpenK = Record
+  '[ "textDocument" >: TextDocumentItem
+   ]
+
+-- TextDocumentDidClose
+----------------------------------------
+type instance NotificationParam 'TextDocumentDidCloseK = Record
+  '[ "textDocument" >: TextDocumentIdentifier
+   ]
+
+-- TextDocumentDidChange
+----------------------------------------
+type instance NotificationParam 'TextDocumentDidChangeK = Record
+  '[ "textDocument"   >: VersionedTextDocmentIdentifier
+   , "contentChanges" >: [TextDocumentContentChangeEvent]
+   ]
+type TextDocumentContentChangeEvent = Record
+  '[ "range"       >: Option Range
+   , "rangeLength" >: Option Number
+   , "text"        >: Text
+   ]
+  -- None,None,FullTextにすればよい
+
+-- TextDocumentDidSave
+----------------------------------------
+type instance NotificationParam 'TextDocumentDidSaveK = Record
+  '[ "textDocument" >: TextDocumentIdentifier
+   , "text"         >: Option Text
+   ]
+
+-- Misc
+----------------------------------------
+type instance NotificationParam ('ClientNotificationMiscK s) = Value
+
+--}}}
+
+-------------------------------------------------------------------------------
+-- Server Notification --{{{
+-------------------------------------------------------------------------------
+
+-- TextDocumentPublishDiagnostics
+----------------------------------------
+type instance NotificationParam 'TextDocumentPublishDiagnosticsK = Record
+  '[ "uri"         >: Uri
+   , "diagnostics" >: [Diagnostic]
+   ]
+
+-- WindowShowMessage
+----------------------------------------
+type instance NotificationParam 'WindowShowMessageK = Record
+  '[ "type"    >: MessageType
+   , "message" >: Text
+   ]
+
+data MessageType
+  = MessageError
+  | MessageWarning
+  | MessageInfo
+  | MessageLog
+  deriving (Show,Eq,Ord)
+instance ToJSON MessageType where-- {{{
+  toJSON MessageError   = Number 1
+  toJSON MessageWarning = Number 2
+  toJSON MessageInfo    = Number 3
+  toJSON MessageLog     = Number 4
+instance FromJSON MessageType where
+  parseJSON (Number n) = case round @_ @Int n of
+    1 -> pure MessageError
+    2 -> pure MessageWarning
+    3 -> pure MessageInfo
+    4 -> pure MessageLog
+    _ -> mzero
+  parseJSON _ = mzero
+-- }}}
+
+-- WindowLogMessage
+----------------------------------------
+type instance NotificationParam 'WindowLogMessageK = Record
+  '[ "type"    >: MessageType
+   , "message" >: Text
+   ]
+
+-- TelemetryEvent
+----------------------------------------
+type instance NotificationParam 'TelemetryEventK = Value
+
+-- Misc
+----------------------------------------
+type instance NotificationParam ('ServerNotificationMiscK s) = Value
+
+--}}}
+
+-------------------------------------------------------------------------------
+-- Server Request --{{{
+-------------------------------------------------------------------------------
 
 -- WorkspaceApplyEdit
----------------------------------------
+----------------------------------------
 type instance RequestParam 'WorkspaceApplyEditK = ApplyWorkspaceEditParams
 type instance ResResult    'WorkspaceApplyEditK = ApplyWorkspaceEditResponse
 type instance ResError     'WorkspaceApplyEditK = String

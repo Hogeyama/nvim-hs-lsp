@@ -510,17 +510,17 @@ loggingErrorImmortal
   :: (HasCallStack, MonadReader r m, MonadUnliftIO m, HasLogFunc r)
   => m () -> m ()
 loggingErrorImmortal = handleAnyDeep $ \e -> logError (displayShow e)
-  where ?callstack = popCallStack ?callstack
+  where ?callstack = popCallStack callStack
 
 loggingError
   :: (HasCallStack, MonadReader r m, MonadUnliftIO m, HasLogFunc r)
   => m a -> m a
 loggingError = handleAny $ \e -> logError (displayShow e) >> throwIO e
-  where ?callstack = popCallStack ?callstack
+  where ?callstack = popCallStack callStack
 
 loggingErrorDeep
   :: (HasCallStack, MonadReader r m, MonadUnliftIO m, HasLogFunc r, NFData a)
   => m a -> m a
 loggingErrorDeep = handleAnyDeep $ \e -> logError (displayShow e) >> throwIO e
-  where ?callstack = popCallStack ?callstack
+  where ?callstack = popCallStack callStack
 

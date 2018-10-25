@@ -113,6 +113,9 @@ nvimEcho s = vim_command' $ "echo " ++ show s
 nvimEchom :: String -> Neovim env ()
 nvimEchom s = vim_command' $ "echom " ++ show s
 
+nvimEchoe :: String -> Neovim env ()
+nvimEchoe s = vim_command' $ "echoerr " ++ show s
+
 -------------------------------------------------------------------------------
 -- Completion
 -------------------------------------------------------------------------------
