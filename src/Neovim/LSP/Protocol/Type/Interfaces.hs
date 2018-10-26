@@ -1055,6 +1055,33 @@ type instance ResError  'WindowShowMessageRequestK = Value -- TODO
 type MessageActionItem = Record
   '[ "title" >: String ]
 
+-- ClientRegisterCapability
+----------------------------------------
+type instance RequestParam 'ClientRegisterCapabilityK = Record
+  '[ "registrationParams" >: [Registration]
+   ]
+type instance ResResult 'ClientRegisterCapabilityK = Void
+type instance ResError  'ClientRegisterCapabilityK = Value -- TODO
+
+type Registration = Record
+  '[ "id" >: String
+   , "method" >: String
+   , "registerOptions" >: Option Value
+   ]
+
+-- ClientUnregisterCapability
+----------------------------------------
+type instance RequestParam 'ClientUnregisterCapabilityK = Record
+  '[ "registrationParams" >: [Unregistration]
+   ]
+type instance ResResult 'ClientUnregisterCapabilityK = Void
+type instance ResError  'ClientUnregisterCapabilityK = Value -- TODO
+
+type Unregistration = Record
+  '[ "id" >: String
+   , "method" >: String
+   ]
+
 -- Misc
 ----------------------------------------
 type instance RequestParam ('ServerRequestMiscK s) = Value

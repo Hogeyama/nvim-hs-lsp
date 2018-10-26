@@ -25,14 +25,11 @@ requestHandler = Plugin "req" requestPluginAction
 
 requestPluginAction :: PluginAction ()
 requestPluginAction = forever $ loggingErrorImmortal $ do
-  msg <- pull
-  case msg of
-    SomeReq req -> case singByProxy req of
+  pull >>= \case
+    SomeReq (req@(Request inner) :: ServerRequest m) -> case singByProxy req of
       SWindowShowMessageRequest -> windowShowMessageRequest req
-      SClientRegisterCapability -> logError "requestHandler: not implemented"
-        -- これは対応する必要性が低そう
-      SClientUnregisterCapability -> logError "requestHandler: not implemented"
-        -- これも
+      SClientRegisterCapability -> push $ response @m (Just (inner^.__#id)) None None
+      SClientUnregisterCapability -> push $ response @m (Just (inner^.__#id)) None None
       SWorkspaceApplyEdit -> respondWorkspaceAplyEdit req
       SServerRequestMisc _ -> logError "requestHandler: Misc: not implemented"
     _ -> return ()
