@@ -159,6 +159,39 @@ executeCommandRequest cmd margs mcallback = do
 --}}}
 
 -------------------------------------------------------------------------------
+-- WorkspaceSymbol {{{
+-------------------------------------------------------------------------------
+workspaceSymbol
+  :: (HasOutChan env, HasContext env)
+  => String
+  -> CallbackOf 'WorkspaceSymbolK a
+  -> Neovim env (TMVar a)
+workspaceSymbol sym mcallback =
+    fromJust <$> pushRequest (Record (#query @= sym <! nil)) (Just mcallback)
+
+callbackWorkspaceSymbol :: CallbackOf 'WorkspaceSymbolK ()
+callbackWorkspaceSymbol (Response resp) = void $ withResult resp $ \case
+    Nothing -> nvimEchom "workspace/Symbol: no symbols"
+    Just symbolInfos -> do
+      logInfo $ "workspace/Symbol: " <> displayShow symbolInfos
+      replaceLocList 0 $ map symbolInfomartionToQfItem symbolInfos
+      unless (null symbolInfos) $ vim_command' "botright lopen"
+  where
+    symbolInfomartionToQfItem symInfo =
+        locationToQfItem (symInfo^.__#location) (symInfo^.__#name)
+          -- TODO 他の情報
+
+--type SymbolInformation = Record
+--  '[ "name" >: String
+--   , "kind" >: Number
+--   , "deprecated" >: Option Bool
+--   , "location" >: Location
+--   , "containerName" >: Option String
+--   ]
+
+--}}}
+
+-------------------------------------------------------------------------------
 -- TextDocumentCompletion {{{
 -------------------------------------------------------------------------------
 completionRequest :: (HasOutChan env, HasContext env)
@@ -385,25 +418,74 @@ callbackTextDocumentReferences (Response resp) = void $ withResult resp $ \case
     Nothing -> nvimEchom "textDocument/references: No result"
     Just locs -> do
       logInfo $ "textDocument/references: " <> displayShow locs
-      replaceLocList 0 =<< mapM locationToQfItem locs -- TODO set winId (current win is used when 0 is set)
+      replaceLocList 0 =<< mapM locationToQfItem' locs -- TODO set winId (current win is used when 0 is set)
       unless (null locs) $ vim_command' "botright lopen"
   where
-    locationToQfItem loc = do
-      Just text <- fmap lastMaybe $ errOnInvalidResult $
-                      vim_call_function_ "readfile" (filename +: False +: lnum +: [])
-      return $ #filename @= Some filename
-            <! #lnum     @= Some lnum
-            <! #col      @= Some col
-            <! #type     @= Some "I"
-            <! #text     @= text
-            <! #valid    @= Some True
-            <! nil
+    locationToQfItem' loc = do
+        Just text <- fmap lastMaybe $ errOnInvalidResult $
+                        vim_call_function_ "readfile" (filename +: False +: lnum +: [])
+        return $ locationToQfItem loc text
       where
         filename = uriToFilePath (loc^.__#uri)
         range = loc^.__#range
         start = range^.__#start
         lnum = 1 + start^.__#line
+
+--}}}
+
+-------------------------------------------------------------------------------
+-- TextDocumentDocumentSymbol {{{
+-------------------------------------------------------------------------------
+
+textDocumentDocumentSymbol
+  :: (HasOutChan env, HasContext env)
+  => Buffer
+  -> Neovim env (TMVar ())
+textDocumentDocumentSymbol b = do
+    uri <- getBufUri b
+    let params = Record
+               $ #textDocument @= textDocumentIdentifier uri
+              <! nil
+    fromJust <$> pushRequest params (Just (callbackTextDocumentDocumentSymbol uri))
+
+callbackTextDocumentDocumentSymbol :: Uri -> CallbackOf 'TextDocumentDocumentSymbolK ()
+callbackTextDocumentDocumentSymbol uri (Response resp) = void $ withResult resp $ \case
+    Nothing -> nvimEchom "textDocument/documentSymbol: no symbols"
+    Just (L docSyms) -> do
+      logInfo $ "textDocument/documentSymbol: " <> displayShow docSyms
+      replaceLocList 0 $ map documentSymbolToQfItem docSyms
+      unless (null docSyms) $ vim_command' "botright lopen"
+    Just (R symInfos) -> do
+      logInfo $ "textDocument/documentSymbol: " <> displayShow symInfos
+      replaceLocList 0 $ map symbolInfomartionToQfItem symInfos
+      unless (null symInfos) $ vim_command' "botright lopen"
+  where
+    documentSymbolToQfItem (DocumentSymbol docSym) =
+           #filename @= Some filename
+        <! #lnum     @= Some lnum
+        <! #col      @= Some col
+        <! #type     @= Some "I" -- TODO
+        <! #text     @= text
+        <! #valid    @= Some True
+        <! nil
+      where
+        filename = uriToFilePath uri
+        range = docSym^.__#range
+        start = range^.__#start
+        lnum = 1 + start^.__#line
         col  = 1 + start^.__#character
+        text = docSym^.__#name -- TODO other info
+    symbolInfomartionToQfItem symInfo = -- TODO other info
+        locationToQfItem (symInfo^.__#location) (symInfo^.__#name)
+
+--newtype DocumentSymbol = DocumentSymbol (Record
+--  '[ "name" >: String
+--   , "detail" >: Option String
+--   , "kind" >: SymbolKind
+--   , "deprecated" >: Option Bool
+--   , "range" >: Range
+--   , "children" >: Option [DocumentSymbol]
+--   ])
 
 --}}}
 

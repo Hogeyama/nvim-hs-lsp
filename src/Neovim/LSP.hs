@@ -27,15 +27,17 @@ plugin = do
             , $(command' 'nvimHsLspInfo) ["async"]
             , $(command' 'nvimHsLspDefinition) ["async"]
             , $(command' 'nvimHsLspCodeAction) ["async"]
-            , $(command' 'nvimHsLspHieCaseSplit) ["async"]
             , $(command' 'nvimHsLspFormatting) ["async", "!", "%"]
             , $(command' 'nvimHsLspReferences) ["async"]
+            , $(command' 'nvimHsLspHieCaseSplit) ["async"]
+            , $(command' 'nvimHsLspDocumentSymbol) ["async"]
+            , $(command' 'nvimHsLspWorkspaceSymbol) ["async"]
+            , $(command' 'nvimHsLspHieHsImport) ["sync"]
             -- Other
             , $(command' 'nvimHsLspLoadQuickfix) ["async", "!"]
             --
             , $(function' 'nvimHsLspComplete) Sync
             , $(function' 'nvimHsLspAsyncComplete) Async
-            , $(function' 'nvimHsLspHieHsImport) Sync
             ]
     }
 

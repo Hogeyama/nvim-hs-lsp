@@ -253,8 +253,8 @@ hiePointCommand cmd =  whenInitialized . whenAlreadyOpened $ do
                     <! nil @(Field Identity)
     void $ executeCommandRequest cmd (Some [arg]) Nothing
 
-nvimHsLspHieHsImport :: String -> NeovimLsp ()
-nvimHsLspHieHsImport moduleToImport = do
+nvimHsLspHieHsImport :: CommandArguments -> String -> NeovimLsp ()
+nvimHsLspHieHsImport _ moduleToImport = do
     uri <- getBufUri =<< vim_get_current_buffer'
     let arg = toJSON $ #file @= uri
                     <! #moduleToImport @= moduleToImport
@@ -290,4 +290,21 @@ nvimHsLspReferences _ = whenInitialized . whenAlreadyOpened $ do
     b <- vim_get_current_buffer'
     p <- getNvimPos
     waitCallback $ textDocumentReferences b p callbackTextDocumentReferences
+
+-------------------------------------------------------------------------------
+-- DocumentSymbol
+-------------------------------------------------------------------------------
+
+nvimHsLspDocumentSymbol :: CommandArguments -> NeovimLsp ()
+nvimHsLspDocumentSymbol _ = whenInitialized . whenAlreadyOpened $ do
+    b <- vim_get_current_buffer'
+    waitCallback $ textDocumentDocumentSymbol b
+
+-------------------------------------------------------------------------------
+-- WorkspaceSymbol
+-------------------------------------------------------------------------------
+
+nvimHsLspWorkspaceSymbol :: CommandArguments -> String -> NeovimLsp ()
+nvimHsLspWorkspaceSymbol _ sym = whenInitialized . whenAlreadyOpened $ do
+    waitCallback $ workspaceSymbol sym callbackWorkspaceSymbol
 

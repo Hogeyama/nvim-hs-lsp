@@ -5,7 +5,8 @@
 module Neovim.LSP.Util where
 
 import           RIO                          hiding ((^.))
-import           RIO.List                     (sortBy, intercalate)
+import qualified RIO.List                     as L
+import qualified RIO.List.Partial             as L
 import qualified RIO.Text                     as T
 import qualified RIO.Map                      as M
 
@@ -17,6 +18,7 @@ import           Neovim
 import           Neovim.LSP.Base
 import           Neovim.LSP.Protocol.Messages
 import           Neovim.LSP.Protocol.Type
+import Data.Foldable (foldlM)
 
 getBufLanguage :: (HasLogFunc env)
                => Buffer -> Neovim env (Maybe String)
@@ -140,7 +142,7 @@ diagnosticsToQfItems prior diagMap = pripri ++ rest
     rest   = M.foldMapWithKey toQfItems (M.delete prior diagMap)
     toQfItems uri diagnostics =
         concatMap (diagnosticToQfItems uri) $
-          sortBy (compare `on` view #severity . fields) diagnostics
+          L.sortOn (view (__#severity)) diagnostics
 
 -------------------------------------------------------------------------------
 
@@ -180,7 +182,7 @@ diagnosticToQfItems uri d = header : rest
           <! #type     @= Some errorType
           <! #text     @= text
           <! #valid    @= Some True
-          <! nil @(Field Identity)
+          <! nil
       where
         start = d^.__#range.__#start
         lnum = 1 + start^.__#line
@@ -203,38 +205,51 @@ diagnosticToQfItems uri d = header : rest
           <! #valid    @= Some False
           <! nil
 
+locationToQfItem :: Location -> String -> QfItem
+locationToQfItem loc text =
+       #filename @= Some filename
+    <! #lnum     @= Some lnum
+    <! #col      @= Some col
+    <! #type     @= Some "I"
+    <! #text     @= text
+    <! #valid    @= Some True
+    <! nil
+  where
+    filename = uriToFilePath (loc^.__#uri)
+    range = loc^.__#range
+    start = range^.__#start
+    lnum = 1 + start^.__#line
+    col  = 1 + start^.__#character
+
 -------------------------------------------------------------------------------
 -- TextEdit
 -------------------------------------------------------------------------------
 
 applyTextEdit :: Uri -> [TextEdit] -> PluginAction ()
-applyTextEdit uri edits =
-    forM_ edits $ \e -> catchAndDisplay $ do
-      let range = e^.__#range
-          (l1,_)  = positionToNvimPos (range^.__#start)
-          (l2,_)  = positionToNvimPos (range^.__#end)
-          newText = e^.__#newText
-      let cmd1 = "edit " ++ uriToFilePath uri ++ " | "
-                  ++ show l1 ++ "," ++ show (l2-1) ++ "d"
-          cmd2 = "setline(" ++
-                    intercalate ","
-                      [ show l1
-                      , show $ lines newText
-                      ]
-                  ++ ")"
-      logDebug "applyChanges"
-      logDebug $ fromString cmd2
-      unless (l1==l2) $ do
-        logDebug $ fromString cmd1
-        vim_command' $ "edit " ++ uriToFilePath uri ++ " | "
-                    ++ show l1 ++ "," ++ show (l2-1) ++ "d"
-      void $ vim_call_function_' "setline"
-        [ ObjectInt (fromIntegral l1)
-        , ObjectArray $
-            map (ObjectString . encodeUtf8 . fromString) (lines newText)
-        ]
+applyTextEdit uri edits = do
+    text <- errOnInvalidResult $ vim_call_function_ "readfile" (uriToFilePath uri+:[])
+    let filePath = uriToFilePath uri
+        -- NOTE: This sort must be stable.
+        edits' = L.reverse $ L.sortOn (view (__#range.__#start)) edits
+        applyOne text' edit = do
+            let range = edit^.__#range
+                (before, r)  = L.splitAt (range^.__#start.__#line) text'
+                (body,after) = L.splitAt (range^.__#end.__#line - range^.__#start.__#line + 1) r
+                body' = lines $ b ++ edit^.__#newText ++ a
+                  where
+                    b = take (range^.__#start.__#character) (L.head body)
+                    a = drop (range^.__#end.__#character) (L.last body)
+            return $ before ++ body' ++ after
+    newText <- foldlM applyOne text edits'
+    void $ vim_call_function_ "writefile" (newText +: filePath +: [])
+    vim_command' $ "edit " ++ filePath
 
-
-
-
+--`TextEdit[]`
+-- Complex text manipulations are described with an array of TextEdit’s, representing a single change to the document.
+--
+-- All text edits ranges refer to positions in the __original document__.
+-- Text edits ranges must never overlap, that means no part of the original document must be manipulated by more than one edit.
+-- However, it is possible that multiple edits have the same start position:
+-- multiple inserts, or any number of inserts followed by a single remove or replace edit.
+-- If multiple inserts have the same position, the order in the array defines the order in which the inserted strings appear in the resulting text.
 

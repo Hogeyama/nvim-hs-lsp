@@ -79,6 +79,8 @@ module Neovim.LSP.Protocol.Type.Interfaces
   , WorkspaceClientCapabilities
   , TextDocumentClientCapabilities
   , FormattingOptions(..)
+  , SymbolInformation
+  , DocumentSymbol(..)
 
   -- function
   , filePathToUri
@@ -957,7 +959,7 @@ newtype DocumentSymbol = DocumentSymbol (Record
 
 type SymbolInformation = Record
   '[ "name" >: String
-   , "kind" >: Number
+   , "kind" >: SymbolKind -- specificationだとnumberってなってるけどたぶんこれで合ってる
    , "deprecated" >: Option Bool
    , "location" >: Location
    , "containerName" >: Option String

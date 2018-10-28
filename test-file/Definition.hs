@@ -5,7 +5,7 @@ import Definition2 (exportedFunc)
 
 main :: IO ()
 main = do
-  print $ sum' []
+  print $ sum' $ []
   exportedFunc
 
 sum' :: [Int] -> Int
