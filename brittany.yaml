@@ -1,0 +1,33 @@
+conf_forward:
+  options_ghc:
+    - -XAutoDeriveTypeable
+    - -XBangPatterns
+    - -XConstraintKinds
+    - -XDefaultSignatures
+    - -XDataKinds
+    - -XFlexibleContexts
+    - -XFlexibleInstances
+    - -XFunctionalDependencies
+    - -XGADTs
+    - -XInstanceSigs
+    - -XKindSignatures
+    - -XLambdaCase
+    - -XMultiParamTypeClasses
+    - -XMultiWayIf
+    - -XNamedFieldPuns
+    - -XNoImplicitPrelude
+    - -XOverloadedLabels
+    - -XOverloadedStrings
+    - -XPatternSynonyms
+    - -XPolyKinds
+    - -XRankNTypes
+    - -XRecordWildCards
+    - -XScopedTypeVariables
+    - -XStandaloneDeriving
+    - -XStrictData
+    - -XTupleSections
+    - -XTypeApplications
+    - -XTypeFamilies
+    - -XTypeFamilyDependencies
+    - -XTypeOperators
+    - -XViewPatterns
