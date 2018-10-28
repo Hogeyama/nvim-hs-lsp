@@ -22,10 +22,9 @@ import           Neovim.LSP.Base
 import           Neovim.LSP.Protocol.Type
 import           Neovim.LSP.Util
 import qualified Neovim.User.Choice       as Choice
-import Data.List (isPrefixOf)
 
 -------------------------------------------------------------------------------
--- TextDocumentHover
+-- TextDocumentHover {{{
 -------------------------------------------------------------------------------
 
 hoverRequest :: (HasOutChan env, HasContext env)
@@ -83,8 +82,10 @@ removeCodeStartEnd = unlines . filter ((/="```") . take 3) . lines
 textDocumentHoverNoInfo ::  String
 textDocumentHoverNoInfo = "textDocument/hover: no info"
 
+--}}}
+
 -------------------------------------------------------------------------------
--- TextDocumentSignatureHelp
+-- TextDocumentSignatureHelp {{{
 -------------------------------------------------------------------------------
 
 signatureHelpRequest :: (HasOutChan env, HasContext env)
@@ -98,8 +99,10 @@ signatureHelpRequest b p callback = do
 
 -- TODO callback
 
+-- }}}
+
 -------------------------------------------------------------------------------
--- TextDocumentDefinition
+-- TextDocumentDefinition -- {{{
 -------------------------------------------------------------------------------
 
 definitionRequest :: (HasOutChan env, HasContext env)
@@ -136,8 +139,11 @@ jumpToLocation loc = do
 textDocumentDefinitionNoInfo ::  String
 textDocumentDefinitionNoInfo = "textDocument/definition: no info"
 
--- WorkspaceExecuteCommand
----------------------------------------
+--}}}
+
+-------------------------------------------------------------------------------
+-- WorkspaceExecuteCommand {{{
+-------------------------------------------------------------------------------
 executeCommandRequest :: (HasOutChan env, HasContext env)
                       => String
                       -> Option [Value]
@@ -150,8 +156,11 @@ executeCommandRequest cmd margs mcallback = do
            <! nil
   pushRequest param mcallback
 
--- TextDocumentCompletion
----------------------------------------
+--}}}
+
+-------------------------------------------------------------------------------
+-- TextDocumentCompletion {{{
+-------------------------------------------------------------------------------
 completionRequest :: (HasOutChan env, HasContext env)
                   => Buffer
                   -> NvimPos
@@ -228,8 +237,11 @@ removeNewline = concatMap (\c -> if c == '\n' then " ⏐ " else [c])
 -- ↩ U+21A9 LEFTWARDS ARROW WITH HOOK
 -- ⏐ U+23D0 VERTICAL LINE EXTENSION
 
--- TextDocumentCodeAction
----------------------------------------
+--}}}
+
+-------------------------------------------------------------------------------
+-- TextDocumentCodeAction {{{
+-------------------------------------------------------------------------------
 
 codeAction :: (HasOutChan env, HasContext env)
            => Buffer
@@ -303,7 +315,8 @@ withResult :: (HasLogFunc env)
            -> Neovim env (Maybe ret)
 withResult resp k =
   case resp^.__#error of
-    Some e -> vim_report_error' (T.unpack (e^.__#message)) >> return Nothing
+    Some e -> vim_report_error' msg >> return Nothing
+      where msg = "nvim-hs-lsp: error from server: " <> T.unpack (e^.__#message)
     None -> case resp^.__#result of
       None   -> logError "withResult: wrong input" >> return Nothing
       Some x -> Just <$> k x
@@ -311,4 +324,5 @@ withResult resp k =
 waitCallback :: MonadIO m => m (TMVar a) -> m a
 waitCallback m = atomically . takeTMVar =<< m
 
+--}}}
 

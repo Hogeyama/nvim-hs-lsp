@@ -497,7 +497,6 @@ dispatch hs = do
         Right !msg -> forM_ inChs $ atomically . flip writeTChan msg
         Left e -> logError $ fromString $ init $ unlines
             [ "dispatcher: could not parse input."
-            --, "input: " ++ B.unpack rawInput
             , "error: " ++ e
             ]
     registerAsyncHandle "dispatcher" dispatcher
@@ -523,4 +522,9 @@ loggingErrorDeep
   => m a -> m a
 loggingErrorDeep = handleAnyDeep $ \e -> logError (displayShow e) >> throwIO e
   where ?callstack = popCallStack callStack
+
+catchAndDisplay
+  :: HasLogFunc env
+  => Neovim env () -> Neovim env ()
+catchAndDisplay = handleAnyDeep $ \e -> logError (displayShow e) >> vim_report_error' (show e)
 

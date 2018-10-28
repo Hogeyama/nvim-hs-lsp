@@ -21,7 +21,6 @@ import qualified RIO.Map                 as M
 
 import           Data.Aeson              hiding (KeyValue, Object)
 import qualified Data.Aeson.Types        as J
-import qualified Data.Extensible         as E
 import           Data.Extensible.Rexport
 import           GHC.Generics            (Generic)
 import           GHC.TypeLits            (KnownSymbol, symbolVal)
@@ -34,7 +33,7 @@ import qualified Neovim                  as N (Object (..))
 -- Some data types
 -------------------------------------------------------------------------------
 
-newtype Record xs = Record { fields :: E.Record xs } deriving (Generic)
+newtype Record xs = Record { fields :: OrigRecord xs } deriving (Generic)
 deriving instance (Forall (Instance1 NFData (Field Identity)) xs) => NFData (Record xs)
 deriving instance (Forall (Instance1 Show (Field Identity)) xs) => Show (Record xs)
 deriving instance (Forall (Instance1 Eq   (Field Identity)) xs) => Eq   (Record xs)
@@ -97,28 +96,17 @@ type family IsOptional a :: Bool where
 --
 newtype (:|:) a b = Sum (Either a b)
   deriving (Show, Eq, Ord, Generic, NFData)
-instance (FromJSON a, FromJSON b) => FromJSON (a :|: b) where
-  parseJSON o =  Sum . Left  <$> parseJSON o
-             <|> Sum . Right <$> parseJSON o
-instance (ToJSON a, ToJSON b) => ToJSON (a :|: b) where
-  toJSON (Sum (Left  o)) = toJSON o
-  toJSON (Sum (Right o)) = toJSON o
-
+infixr 4 :|:
 {-# COMPLETE L, R #-}
 pattern L :: a -> a :|: b
 pattern L a = Sum (Left a)
 pattern R :: b -> a :|: b
 pattern R b = Sum (Right b)
-
---data (:|:) a b = L a | R b
---  deriving (Show, Eq, Ord, Generic, NFData)
---instance (FromJSON a, FromJSON b) => FromJSON (a :|: b) where
---  parseJSON o =  L <$> parseJSON o
---             <|> R <$> parseJSON o
---instance (ToJSON a, ToJSON b) => ToJSON (a :|: b) where
---  toJSON (L o) = toJSON o
---  toJSON (R o) = toJSON o
-infixr 4 :|:
+instance (FromJSON a, FromJSON b) => FromJSON (a :|: b) where
+  parseJSON o = L <$> parseJSON o <|> R <$> parseJSON o
+instance (ToJSON a, ToJSON b) => ToJSON (a :|: b) where
+  toJSON (L o) = toJSON o
+  toJSON (R o) = toJSON o
 
 -------------------------------------------------------------------------------
 -- JSON
@@ -213,8 +201,8 @@ instance (NFData (Record xs), Forall (KeyValue KnownSymbol FieldNvimObject) xs)
     M.empty
     xs
 
-instance (NFData (E.Record xs), Forall (KeyValue KnownSymbol FieldNvimObject) xs)
-          => NvimObject (E.Record xs) where
+instance (NFData (OrigRecord xs), Forall (KeyValue KnownSymbol FieldNvimObject) xs)
+          => NvimObject (OrigRecord xs) where
   toObject xs = N.ObjectMap $ hfoldlWithIndexFor
     (Proxy @(KeyValue KnownSymbol FieldNvimObject))
     (\_ m kv ->

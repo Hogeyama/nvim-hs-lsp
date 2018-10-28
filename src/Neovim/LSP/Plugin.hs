@@ -260,5 +260,6 @@ nvimHsLspHieHsImport moduleToImport = do
                   <! #moduleToImport @= moduleToImport
                   <! nil @(Field Identity)
   void $ executeCommandRequest "hsimport:import" (Some [arg]) Nothing
+                    <! #moduleToImport @= moduleToImport
 
 

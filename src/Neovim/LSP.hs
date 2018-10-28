@@ -28,8 +28,10 @@ plugin = do
             , $(command' 'nvimHsLspDefinition) ["async"]
             , $(command' 'nvimHsLspCodeAction) ["async"]
             , $(command' 'nvimHsLspHieCaseSplit) ["async"]
+            , $(command' 'nvimHsLspFormatting) ["async", "!", "%"]
+            , $(command' 'nvimHsLspReferences) ["async"]
             -- Other
-            , $(command' 'nvimHsLspLoadQuickfix) ["async",  "!"]
+            , $(command' 'nvimHsLspLoadQuickfix) ["async", "!"]
             --
             , $(function' 'nvimHsLspComplete) Sync
             , $(function' 'nvimHsLspAsyncComplete) Async

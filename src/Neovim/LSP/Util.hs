@@ -5,7 +5,7 @@
 module Neovim.LSP.Util where
 
 import           RIO                          hiding ((^.))
-import           RIO.List                     (sortBy)
+import           RIO.List                     (sortBy, intercalate)
 import qualified RIO.Text                     as T
 import qualified RIO.Map                      as M
 
@@ -45,9 +45,6 @@ getTextDocumentPositionParams b p = do
          <! #position     @= nvimPosToPosition p
          <! nil
   return pos
-
-catchAndDisplay :: (HasLogFunc env) => Neovim env () -> Neovim env ()
-catchAndDisplay = handleAny $ \e -> logError (displayShow e) >> vim_report_error' (show e)
 
 -------------------------------------------------------------------------------
 -- TODO To be moved
@@ -202,4 +199,39 @@ diagnosticToQfItems uri d = header : rest
           <! #text     @= T.unpack msg
           <! #valid    @= Some False
           <! nil
+
+-------------------------------------------------------------------------------
+-- TextEdit
+-------------------------------------------------------------------------------
+
+applyTextEdit :: Uri -> [TextEdit] -> PluginAction ()
+applyTextEdit uri edits =
+    forM_ edits $ \e -> catchAndDisplay $ do
+      let range = e^.__#range
+          (l1,_)  = positionToNvimPos (range^.__#start)
+          (l2,_)  = positionToNvimPos (range^.__#end)
+          newText = e^.__#newText
+      let cmd1 = "edit " ++ uriToFilePath uri ++ " | "
+                  ++ show l1 ++ "," ++ show (l2-1) ++ "d"
+          cmd2 = "setline(" ++
+                    intercalate ","
+                      [ show l1
+                      , show $ lines newText
+                      ]
+                  ++ ")"
+      logDebug "applyChanges"
+      logDebug $ fromString cmd2
+      unless (l1==l2) $ do
+        logDebug $ fromString cmd1
+        vim_command' $ "edit " ++ uriToFilePath uri ++ " | "
+                    ++ show l1 ++ "," ++ show (l2-1) ++ "d"
+      void $ vim_call_function_' "setline"
+        [ ObjectInt (fromIntegral l1)
+        , ObjectArray $
+            map (ObjectString . encodeUtf8 . fromString) (lines newText)
+        ]
+
+
+
+
 

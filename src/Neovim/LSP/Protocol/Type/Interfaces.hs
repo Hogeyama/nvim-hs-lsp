@@ -497,9 +497,8 @@ deriving instance ImplResponse m => FromJSON (Response m)
 -- Client Request --{{{
 -------------------------------------------------------------------------------
 
--- Initialize
+-- Initialize {{{
 ----------------------------------------
---{{{
 
 -- | Initialize Request
 type instance RequestParam 'InitializeK = Record
@@ -734,7 +733,7 @@ type ExecuteCommandOptions = Record
   '[ "commands" >: [String]
    ]
 
---(To|From)JSON TextDocumentSync{{{
+--(To|From)JSON TextDocumentSync {{{
 instance FromJSON TextDocumentSync where
   parseJSON x@Number{} = SyncKind   <$> parseJSON x
   parseJSON x          = SyncOption <$> parseJSON x
@@ -744,14 +743,20 @@ instance ToJSON TextDocumentSync where
 -- }}}
 -- }}}
 
--- Shutdown
+-- Shutdown {{{
 ----------------------------------------
 
--- Cancel
+-- TODO
+
+-- }}}
+
+-- Cancel {{{
 ----------------------------------------
 type instance NotificationParam 'ClientCancelK = Record '[ "id" >: ID ]
 
--- TextDocumentHover
+-- }}}
+
+-- TextDocumentHover {{{
 ----------------------------------------
 type instance RequestParam 'TextDocumentHoverK = TextDocumentPositionParams
 type instance ResResult    'TextDocumentHoverK = Nullable Hover
@@ -763,7 +768,9 @@ type Hover = Record
    , "range"    >: Option Range
    ]
 
--- TextDocumentSignatureHelp
+-- }}}
+
+-- TextDocumentSignatureHelp {{{
 ----------------------------------------
 type instance RequestParam 'TextDocumentSignatureHelpK = TextDocumentPositionParams
 type instance ResResult    'TextDocumentSignatureHelpK = SignatureHelp
@@ -772,13 +779,17 @@ type instance ResError     'TextDocumentSignatureHelpK = Value
 type SignatureHelp = Value
   -- HIEが対応していないので後回しで良い
 
--- TextDocumentDefinition
+-- }}}
+
+-- TextDocumentDefinition {{{
 ----------------------------------------
 type instance RequestParam 'TextDocumentDefinitionK = TextDocumentPositionParams
 type instance ResResult    'TextDocumentDefinitionK = Nullable [Location]
 type instance ResError     'TextDocumentDefinitionK = String
 
--- WorkspaceExecuteCommand
+-- }}}
+
+-- WorkspaceExecuteCommand {{{
 ----------------------------------------
 type instance RequestParam 'WorkspaceExecuteCommandK = ExecuteCommandParams
 type instance ResResult    'WorkspaceExecuteCommandK = Nullable Value
@@ -789,7 +800,18 @@ type ExecuteCommandParams = Record
    , "arguments" >: Option [Value]
    ]
 
--- TextDocumentCompletion
+-- }}}
+
+-- WorkspaceSymbol {{{
+----------------------------------------
+type instance RequestParam 'WorkspaceSymbolK = Record
+  '[ "query" >: String ]
+type instance ResResult    'WorkspaceSymbolK = Nullable [SymbolInformation]
+type instance ResError     'WorkspaceSymbolK = Value
+
+-- }}}
+
+-- TextDocumentCompletion {{{
 ----------------------------------------
 type instance RequestParam 'TextDocumentCompletionK = CompletionParams
 type instance ResResult    'TextDocumentCompletionK = Nullable ([CompletionItem] :|: CompletionList)
@@ -824,7 +846,9 @@ type CompletionParamsF =
    ]
 type CompletionContext = Value
 
--- TextDocumentReferences
+-- }}}
+
+-- TextDocumentReferences {{{
 ----------------------------------------
 type instance RequestParam 'TextDocumentReferencesK = ReferenceParams
 type instance ResResult    'TextDocumentReferencesK = Nullable [Location]
@@ -839,7 +863,9 @@ type ReferenceContext = Record
   '[ "includeDeclaration" >: Bool
    ]
 
--- TextDocumentCodeAction
+-- }}}
+
+-- TextDocumentCodeAction {{{
 ----------------------------------------
 
 type instance RequestParam 'TextDocumentCodeActionK = CodeActionParams
@@ -1095,6 +1121,6 @@ type instance ResError     ('ServerRequestMiscK s) = Value
 -------------------------------------------------------------------------------
 
 revLookup :: Eq a => a -> [(b,a)] -> Maybe b
-revLookup x dic = lookup x $ map flip' dic
-  where flip' (a,b) = (b,a)
+revLookup x = lookup x . map swap
+  where swap (a,b) = (b,a)
 

@@ -112,6 +112,6 @@ prfClientResp = \case -- {{{
   SServerRequestMisc SSym         -> Dict
 -- }}}
 
-notImplemented :: a
+notImplemented :: HasCallStack => a
 notImplemented = error "Neovim.LSP.Protocol.Type.Proof: not implemented"
 
