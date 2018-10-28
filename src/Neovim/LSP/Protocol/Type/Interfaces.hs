@@ -4,6 +4,7 @@
 {-# LANGUAGE EmptyCase            #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE UndecidableSuperClasses #-}
 {-# OPTIONS_GHC -Wall             #-}
 
 module Neovim.LSP.Protocol.Type.Interfaces
@@ -77,6 +78,7 @@ module Neovim.LSP.Protocol.Type.Interfaces
   , ApplyWorkspaceEditResponse
   , WorkspaceClientCapabilities
   , TextDocumentClientCapabilities
+  , FormattingOptions(..)
 
   -- function
   , filePathToUri
@@ -107,13 +109,14 @@ import qualified RIO.Text                          as T
 import           Prelude                           (Enum (toEnum))
 
 import           Data.Aeson                        hiding (Error)
-import           Data.Extensible                   hiding (Nullable, Record, record)
+import           Data.Extensible                   as E hiding (Nullable, Record, record)
 import           Data.Singletons                   (SingI, SingKind (..))
 import           GHC.TypeLits
 import           Safe                              (lookupJust)
 
 import           Neovim.LSP.Protocol.Type.Record
 import           Neovim.LSP.Protocol.Type.Method
+import Data.Kind (Constraint)
 
 
 -- Interfaces defined in
@@ -933,12 +936,115 @@ mkEnum' p = Enum' (embed p)
 mkEnum'' :: forall x xs. Member xs x => Enum' xs
 mkEnum'' = Enum' (embed (Proxy @x))
 
--- Misc
+-- }}}
+
+-- TextDocumentDocumentSymbol {{{
+----------------------------------------
+type instance RequestParam 'TextDocumentDocumentSymbolK = Record
+  '[ "textDocument" >: TextDocumentIdentifier ]
+type instance ResResult 'TextDocumentDocumentSymbolK = Nullable ([DocumentSymbol] :|: [SymbolInformation])
+type instance ResError  'TextDocumentDocumentSymbolK = Value
+
+newtype DocumentSymbol = DocumentSymbol (Record
+  '[ "name" >: String
+   , "detail" >: Option String
+   , "kind" >: SymbolKind
+   , "deprecated" >: Option Bool
+   , "range" >: Range
+   , "children" >: Option [DocumentSymbol]
+   ])
+  deriving (Show,Eq,ToJSON,FromJSON)
+
+type SymbolInformation = Record
+  '[ "name" >: String
+   , "kind" >: Number
+   , "deprecated" >: Option Bool
+   , "location" >: Location
+   , "containerName" >: Option String
+   ]
+
+--}}}
+
+-- TextDocumentFormatting {{{
+----------------------------------------
+type instance RequestParam 'TextDocumentFormattingK = Record
+  '[ "textDocument" >: TextDocumentIdentifier
+   , "options" >: FormattingOptions
+   ]
+type instance ResResult    'TextDocumentFormattingK = Nullable [TextEdit]
+type instance ResError     'TextDocumentFormattingK = String
+
+-- FormattingOptions {{{
+-- |
+-- Original difinition is:
+--
+-- @
+-- interface FormattingOptions {
+--   tabSize: number;
+--   insertSpaces: boolean;
+--   [key: string]: boolean | number | string;
+-- }
+-- @
+--
+-- Usage:
+--
+-- >>> FormattingOptions $ Record $ #tabSize @= 0 <! #insertSpaces @= False <! #foo @= ("bar" :: String) <! nil
+-- FormattingOptions Record {fields = tabSize @= 0.0 <: insertSpaces @= False <: foo @= "bar" <: nil}
+--
+data FormattingOptions where
+  FormattingOptions
+    :: forall xs.
+          ( Associate "tabSize" Number xs
+          , Associate "insertSpaces" Bool xs
+          , Forall (E.KeyValue KnownSymbol FOField) xs
+          , Eq (Record xs)
+          , Show (Record xs)
+          , ToJSON (Record xs)
+          , FromJSON (Record xs)
+          )
+    => Record xs -> FormattingOptions
+instance Show FormattingOptions where
+  show (FormattingOptions x) = "FormattingOptions " <> show x
+instance Eq FormattingOptions where
+  FormattingOptions x == FormattingOptions y = toJSON x == toJSON y
+instance ToJSON FormattingOptions where
+  toJSON (FormattingOptions xs) = toJSON xs
+instance FromJSON FormattingOptions where
+  parseJSON x = -- tenuki
+    FormattingOptions
+      @'["tabSize" >: Number, "insertSpaces" >: Bool]
+      <$> parseJSON x
+type family FOField' x :: Constraint where
+  FOField' Number = ()
+  FOField' Bool = ()
+  FOField' String = ()
+  FOField' x = 'True ~ 'False
+class FOField' x => FOField x
+instance FOField' x => FOField x
+-- }}}
+
+-- }}}
+
+-- TextDocumentRangeFormatting {{{
+----------------------------------------
+type instance RequestParam 'TextDocumentRangeFormattingK = Record
+  '[ "textDocument" >: TextDocumentIdentifier
+   , "range" >: Range
+   , "options" >: FormattingOptions
+   ]
+type instance ResResult    'TextDocumentRangeFormattingK = Nullable [TextEdit]
+type instance ResError     'TextDocumentRangeFormattingK = String
+
+--}}}
+
+-- Misc {{{
 ----------------------------------------
 
 type instance RequestParam ('ClientRequestMiscK s) = Value
 type instance ResResult    ('ClientRequestMiscK s) = Value
 type instance ResError     ('ClientRequestMiscK s) = Value
+
+-- }}}
 
 --}}}
 

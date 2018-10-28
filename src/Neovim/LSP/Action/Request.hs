@@ -305,8 +305,110 @@ executeCommandOrNot cmd = do
 executeCommand :: Command -> Neovim PluginEnv ()
 executeCommand cmd = void $ executeCommandRequest (cmd^.__#command) (cmd^.__#arguments) Nothing
 
+--}}}
 
--- Util
+-------------------------------------------------------------------------------
+-- TextDocumentFormatting {{{
+-------------------------------------------------------------------------------
+
+textDocumentFormatting
+  :: (HasOutChan env, HasContext env, HasLogFunc env)
+  => Buffer
+  -> FormattingOptions
+  -> Neovim env (TMVar ())
+textDocumentFormatting b fopts = do
+    uri <- getBufUri b
+    let param = Record
+              $ #textDocument @= Record (#uri @= uri <! nil)
+             <! #options @= fopts
+             <! nil
+    fromJust <$> pushRequest param (Just (callbackTextDocumentFormatting uri))
+
+textDocumentRangeFormatting
+  :: (HasOutChan env, HasContext env, HasLogFunc env)
+  => Buffer
+  -> (NvimPos, NvimPos)
+  -> FormattingOptions
+  -> Neovim env (TMVar ())
+textDocumentRangeFormatting b (start,end) fopts = do
+    uri <- getBufUri b
+    let param = Record
+              $ #textDocument @= Record (#uri @= uri <! nil)
+             <! #range @= range
+             <! #options @= fopts
+             <! nil
+        range = Record
+              $ #start @= nvimPosToPosition start
+             <! #end @= nvimPosToPosition end
+             <! nil
+    fromJust <$> pushRequest param (Just (callbackTextDocumentRangeFormatting uri))
+
+callbackTextDocumentFormatting :: Uri -> CallbackOf 'TextDocumentFormattingK ()
+callbackTextDocumentFormatting uri (Response resp) = callbackTextEdits uri resp
+
+callbackTextDocumentRangeFormatting :: Uri -> CallbackOf 'TextDocumentRangeFormattingK ()
+callbackTextDocumentRangeFormatting uri (Response resp) = callbackTextEdits uri resp
+
+callbackTextEdits
+  :: Uri
+  -> ResponseMessage (Nullable [TextEdit]) e
+  -> Neovim PluginEnv ()
+callbackTextEdits uri resp =
+    void $ withResult resp $ \case
+      Nothing -> return ()
+      Just edits -> applyTextEdit uri edits
+
+--}}}
+
+-------------------------------------------------------------------------------
+-- TextDocumentReferences {{{
+-------------------------------------------------------------------------------
+
+textDocumentReferences
+  :: (HasOutChan env, HasContext env)
+  => Buffer
+  -> NvimPos
+  -> CallbackOf 'TextDocumentReferencesK a
+  -> Neovim env (TMVar a)
+textDocumentReferences b p callback = do
+    pos <- getTextDocumentPositionParams b p
+    let param = Record
+              $ fields pos `happend`
+                (#context @= context <! nil)
+        context = Record
+                $ #includeDeclaration @= True
+               <! nil
+    fromJust <$> pushRequest param (Just callback)
+
+callbackTextDocumentReferences :: CallbackOf 'TextDocumentReferencesK ()
+callbackTextDocumentReferences (Response resp) = void $ withResult resp $ \case
+    Nothing -> nvimEchom "textDocument/references: No result"
+    Just locs -> do
+      logInfo $ "textDocument/references: " <> displayShow locs
+      replaceLocList 0 =<< mapM locationToQfItem locs -- TODO set winId (current win is used when 0 is set)
+      unless (null locs) $ vim_command' "botright lopen"
+  where
+    locationToQfItem loc = do
+      Just text <- fmap lastMaybe $ errOnInvalidResult $
+                      vim_call_function_ "readfile" (filename +: False +: lnum +: [])
+      return $ #filename @= Some filename
+            <! #lnum     @= Some lnum
+            <! #col      @= Some col
+            <! #type     @= Some "I"
+            <! #text     @= text
+            <! #valid    @= Some True
+            <! nil
+      where
+        filename = uriToFilePath (loc^.__#uri)
+        range = loc^.__#range
+        start = range^.__#start
+        lnum = 1 + start^.__#line
+        col  = 1 + start^.__#character
+
+--}}}
+
+-------------------------------------------------------------------------------
+-- Util {{{
 -------------------------------------------------------------------------------
 
 withResult :: (HasLogFunc env)

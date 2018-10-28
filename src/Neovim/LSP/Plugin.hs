@@ -255,11 +255,39 @@ hiePointCommand cmd =  whenInitialized . whenAlreadyOpened $ do
 
 nvimHsLspHieHsImport :: String -> NeovimLsp ()
 nvimHsLspHieHsImport moduleToImport = do
-  uri <- getBufUri =<< vim_get_current_buffer'
-  let arg = toJSON $ #file @= uri
-                  <! #moduleToImport @= moduleToImport
-                  <! nil @(Field Identity)
-  void $ executeCommandRequest "hsimport:import" (Some [arg]) Nothing
+    uri <- getBufUri =<< vim_get_current_buffer'
+    let arg = toJSON $ #file @= uri
                     <! #moduleToImport @= moduleToImport
+                    <! nil @(Field Identity)
+    void $ executeCommandRequest "hsimport:import" (Some [arg]) Nothing
 
+
+-------------------------------------------------------------------------------
+-- Formatting
+-------------------------------------------------------------------------------
+
+nvimHsLspFormatting :: CommandArguments -> NeovimLsp ()
+nvimHsLspFormatting CommandArguments{range,bang} = whenInitialized . whenAlreadyOpened $ do
+    b <- vim_get_current_buffer'
+    let fopts = FormattingOptions . Record
+              $ #tabSize @= 2 -- TODO set by vim variable
+             <! #insertSpaces @= False
+             <! nil
+    case (bang, range) of
+      (Just True, _) ->
+        waitCallback $ textDocumentFormatting b fopts
+      (_, Nothing) ->
+        waitCallback $ textDocumentFormatting b fopts
+      (_, Just (l1,l2)) ->
+        waitCallback $ textDocumentRangeFormatting b ((l1,1),(l2,1)) fopts
+
+-------------------------------------------------------------------------------
+-- References
+-------------------------------------------------------------------------------
+
+nvimHsLspReferences :: CommandArguments -> NeovimLsp ()
+nvimHsLspReferences _ = whenInitialized . whenAlreadyOpened $ do
+    b <- vim_get_current_buffer'
+    p <- getNvimPos
+    waitCallback $ textDocumentReferences b p callbackTextDocumentReferences
 

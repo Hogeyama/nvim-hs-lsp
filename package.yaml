@@ -16,6 +16,7 @@ default-extensions:
 - LambdaCase
 - MultiParamTypeClasses
 - MultiWayIf
+- NamedFieldPuns
 - NoImplicitPrelude
 - OverloadedLabels
 - OverloadedStrings

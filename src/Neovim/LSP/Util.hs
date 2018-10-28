@@ -156,6 +156,9 @@ type QfItem = OrigRecord
 replaceQfList :: HasLogFunc env => [QfItem] -> Neovim env ()
 replaceQfList qs = void $ vim_call_function_ "setqflist" $! qs +: ['r'] +: []
 
+replaceLocList :: HasLogFunc env => Int -> [QfItem] -> Neovim env ()
+replaceLocList winId qs = void $ vim_call_function_ "setloclist" $! winId +: qs +: ['r'] +: []
+
 vim_call_function_ :: String -> [Object] -> Neovim env (Either NeovimException Object)
 vim_call_function_ func args = do
   func' <- evaluate (force func)

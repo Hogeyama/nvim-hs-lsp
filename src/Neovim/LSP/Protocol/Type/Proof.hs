@@ -19,7 +19,7 @@ prfClientReq :: forall (m :: ClientRequestMethodK). Sing m -> Dict (ImplRequest 
 prfClientReq = \case -- {{{
     SInitialize                      -> Dict
     SShutdown                        -> notImplemented
-    SWorkspaceSymbol                 -> notImplemented
+    SWorkspaceSymbol                 -> Dict
     SWorkspaceExecuteCommand         -> Dict
     STextDocumentWillSaveWaitUntil   -> notImplemented
     STextDocumentCompletion          -> Dict
@@ -28,11 +28,11 @@ prfClientReq = \case -- {{{
     STextDocumentSignatureHelp       -> Dict
     STextDocumentReferences          -> Dict
     STextDocumentDocumentHighlight   -> notImplemented
-    STextDocumentDocumentSymbol      -> notImplemented
-    STextDocumentFormatting          -> notImplemented
-    STextDocumentRangeFormatting     -> notImplemented
+    STextDocumentDocumentSymbol      -> Dict
+    STextDocumentFormatting          -> Dict
+    STextDocumentRangeFormatting     -> Dict
     STextDocumentOnTypeFormatting    -> notImplemented
-    STextDocumentDefinition          -> notImplemented
+    STextDocumentDefinition          -> Dict
     STextDocumentCodeAction          -> Dict
     STextDocumentCodeLens            -> notImplemented
     SCodeLensResolve                 -> notImplemented
@@ -61,7 +61,7 @@ prfServerResp :: forall (m :: ClientRequestMethodK). Sing m -> Dict (ImplRespons
 prfServerResp = \case  -- {{{
     SInitialize                      -> Dict
     SShutdown                        -> notImplemented
-    SWorkspaceSymbol                 -> notImplemented
+    SWorkspaceSymbol                 -> Dict
     SWorkspaceExecuteCommand         -> Dict
     STextDocumentWillSaveWaitUntil   -> notImplemented
     STextDocumentCompletion          -> Dict
@@ -70,9 +70,9 @@ prfServerResp = \case  -- {{{
     STextDocumentSignatureHelp       -> Dict
     STextDocumentReferences          -> Dict
     STextDocumentDocumentHighlight   -> notImplemented
-    STextDocumentDocumentSymbol      -> notImplemented
-    STextDocumentFormatting          -> notImplemented
-    STextDocumentRangeFormatting     -> notImplemented
+    STextDocumentDocumentSymbol      -> Dict
+    STextDocumentFormatting          -> Dict
+    STextDocumentRangeFormatting     -> Dict
     STextDocumentOnTypeFormatting    -> notImplemented
     STextDocumentDefinition          -> Dict
     STextDocumentCodeAction          -> Dict
