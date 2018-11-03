@@ -423,7 +423,7 @@ callbackTextDocumentReferences (Response resp) = void $ withResult resp $ \case
   where
     locationToQfItem' loc = do
         Just text <- fmap lastMaybe $ errOnInvalidResult $
-                        vim_call_function_ "readfile" (filename +: False +: lnum +: [])
+                        vimCallFunction "readfile" (filename +: False +: lnum +: [])
         return $ locationToQfItem loc text
       where
         filename = uriToFilePath (loc^.__#uri)

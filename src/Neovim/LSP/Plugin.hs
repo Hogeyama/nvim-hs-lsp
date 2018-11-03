@@ -40,7 +40,7 @@ nvimHsLspInitialize _ = loggingErrorImmortal $ do
         map' <- errOnInvalidResult $ vim_get_var "NvimHsLsp_serverCommands"
         case M.lookup ft map' of
           Just (cmd:args) -> do
-            cwd <- errOnInvalidResult (vim_call_function_ "getcwd" [])
+            cwd <- errOnInvalidResult (vimCallFunction "getcwd" [])
             let cwdUri = filePathToUri cwd
             initializeLsp cwd cmd args
             #fileType .== Just ft

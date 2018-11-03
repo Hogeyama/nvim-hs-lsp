@@ -117,19 +117,21 @@ spec = do
 -------------------------------------------------------------------------------
 
 
-testNeovimLsp :: Seconds
+testNeovimLsp :: (Show a, Typeable a)
+              => Seconds
               -> FilePath
               -> NeovimLsp a
               -> IO a
 testNeovimLsp time file action = do
   initialEnv <- initialEnvM
+  --testNeovim time initialEnv $
   testNeovim time initialEnv $
     finally `flip` finalizeLSP $ do
       vim_command' "source ./test-file/init.vim"
 
       initializeLsp "./" "hie" ["--lsp", "-d", "-l", "/tmp/hie.log"]
       #fileType .== Just "haskell"
-      cwd <- filePathToUri <$> errOnInvalidResult (vim_call_function_ "getcwd" [])
+      cwd <- filePathToUri <$> errOnInvalidResult (vimCallFunction "getcwd" [])
       pushRequest' @'InitializeK (initializeParam Nothing (Just cwd))
 
       dispatch [ callbackHandler ]

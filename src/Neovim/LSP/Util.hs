@@ -31,7 +31,7 @@ getBufUri :: Buffer -> Neovim env Uri
 getBufUri b = filePathToUri <$> nvim_buf_get_name' b
 
 getNvimPos :: (HasLogFunc env) => Neovim env NvimPos
-getNvimPos = vim_call_function_ "getpos" [ObjectString "."] >>= \case
+getNvimPos = vimCallFunction "getpos" [ObjectString "."] >>= \case
   Right (fromObject -> Right [_bufnum, lnum, col, _off]) -> return (lnum,col)
   e -> logError (displayShow e) >> error "getNvimPos"
 
@@ -156,19 +156,19 @@ type QfItem = OrigRecord
    ]
 
 replaceQfList :: HasLogFunc env => [QfItem] -> Neovim env ()
-replaceQfList qs = void $ vim_call_function_ "setqflist" $! qs +: ['r'] +: []
+replaceQfList qs = void $ vimCallFunction "setqflist" $! qs +: ['r'] +: []
 
 replaceLocList :: HasLogFunc env => Int -> [QfItem] -> Neovim env ()
-replaceLocList winId qs = void $ vim_call_function_ "setloclist" $! winId +: qs +: ['r'] +: []
+replaceLocList winId qs = void $ vimCallFunction "setloclist" $! winId +: qs +: ['r'] +: []
 
-vim_call_function_ :: String -> [Object] -> Neovim env (Either NeovimException Object)
-vim_call_function_ func args = do
+vimCallFunction :: String -> [Object] -> Neovim env (Either NeovimException Object)
+vimCallFunction func args = do
   func' <- evaluate (force func)
   args' <- evaluate (force args)
   vim_call_function func' args'
 
-vim_call_function_' :: String -> [Object] -> Neovim env Object
-vim_call_function_' func args = do
+vimCallFunction' :: String -> [Object] -> Neovim env Object
+vimCallFunction' func args = do
   func' <- evaluate (force func)
   args' <- evaluate (force args)
   vim_call_function' func' args'
@@ -227,22 +227,47 @@ locationToQfItem loc text =
 
 applyTextEdit :: Uri -> [TextEdit] -> PluginAction ()
 applyTextEdit uri edits = do
-    text <- errOnInvalidResult $ vim_call_function_ "readfile" (uriToFilePath uri+:[])
+    text <- errOnInvalidResult $ vimCallFunction "readfile" (uriToFilePath uri+:[])
     let filePath = uriToFilePath uri
         -- NOTE: This sort must be stable.
         edits' = L.reverse $ L.sortOn (view (__#range.__#start)) edits
-        applyOne text' edit = do
-            let range = edit^.__#range
-                (before, r)  = L.splitAt (range^.__#start.__#line) text'
-                (body,after) = L.splitAt (range^.__#end.__#line - range^.__#start.__#line + 1) r
-                body' = lines $ b ++ edit^.__#newText ++ a
-                  where
-                    b = take (range^.__#start.__#character) (L.head body)
-                    a = drop (range^.__#end.__#character) (L.last body)
-            return $ before ++ body' ++ after
-    newText <- foldlM applyOne text edits'
-    void $ vim_call_function_ "writefile" (newText +: filePath +: [])
+        newText = foldl' applyTextEditOne text edits'
+    void $ vimCallFunction "writefile" (newText +: filePath +: [])
     vim_command' $ "edit " ++ filePath
+
+-- TODO これはdoctestに置くべきではない
+-- |
+-- >>> import Prelude (putStr)
+-- >>> :{
+--  let text = [ "let () = begin match () with"
+--             , "      _ -> ()"
+--             , "  end"
+--             ]
+--      edit = Record
+--           $ #range @= Record ( #start @= Record (#line @= 0 <! #character @= 0 <! nil)
+--                             <! #end   @= Record (#line @= 3 <! #character @= 0 <! nil)
+--                             <! nil )
+--          <! #newText @= "let () =\n  begin match () with\n    | () -> ()\n  end\n"
+--          <! nil
+--  in putStr $ T.unpack $ T.unlines $ applyTextEditOne text edit
+-- :}
+-- let () =
+--   begin match () with
+--     | () -> ()
+--   end
+--
+applyTextEditOne :: [Text] -> TextEdit -> [Text]
+applyTextEditOne text edit =
+    let range = edit^.__#range
+        (before, r)   = L.splitAt (range^.__#start.__#line) text
+        (body, after) = L.splitAt (range^.__#end.__#line - range^.__#start.__#line + 1) r
+        body' = T.lines $ b <> edit^.__#newText <> a
+          where
+            b = T.take (range^.__#start.__#character) (L.head body)
+            a = if length text > range^.__#end.__#line
+                then T.drop (range^.__#end.__#character) (L.last body)
+                else ""
+    in before <> body' <> after
 
 --`TextEdit[]`
 -- Complex text manipulations are described with an array of TextEdit’s, representing a single change to the document.
