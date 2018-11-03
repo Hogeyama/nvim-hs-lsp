@@ -23,7 +23,7 @@ import           Data.Aeson              hiding (KeyValue, Object)
 import qualified Data.Aeson.Types        as J
 import           Data.Extensible.Rexport
 import           GHC.Generics            (Generic)
-import           GHC.TypeLits            (KnownSymbol, symbolVal)
+import           GHC.TypeLits            (Symbol, KnownSymbol, symbolVal)
 import           Unsafe.Coerce           (unsafeCoerce)
 
 import           Neovim                  (NvimObject (..))
@@ -33,7 +33,7 @@ import qualified Neovim                  as N (Object (..))
 -- Some data types
 -------------------------------------------------------------------------------
 
-newtype Record xs = Record { fields :: OrigRecord xs } deriving (Generic)
+newtype Record (xs :: [Assoc Symbol *]) = Record { fields :: OrigRecord xs } deriving (Generic)
 deriving instance (Forall (Instance1 NFData (Field Identity)) xs) => NFData (Record xs)
 deriving instance (Forall (Instance1 Show (Field Identity)) xs) => Show (Record xs)
 deriving instance (Forall (Instance1 Eq   (Field Identity)) xs) => Eq   (Record xs)

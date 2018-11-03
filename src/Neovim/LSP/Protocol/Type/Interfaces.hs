@@ -269,7 +269,7 @@ type Command = Record
 ----------------------------------------
 type TextEdit = Record
   '[ "range"   >: Range
-   , "newText" >: String
+   , "newText" >: Text
    ]
 type TextDocumentEdit = Record
   '[ "textDocument" >: VersionedTextDocmentIdentifier
