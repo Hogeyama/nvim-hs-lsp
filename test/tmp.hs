@@ -20,7 +20,6 @@ import           Neovim                            hiding (Plugin, wait)
 import           Neovim.Context                    (quit)
 import           Neovim.Test
 
-import           Neovim.LSP.Action.Callback
 import           Neovim.LSP.Action.Notification    --(didChangeBuffer, didOpenBuffer)
 import           Neovim.LSP.Action.Request         --(hoverRequest)
 import           Neovim.LSP.Base

@@ -8,10 +8,11 @@
 module Neovim.LSP.PluginSpec where
 
 import           RIO
-import           RIO.List.Partial (tail)
+import           RIO.List.Partial                  (tail)
 import           Test.Hspec
 import           Data.Extensible
-import           Neovim.Test_
+--import           Neovim.Test_
+import           Neovim.Test.Wrapper
 import           Neovim.Context.Internal
 
 import           Neovim
@@ -37,8 +38,6 @@ spec = do
   baseDirectory <- runIO getCurrentDirectory
   let removeStackWorkDir =
         runIO $ void $ tryIO $ removeDirectoryRecursive "./test-file/.stack-work"
-
-
 
   describe "completion" $ do
     specify "findStart simple" $ do
