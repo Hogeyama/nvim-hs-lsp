@@ -65,8 +65,8 @@ getTextDocumentPositionParams b p = do
 -- "OK"
 --
 -- TODO これをユーザーに見せるのはどうなのか．でもtype checkはして欲しいしなあ
-pushRequest :: forall (m :: ClientRequestMethodK) env a.
-               (ImplRequest m, HasOutChan env, HasContext env)
+pushRequest :: forall (m :: ClientRequestMethodK) env a
+            .  (ImplRequest m, HasOutChan env, HasContext env)
             => RequestParam m
             -> Maybe (CallbackOf m a)
             -> Neovim env (Maybe (TMVar a))

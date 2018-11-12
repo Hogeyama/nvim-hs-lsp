@@ -13,7 +13,7 @@ import           RIO.List                 (isPrefixOf)
 import           RIO.List.Partial         (init)
 import qualified RIO.Map                  as M
 import           RIO.Partial              (read)
---import qualified RIO.Text                 as T
+import qualified RIO.Text                 as T
 
 import           Control.Lens             (makeLenses, views)
 import           Control.Lens.Operators
@@ -306,7 +306,7 @@ initializeLsp cwd cmd args = do
 
     showAndLog msg = do
         logError msg
-        --vim_report_error' $ T.unpack $ utf8BuilderToText msg
+        vim_report_error' $ T.unpack $ utf8BuilderToText msg
         -- なんでRIOには'Utf8Builder -> String'の関数がないんだ
         -- rlsがうるさいのでreportやめます
 
