@@ -24,6 +24,7 @@ import qualified Data.Aeson.Types        as J
 import           Data.Extensible.Rexport
 import           GHC.Generics            (Generic)
 import           GHC.TypeLits            (Symbol, KnownSymbol, symbolVal)
+import           GHC.OverloadedLabels
 import           Unsafe.Coerce           (unsafeCoerce)
 
 import           Neovim                  (NvimObject (..))
@@ -40,8 +41,28 @@ deriving instance (Forall (Instance1 Eq   (Field Identity)) xs) => Eq   (Record 
 deriving instance ((Forall (Instance1 Eq   (Field Identity)) xs),
                    (Forall (Instance1 Ord  (Field Identity)) xs)) => Ord  (Record xs)
 
-__ :: Lens' (OrigRecord xs) a -> Lens' (Record xs) a
-__ l (x :: a -> f a) = unsafeCoerce (l @f) x
+type LensLike  f s t a b = (a -> f b) -> s -> f t
+type LensLike' f s a = LensLike f s s a a
+
+-- Requirements for this instance
+-- + Instance head is less general than `p rep (f rep') -> p s (f t)`
+--   which is the head of the instance defined in 'Data.Extensible.Label'
+-- + Can be used with '(.~) :: ASetter s t a b -> b -> s -> t' without type annotation
+--    + 'a' and 't' should be determined by 'b' and 's'
+-- + Can be used with '(^.) :: s -> Getting a s a -> a' without type annotation
+--    + 'a' should be determined by 's'
+instance {-# OVERLAPPING #-}
+    ( Functor f
+    , Associate k v xs
+    , t ~ Record xs
+    , v ~ v'
+    ) =>
+    IsLabel k (LensLike f (Record xs) t v v')
+  where
+    fromLabel = __ (Proxy @k)
+
+__ :: forall k v xs f. (Functor f, Associate k v xs) => Proxy k -> LensLike' f (Record xs) v
+__ p = unsafeCoerce (itemAssoc p :: LensLike' f (OrigRecord xs) v)
 
 type Nullable = Maybe
 

@@ -42,7 +42,7 @@ callbackHoverPreview (Response resp) = do
   void $ withResult resp $ \case
     Nothing -> nvimEcho textDocumentHoverNoInfo
     Just r -> do
-      let content = stringOfHoverContents (r^.__#contents)
+      let content = stringOfHoverContents (r^. #contents)
       writeFileUtf8Builder "/tmp/nvim-hs-lsp.preview" (fromString content)
       vim_command' "pedit /tmp/nvim-hs-lsp.preview"
 
@@ -60,18 +60,18 @@ callbackHoverWith process (Response resp) = do
   logDebug $ "responseHover: " <> displayShow resp
   void $ withResult resp $ \case
     Nothing -> nvimEcho textDocumentHoverNoInfo
-    Just r -> nvimEcho $ process $ stringOfHoverContents (r^.__#contents)
+    Just r -> nvimEcho $ process $ stringOfHoverContents (r^. #contents)
 
 stringOfHoverContents :: MarkedString :|: [MarkedString] :|: MarkupContent -> String
 stringOfHoverContents (L ms)     = pprMarkedString ms
 stringOfHoverContents (R (L [])) = textDocumentHoverNoInfo
 stringOfHoverContents (R (L xs)) = unlines $ map pprMarkedString xs
-stringOfHoverContents (R (R x))  = x^.__#value
+stringOfHoverContents (R (R x))  = x^. #value
 
 -- TODO markdownをどう表示するか
 pprMarkedString :: MarkedString -> String
 pprMarkedString (L s) = s
-pprMarkedString (R x) = x^.__#value
+pprMarkedString (R x) = x^. #value
 
 removeLastNewlines :: String -> String
 removeLastNewlines = reverse . dropWhile (=='\n') .reverse
@@ -124,9 +124,9 @@ callbackDefinition (Response resp) = do
 
 jumpToLocation ::  (HasLogFunc env) => Location -> Neovim env ()
 jumpToLocation loc = do
-  let uri        = loc^.__#uri
-      range      = loc^.__#range
-      start      = range^.__#start
+  let uri        = loc^. #uri
+      range      = loc^. #range
+      start      = range^. #start
       (lnum,col) = positionToNvimPos start
   vim_command' "normal! m`"
   m <- vim_command $ unwords
@@ -178,7 +178,7 @@ callbackWorkspaceSymbol (Response resp) = void $ withResult resp $ \case
       unless (null symbolInfos) $ vim_command' "botright lopen"
   where
     symbolInfomartionToQfItem symInfo =
-        locationToQfItem (symInfo^.__#location) (symInfo^.__#name)
+        locationToQfItem (symInfo^. #location) (symInfo^. #name)
           -- TODO 他の情報
 
 --type SymbolInformation = Record
@@ -220,7 +220,7 @@ callbackComplete (Response resp) = do
     Just xs -> return xs
 
 completeCompletionList :: CompletionList -> [VimCompleteItem]
-completeCompletionList cl = completeCompletionItems $ cl^.__#items
+completeCompletionList cl = completeCompletionItems $ cl^. #items
 
 completeCompletionItems :: [CompletionItem] -> [VimCompleteItem]
 completeCompletionItems cs = map toVimItem cs
@@ -228,14 +228,14 @@ completeCompletionItems cs = map toVimItem cs
 toVimItem :: CompletionItem -> VimCompleteItem
 toVimItem c
   =  Record
-  $  #word      @= c^.__#label
+  $  #word      @= c^. #label
   <! #abbr      @= None
-  <! #menu      @= removeNewline <$> c^.__#detail
-  <! #info      @= case c^.__#documentation of
+  <! #menu      @= removeNewline <$> c^. #detail
+  <! #info      @= case c^. #documentation of
                      None            -> None
                      Some (L s)      -> Some s
-                     Some (R markup) -> Some (markup^.__#value)
-  <! #kind      @= case c^.__#kind of
+                     Some (R markup) -> Some (markup^. #value)
+  <! #kind      @= case c^. #kind of
                      -- TODO {{{
                      Some  1 -> None     -- text(?)
                      Some  2 -> Some "f" -- method
@@ -297,9 +297,9 @@ codeAction b (start,end) callback = do
              <! #only @= None
              <! nil
       diags = filter `flip` allDiagnostics $ \diag ->
-        let range  = diag^.__#range
-            start' = positionToNvimPos $ range^.__#start
-            end'   = positionToNvimPos $ range^.__#end
+        let range  = diag^. #range
+            start' = positionToNvimPos $ range^. #start
+            end'   = positionToNvimPos $ range^. #end
             line   = fst
         in line start' <= line start && line start <= line end'
 
@@ -326,17 +326,17 @@ chooseCommandAndExecute cmds = do
     let titles = map (view #title . fields) cmds
     Choice.oneOf titles >>= \case
       Nothing -> return ()
-      Just x -> case find (\cmd -> cmd^.__#title == x) cmds of
+      Just x -> case find (\cmd -> cmd^. #title == x) cmds of
         Nothing -> error "impossible"
         Just cmd -> executeCommand cmd
 
 executeCommandOrNot :: Command -> Neovim PluginEnv ()
 executeCommandOrNot cmd = do
-    b <- Choice.yesOrNo ("execute this command?: " ++ cmd^.__#title)
+    b <- Choice.yesOrNo ("execute this command?: " ++ cmd^. #title)
     when b $ executeCommand cmd
 
 executeCommand :: Command -> Neovim PluginEnv ()
-executeCommand cmd = void $ executeCommandRequest (cmd^.__#command) (cmd^.__#arguments) Nothing
+executeCommand cmd = void $ executeCommandRequest (cmd^. #command) (cmd^. #arguments) Nothing
 
 --}}}
 
@@ -426,10 +426,10 @@ callbackTextDocumentReferences (Response resp) = void $ withResult resp $ \case
                         vimCallFunction "readfile" (filename +: False +: lnum +: [])
         return $ locationToQfItem loc text
       where
-        filename = uriToFilePath (loc^.__#uri)
-        range = loc^.__#range
-        start = range^.__#start
-        lnum = 1 + start^.__#line
+        filename = uriToFilePath (loc^. #uri)
+        range = loc^. #range
+        start = range^. #start
+        lnum = 1 + start^. #line
 
 --}}}
 
@@ -470,13 +470,13 @@ callbackTextDocumentDocumentSymbol uri (Response resp) = void $ withResult resp 
         <! nil
       where
         filename = uriToFilePath uri
-        range = docSym^.__#range
-        start = range^.__#start
-        lnum = 1 + start^.__#line
-        col  = 1 + start^.__#character
-        text = docSym^.__#name -- TODO other info
+        range = docSym^. #range
+        start = range^. #start
+        lnum = 1 + start^. #line
+        col  = 1 + start^. #character
+        text = docSym^. #name -- TODO other info
     symbolInfomartionToQfItem symInfo = -- TODO other info
-        locationToQfItem (symInfo^.__#location) (symInfo^.__#name)
+        locationToQfItem (symInfo^. #location) (symInfo^. #name)
 
 --newtype DocumentSymbol = DocumentSymbol (Record
 --  '[ "name" >: String
@@ -498,10 +498,10 @@ withResult :: (HasLogFunc env)
            -> (a -> Neovim env ret)
            -> Neovim env (Maybe ret)
 withResult resp k =
-  case resp^.__#error of
+  case resp^. #error of
     Some e -> vim_report_error' msg >> return Nothing
-      where msg = "nvim-hs-lsp: error from server: " <> T.unpack (e^.__#message)
-    None -> case resp^.__#result of
+      where msg = "nvim-hs-lsp: error from server: " <> T.unpack (e^. #message)
+    None -> case resp^. #result of
       None   -> logError "withResult: wrong input" >> return Nothing
       Some x -> Just <$> k x
 

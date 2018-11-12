@@ -39,8 +39,8 @@ notificationPluginAction = forever $ loggingErrorImmortal $ do
 showDiagnotics :: ServerNotification 'TextDocumentPublishDiagnosticsK
                -> PluginAction ()
 showDiagnotics (Notification noti) = do
-    let uri         = noti^.__#params.__#uri
-        diagnostics = noti^.__#params.__#diagnostics
+    let uri         = noti^. #params.__#uri
+        diagnostics = noti^. #params.__#diagnostics
     logError $ displayShow diagnostics
     modifyContext $ #otherState.diagnosticsMap %~ M.insert uri diagnostics
     -- 今開いてるBufferは優先的に表示する
@@ -58,9 +58,11 @@ showDiagnotics (Notification noti) = do
 windowLogMessage :: ServerNotification 'WindowLogMessageK
                  -> PluginAction ()
 windowLogMessage (Notification noti) = do
-    let type'   = noti^.__#params.__#type
-        message = noti^.__#params.__#message
-        log' l = l $ "window/logMessage: " <> displayShow message
+    let type'   = noti^. #params.__#type
+        message = noti^. #params.__#message
+        log' l = do
+          nvimEchom $ "window/logMessage: " <> T.unpack message
+          l $ "window/logMessage: " <> displayShow message
     case type' of
       MessageError -> log' logError
       MessageWarning -> log' logWarn
@@ -74,8 +76,8 @@ windowLogMessage (Notification noti) = do
 windowShowMessage :: ServerNotification 'WindowShowMessageK
                   -> PluginAction ()
 windowShowMessage (Notification noti) = do
-    let type'   = noti^.__#params.__#type
-        message = noti^.__#params.__#message
+    let type'   = noti^. #params.__#type
+        message = noti^. #params.__#message
     case type' of
       MessageError -> nvimEchoe $ "LSP: Error: " <> T.unpack message
       MessageWarning -> nvimEchoe $ "LSP: Warning: " <> T.unpack message
@@ -89,6 +91,6 @@ windowShowMessage (Notification noti) = do
 telemetryEvent :: ServerNotification 'TelemetryEventK
                -> PluginAction ()
 telemetryEvent (Notification noti) = do
-    let params = noti^.__#params
+    let params = noti^. #params
     logInfo $ "telemetry/event: " <> displayShow params
 

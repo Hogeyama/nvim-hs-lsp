@@ -26,8 +26,8 @@ requestPluginAction = forever $ loggingErrorImmortal $ do
   pull >>= \case
     SomeReq (req@(Request inner) :: ServerRequest m) -> case singByProxy req of
       SWindowShowMessageRequest -> windowShowMessageRequest req
-      SClientRegisterCapability -> push $ response @m (Just (inner^.__#id)) None None
-      SClientUnregisterCapability -> push $ response @m (Just (inner^.__#id)) None None
+      SClientRegisterCapability -> push $ response @m (Just (inner^. #id)) None None
+      SClientUnregisterCapability -> push $ response @m (Just (inner^. #id)) None None
       SWorkspaceApplyEdit -> respondWorkspaceAplyEdit req
       SServerRequestMisc _ -> logError "requestHandler: Misc: not implemented"
     _ -> return ()
@@ -38,9 +38,9 @@ requestPluginAction = forever $ loggingErrorImmortal $ do
 
 windowShowMessageRequest :: Request 'WindowShowMessageRequestK -> PluginAction ()
 windowShowMessageRequest (Request req) = do
-    let type'   = req^.__#params.__#type
-        message = req^.__#params.__#message
-        actions = req^.__#params.__#actions
+    let type'   = req^. #params.__#type
+        message = req^. #params.__#message
+        actions = req^. #params.__#actions
     case type' of
       MessageError -> nvimEchoe $ "LSP: Error: " <> T.unpack message
       MessageWarning -> nvimEchoe $ "LSP: Warning: " <> T.unpack message
@@ -49,11 +49,11 @@ windowShowMessageRequest (Request req) = do
     -- ask action
     mAction <- case actions of
       None -> return Nothing
-      Some actions' -> oneOf $ map (view (__#title)) actions'
+      Some actions' -> oneOf $ map (view #title) actions'
     let result = fmap (\action -> Record (#title @= action <: nil)) mAction
     push $
       response @'WindowShowMessageRequestK
-        (Just (req^.__#id))
+        (Just (req^. #id))
         (Some result)
         None
 
@@ -63,16 +63,16 @@ windowShowMessageRequest (Request req) = do
 -- TODO ask whether to apply or not
 respondWorkspaceAplyEdit :: Request 'WorkspaceApplyEditK -> PluginAction ()
 respondWorkspaceAplyEdit (Request req) = do
-  let edit = req^.__#params.__#edit
+  let edit = req^. #params.__#edit
   logDebug $ displayShow edit
-  case edit^.__#changes of
-    None -> case edit^.__#documentChanges of
+  case edit^. #changes of
+    None -> case edit^. #documentChanges of
       None -> logError "respondWorkspaceAplyEdit: Wrong Input!"
       Some cs -> applyDocumentChanges cs >>= ret
     Some cs -> applyChanges cs >>= ret
   where
     ret x = push $ response @'WorkspaceApplyEditK
-              (Just (req^.__#id))
+              (Just (req^. #id))
               (Some (Record (#applied @= x <! nil)))
               None
 

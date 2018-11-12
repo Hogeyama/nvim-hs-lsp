@@ -18,7 +18,7 @@ callbackPluginAction :: PluginAction ()
 callbackPluginAction = forever $ loggingErrorImmortal $
   pull >>= \case
     SomeResp resp@(Response inner) ->
-      case inner^.__#id of
+      case inner^. #id of
         Just id' -> getCallback id' >>= \case
           Just (Callback var callback) -> do
             removeCallback id'

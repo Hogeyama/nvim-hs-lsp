@@ -103,7 +103,7 @@ nvimPosToPosition (line,char) = Record $
  <! nil
 
 positionToNvimPos :: Position -> NvimPos
-positionToNvimPos pos = (1 + pos^.__#line, 1 + pos^.__#character)
+positionToNvimPos pos = (1 + pos^. #line, 1 + pos^. #character)
 
 nvimEcho :: String -> Neovim env ()
 nvimEcho s = vim_command' $ "echo " ++ show s
@@ -141,7 +141,7 @@ diagnosticsToQfItems prior diagMap = pripri ++ rest
     rest   = M.foldMapWithKey toQfItems (M.delete prior diagMap)
     toQfItems uri diagnostics =
         concatMap (diagnosticToQfItems uri) $
-          L.sortOn (view (__#severity)) diagnostics
+          L.sortOn (view #severity) diagnostics
 
 -------------------------------------------------------------------------------
 
@@ -183,19 +183,19 @@ diagnosticToQfItems uri d = header : rest
           <! #valid    @= Some True
           <! nil
       where
-        start = d^.__#range.__#start
-        lnum = 1 + start^.__#line
-        col  = 1 + start^.__#character
-        errorType = case d^.__#severity of
+        start = d^. #range.__#start
+        lnum = 1 + start^. #line
+        col  = 1 + start^. #character
+        errorType = case d^. #severity of
             Some Error        -> "E"
             Some Warning      -> "W"
             Some Information  -> "I"
             Some Hint         -> "I"
             _                 -> "W"
-        text = case d^.__#source of
+        text = case d^. #source of
             None   -> ""
             Some n -> "[" ++ n ++ "]"
-    rest = flip map (T.lines (d^.__#message)) $ \msg ->
+    rest = flip map (T.lines (d^. #message)) $ \msg ->
              #filename @= None
           <! #lnum     @= None
           <! #col      @= None
@@ -214,11 +214,11 @@ locationToQfItem loc text =
     <! #valid    @= Some True
     <! nil
   where
-    filename = uriToFilePath (loc^.__#uri)
-    range = loc^.__#range
-    start = range^.__#start
-    lnum = 1 + start^.__#line
-    col  = 1 + start^.__#character
+    filename = uriToFilePath (loc^. #uri)
+    range = loc^. #range
+    start = range^. #start
+    lnum = 1 + start^. #line
+    col  = 1 + start^. #character
 
 -------------------------------------------------------------------------------
 -- TextEdit
@@ -229,9 +229,10 @@ applyTextEdit uri edits = do
     text <- errOnInvalidResult $ vimCallFunction "readfile" (uriToFilePath uri+:[])
     let filePath = uriToFilePath uri
         -- NOTE: This sort must be stable.
-        edits' = L.reverse $ L.sortOn (view (__#range.__#start)) edits
+        edits' = L.reverse $ L.sortOn (view (#range.__#start)) edits
         newText = foldl' applyTextEditOne text edits'
-    void $ vimCallFunction "writefile" (newText +: filePath +: [])
+    void (vimCallFunction "writefile" (newText +: filePath +: []))
+      `catchAny` \e -> nvimEchoe (show e)
     vim_command' $ "edit " ++ filePath
 
 -- TODO これはdoctestに置くべきではない
@@ -257,14 +258,14 @@ applyTextEdit uri edits = do
 --
 applyTextEditOne :: [Text] -> TextEdit -> [Text]
 applyTextEditOne text edit =
-    let range = edit^.__#range
-        (before, r)   = L.splitAt (range^.__#start.__#line) text
-        (body, after) = L.splitAt (range^.__#end.__#line - range^.__#start.__#line + 1) r
-        body' = T.lines $ b <> edit^.__#newText <> a
+    let range = edit^. #range
+        (before, r)   = L.splitAt (range^. #start.__#line) text
+        (body, after) = L.splitAt (range^. #end.__#line - range^.__#start.__#line + 1) r
+        body' = T.lines $ b <> edit^. #newText <> a
           where
-            b = T.take (range^.__#start.__#character) (L.head body)
-            a = if length text > range^.__#end.__#line
-                then T.drop (range^.__#end.__#character) (L.last body)
+            b = T.take (range^. #start.__#character) (L.head body)
+            a = if length text > range^. #end.__#line
+                then T.drop (range^. #end.__#character) (L.last body)
                 else ""
     in before <> body' <> after
 
