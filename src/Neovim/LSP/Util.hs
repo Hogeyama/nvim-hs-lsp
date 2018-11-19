@@ -93,7 +93,7 @@ pushNotification :: forall (m :: ClientNotificationMethodK) env
                  => NotificationParam m -> Neovim env ()
 pushNotification param = push $ notification @m param
 
--- TODO NeovimのPos,RangeとLSPのPos,Rangeを上手く変換する
+-- TODO ちゃんとdata型にする
 type NvimPos = (Int,Int)
 
 nvimPosToPosition :: NvimPos -> Position
@@ -109,10 +109,23 @@ nvimEcho :: String -> Neovim env ()
 nvimEcho s = vim_command' $ "echo " ++ show s
 
 nvimEchom :: String -> Neovim env ()
-nvimEchom s = vim_command' $ "echom " ++ show s
+nvimEchom s = vim_command' $ "echomsg " ++ show s
 
 nvimEchoe :: String -> Neovim env ()
-nvimEchoe s = vim_command' $ "echoerr " ++ show s
+nvimEchoe s =
+    vim_command' $ L.intercalate "|"
+      [ "echohl ErrorMsg"
+      , "echomsg " ++ show s
+      , "echohl None"
+      ]
+
+nvimEchow :: String -> Neovim env ()
+nvimEchow s =
+    vim_command' $ L.intercalate "|"
+      [ "echohl WarningMsg"
+      , "echomsg " ++ show s
+      , "echohl None"
+      ]
 
 -------------------------------------------------------------------------------
 -- Completion

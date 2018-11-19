@@ -80,7 +80,7 @@ windowShowMessage (Notification noti) = do
         message = noti^. #params.__#message
     case type' of
       MessageError -> nvimEchoe $ "LSP: Error: " <> T.unpack message
-      MessageWarning -> nvimEchoe $ "LSP: Warning: " <> T.unpack message
+      MessageWarning -> nvimEchow $ "LSP: Warning: " <> T.unpack message
       MessageInfo -> nvimEchom $ "LSP: Info: " <> T.unpack message
       MessageLog -> nvimEchom $ "LSP: Log: " <> T.unpack message
 

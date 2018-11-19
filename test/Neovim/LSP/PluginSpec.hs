@@ -4,6 +4,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications    #-}
 {-# LANGUAGE OverloadedLabels    #-}
+{-# OPTIONS_GHC -Wno-name-shadowing #-}
 
 module Neovim.LSP.PluginSpec where
 
@@ -11,7 +12,6 @@ import           RIO
 import           RIO.List.Partial                  (tail)
 import           Test.Hspec
 import           Data.Extensible
---import           Neovim.Test_
 import           Neovim.Test.Wrapper
 import           Neovim.Context.Internal
 
@@ -60,8 +60,6 @@ spec = do
           col     = 20
       completionFindStart curLine col `shouldBe` 6
 
-
-
   describe "definition" $ do
     removeStackWorkDir
     specify "simple" $ do
@@ -74,7 +72,7 @@ spec = do
               $  #jsonrpc @= "2.0"
               <: #id @= Just (IDNum 1.0)
               <: #result @= Some (Just
-                    [  Record $
+                    [ Record $
                        #uri @= filePathToUri (baseDirectory ++ tail src)
                     <: #range @= Record { fields =
                                   #start @= Record (#line @= 11 <: #character @= 0 <: nil)
@@ -106,8 +104,6 @@ spec = do
               <: #error @= None <: nil
       definition2 `shouldReturn` expected
 
-
-
   describe "tekito example" $ do
     removeStackWorkDir
     specify "example 1" $ do
@@ -116,14 +112,12 @@ spec = do
 -------------------------------------------------------------------------------
 
 
-testNeovimLsp :: (Show a, Typeable a)
-              => Seconds
+testNeovimLsp :: Seconds
               -> FilePath
               -> NeovimLsp a
               -> IO a
 testNeovimLsp time file action = do
   initialEnv <- initialEnvM
-  --testNeovim time initialEnv $
   testNeovim time initialEnv $
     finally `flip` finalizeLSP $ do
       vim_command' "source ./test-file/init.vim"

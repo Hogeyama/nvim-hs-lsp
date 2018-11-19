@@ -1,10 +1,10 @@
 
-{-# LANGUAGE DeriveAnyClass       #-}
-{-# LANGUAGE DeriveFunctor        #-}
-{-# LANGUAGE DeriveGeneric        #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# OPTIONS_GHC -Wall             #-}
-{-# OPTIONS_GHC -Wno-orphans      #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE DeriveFunctor              #-}
+{-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE UndecidableInstances       #-}
+{-# OPTIONS_GHC -Wall                   #-}
+{-# OPTIONS_GHC -Wno-orphans            #-}
 
 module Neovim.LSP.Protocol.Type.Record
   ( Option(..)
@@ -22,7 +22,7 @@ import qualified RIO.Map                 as M
 import           Data.Aeson              hiding (KeyValue, Object)
 import qualified Data.Aeson.Types        as J
 import           Data.Extensible.Rexport
-import           GHC.Generics            (Generic)
+import           GHC.Generics            (Generic, Generic1)
 import           GHC.TypeLits            (Symbol, KnownSymbol, symbolVal)
 import           GHC.OverloadedLabels
 import           Unsafe.Coerce           (unsafeCoerce)
@@ -42,8 +42,8 @@ deriving instance ((Forall (Instance1 Eq   (Field Identity)) xs),
                    (Forall (Instance1 Ord  (Field Identity)) xs)) => Ord  (Record xs)
 
 type LensLike  f s t a b = (a -> f b) -> s -> f t
-type LensLike' f s a = LensLike f s s a a
 
+type LensLike' f s a = LensLike f s s a a
 -- Requirements for this instance
 -- + Instance head is less general than `p rep (f rep') -> p s (f t)`
 --   which is the head of the instance defined in 'Data.Extensible.Label'
@@ -101,11 +101,8 @@ type Nullable = Maybe
 -- Just (Record {fields = id @= None <: nil})
 --
 data Option a = Some a | None
-  deriving (Show, Eq, Ord, Generic, NFData, Functor)
-
-type family IsOptional a :: Bool where
-  IsOptional (Option a) = 'True
-  IsOptional a          = 'False
+  deriving (Show, Eq, Ord, Functor, Generic, Generic1)
+instance NFData a => NFData (Option a)
 
 -- | Sum type for record. The differnce against 'Either' is:
 --
@@ -138,10 +135,10 @@ type FieldJSON a = (FieldToJSON a, FieldFromJSON a)
 -- From JSON
 ------------
 
-class FieldFromJSON' (b :: Bool) (a :: *) where
-  lookupD :: Proxy b -> String -> J.Object -> J.Parser a
-instance FromJSON a => FieldFromJSON' 'True (Option a) where
-  lookupD _ k v = case HM.lookup (fromString k) v of
+class FieldFromJSON a where
+  lookupD :: String -> J.Object -> J.Parser a
+instance {-# OVERLAPPING #-} FromJSON a => FieldFromJSON (Option a) where
+  lookupD k v = case HM.lookup (fromString k) v of
     Just Null -> Some <$> parseJSON Null <|> return None
     -- We does not need this case in fact, but some language servers are wrongly
     -- implemented around this case. e.g., rls returns something like this
@@ -150,42 +147,34 @@ instance FromJSON a => FieldFromJSON' 'True (Option a) where
     -- However, 'range' cannot be 'null' here.
     Just x    -> Some <$> parseJSON x
     Nothing   -> return None
-instance FromJSON a => FieldFromJSON' 'False a where
-  lookupD _ k v = case HM.lookup (fromString k) v of
+instance FromJSON a => FieldFromJSON a where
+  lookupD k v = case HM.lookup (fromString k) v of
     Just x  -> parseJSON x
     Nothing -> fail $ "Missing key: " ++ k
-class    (FieldFromJSON' (IsOptional a) a) => FieldFromJSON a
-instance (FieldFromJSON' (IsOptional a) a) => FieldFromJSON a
 
 instance Forall (KeyValue KnownSymbol FieldFromJSON) xs => FromJSON (Record xs) where
   parseJSON = withObject "Object" $ \v -> fmap Record $
-    hgenerateFor (Proxy @(KeyValue KnownSymbol FieldFromJSON))
-    $ \(m :: Membership xs x) ->
-            let k = symbolVal (proxyAssocKey m)
-                z = lookupD (Proxy @(IsOptional (AssocValue x))) k v
-            in  Field . Identity <$> z
-
+    hgenerateFor (Proxy @(KeyValue KnownSymbol FieldFromJSON)) $ \m ->
+      let k = symbolVal (proxyAssocKey m)
+          z = lookupD k v
+      in  Field . Identity <$> z
 -- To JSON
 ----------
 
-class FieldToJSON' (b :: Bool) (a :: *) where
-  toJSON' :: Proxy b -> a -> Maybe Value
-instance ToJSON a => FieldToJSON' 'True (Option a) where
-  toJSON' _ (Some x) = Just (toJSON x)
-  toJSON' _ None     = Nothing
-instance ToJSON a => FieldToJSON' 'False a where
-  toJSON' _ = Just . toJSON
-class    (FieldToJSON' (IsOptional a) a) => FieldToJSON a
-instance (FieldToJSON' (IsOptional a) a) => FieldToJSON a
-toJSON_ :: forall a. FieldToJSON a => a -> Maybe Value
-toJSON_ = toJSON' (Proxy @(IsOptional a))
+class FieldToJSON (a :: *) where
+  toJSON' :: a -> Maybe Value
+instance {-# OVERLAPPING #-} ToJSON a => FieldToJSON (Option a) where
+  toJSON' (Some x) = Just (toJSON x)
+  toJSON' None     = Nothing
+instance ToJSON a => FieldToJSON a where
+  toJSON' = Just . toJSON
 
 instance Forall (KeyValue KnownSymbol FieldToJSON) xs => ToJSON (Record xs) where
   toJSON (Record xs) = J.Object $ hfoldlWithIndexFor
     (Proxy @(KeyValue KnownSymbol FieldToJSON))
     (\_ m kv ->
       let key  = fromString $ symbolVal $ proxyAssocKey kv
-          mval  = toJSON_ $ runIdentity $ getField kv
+          mval  = toJSON' $ runIdentity $ getField kv
       in case mval of
         Nothing  -> m
         Just val -> HM.insert key val m)
@@ -197,17 +186,13 @@ instance Forall (KeyValue KnownSymbol FieldToJSON) xs => ToJSON (Record xs) wher
 -------------------------------------------------------------------------------
 
 -- TODO implement fromObject
-class FieldNvimObject' b a where
-  toObject' :: Proxy b -> a -> Maybe N.Object
-instance NvimObject o => FieldNvimObject' 'False o where
-  toObject' _ = Just . toObject
-instance NvimObject o => FieldNvimObject' 'True (Option o) where
-  toObject' _ None     = Nothing
-  toObject' _ (Some x) = Just $ toObject x
-class    (FieldNvimObject' (IsOptional a) a) => FieldNvimObject a
-instance (FieldNvimObject' (IsOptional a) a) => FieldNvimObject a
-toObject_ :: forall a. FieldNvimObject a => a -> Maybe N.Object
-toObject_ = toObject' (Proxy @(IsOptional a))
+class FieldNvimObject a where
+  toObject' :: a -> Maybe N.Object
+instance {-# OVERLAPPING #-} NvimObject o => FieldNvimObject (Option o) where
+  toObject' None     = Nothing
+  toObject' (Some x) = Just $ toObject x
+instance NvimObject o => FieldNvimObject o where
+  toObject' = Just . toObject
 
 instance (NFData (Record xs), Forall (KeyValue KnownSymbol FieldNvimObject) xs)
           => NvimObject (Record xs) where
@@ -215,7 +200,7 @@ instance (NFData (Record xs), Forall (KeyValue KnownSymbol FieldNvimObject) xs)
     (Proxy @(KeyValue KnownSymbol FieldNvimObject))
     (\_ m kv ->
       let key  = N.ObjectString $ fromString $ symbolVal $ proxyAssocKey kv
-          mval = toObject_ $ runIdentity $ getField kv
+          mval = toObject' $ runIdentity $ getField kv
       in case mval of
         Nothing  -> m
         Just val -> M.insert key val m)
@@ -228,7 +213,7 @@ instance (NFData (OrigRecord xs), Forall (KeyValue KnownSymbol FieldNvimObject) 
     (Proxy @(KeyValue KnownSymbol FieldNvimObject))
     (\_ m kv ->
       let key  = N.ObjectString $ fromString $ symbolVal $ proxyAssocKey kv
-          mval = toObject_ $ runIdentity $ getField kv
+          mval = toObject' $ runIdentity $ getField kv
       in case mval of
         Nothing  -> m
         Just val -> M.insert key val m)
