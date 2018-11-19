@@ -214,27 +214,14 @@ resultEither (J.Error e)   = Left e
 makeLenses ''OtherState
 makeLenses ''LspConfig
 
-type family UnRecord env :: [Assoc Symbol *] where UnRecord (OrigRecord xs) = xs
-type IsRealRecord env = OrigRecord (UnRecord env) ~ env
-type Associate' k v env = (IsRealRecord env, Associate k v (UnRecord env))
+type family RecFields' env :: [Assoc Symbol *] where RecFields' (OrigRecord xs) = xs
+type IsRecord' env = OrigRecord (RecFields' env) ~ env
+type Associate' k v env = (IsRecord' env, Associate k v (RecFields' env))
 type HasContext env = Associate' "context" (TVar Context)     env
 type HasInChan  env = Associate' "inChan"  (TChan InMessage)  env
 type HasOutChan env = Associate' "outChan" (TChan ByteString) env
 instance Associate "logFunc" LogFunc xs
   => HasLogFunc (OrigRecord xs) where logFuncL = #logFunc
--- #context :: HasContext env => Lens' env (TVar Context)
-
-{-
--- ExtensibleのIsRecordが使えるかも
-instance IsRecord (Record (xs :: [Assoc Symbol *])) where
-  type RecFields (Record xs) = xs
-  recordToList = toHList
-  recordFromList = fromHList
-type HasContext env = (IsRecord env, Associate "context" (TVar Context)     (RecFields env))
-type HasInChan  env = (IsRecord env, Associate "inChan"  (TChan InMessage)  (RecFields env))
-type HasOutChan env = (IsRecord env, Associate "outChan" (TChan ByteString) (RecFields env))
--- (record . #context) :: HasContext env => Lens' env (TVar Context)
--}
 
 useTV :: (MonadReader r m, MonadIO m) => Lens' r (TVar a) -> m a
 useTV l = readTVarIO =<< view l

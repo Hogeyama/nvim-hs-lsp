@@ -8,19 +8,21 @@ import           RIO
 import           Neovim
 import           Neovim.Test
 
-data Container a = Container a
+data EndNeovim = EndNeovim
   deriving (Show, Typeable)
-instance (Show a, Typeable a) => Exception (Container a)
+instance Exception EndNeovim
 
-testNeovim :: (Show a, Typeable a)
-            => Seconds
-            -> env
-            -> Neovim env a
-            -> IO a
+testNeovim :: Seconds
+           -> env
+           -> Neovim env a
+           -> IO a
 testNeovim sec env action = do
-    testWithEmbeddedNeovim Nothing sec env $ do
-      x <- action
-      throwIO (Container x)
-    error "impossible(?)"
-  `catch` \(Container x) -> return x
+    var <- newEmptyMVar
+    handle (\EndNeovim -> takeMVar var) $ do
+      testWithEmbeddedNeovim Nothing sec env $ do
+        x <- action
+        putMVar var x
+        throwIO EndNeovim -- sometimes 'testWithEmbeddedNeovim' blocks forever
+                          -- when the action successfully ends.
+      error "impossible"
 
