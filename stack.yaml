@@ -1,1 +1,6 @@
-resolver: lts-12.12
+resolver: lts-12.20
+extra-deps:
+- extensible-0.5
+- winery-0.3.1
+
+

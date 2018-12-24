@@ -65,7 +65,7 @@ initializeParam processId rootUri
                                     <! #textDocument @= Some textDocumentOption
                                     <! #experimental @= None
                                     <! nil }
-    <! #trace                 @= Some TraceOff
+    <! #trace                 @= Some #off
     <! nil
   where
     workspaceOption :: WorkspaceClientCapabilities
@@ -105,7 +105,7 @@ initializeParam processId rootUri
             <! #completionItem @= Some Record { fields =
                      #snippetSupport @= Some True -- use neosnippet
                   <! #commitCharactersSupport @= Some True
-                  <! #documentationFormat @= Some [PlainText]
+                  <! #documentationFormat @= Some [ #plaintext ]
                   <! nil }
             <! #completionItemKind @= Some Record { fields =
                      #valueSet @= None <! nil }
@@ -113,12 +113,12 @@ initializeParam processId rootUri
             <! nil }
       <! #hover @= Some Record { fields =
                #dynamicRegistration @= Some False
-            <! #contentFormat @= Some [PlainText]
+            <! #contentFormat @= Some [ #plaintext ]
             <! nil }
       <! #signatureHelp @= Some Record { fields =
                #dynamicRegistration @= Some False
             <! #signatureInformation @= Some Record { fields =
-                     #documentationFormat @= Some [PlainText] <! nil }
+                     #documentationFormat @= Some [ #plaintext ] <! nil }
             <! nil }
       <! #references @= noDyn
       <! #documentHightlight @= noDyn

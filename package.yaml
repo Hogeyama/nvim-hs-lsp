@@ -57,7 +57,7 @@ library:
   - nvim-hs-contrib
   - aeson
   - constraints
-  - extensible >= 0.4.8
+  - extensible >= 0.5
   - lens
   - text
   - process

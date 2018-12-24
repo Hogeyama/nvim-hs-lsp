@@ -42,8 +42,8 @@ module Neovim.LSP.Protocol.Type.Interfaces
   , CompletionList
   , DocumentFilter
   , DocumentSelector
-  , Trace(..)
-  , MessageType(..)
+  , Trace
+  , MessageType--(..)
   , MessageActionItem
 
   , RequestParam
@@ -73,7 +73,7 @@ module Neovim.LSP.Protocol.Type.Interfaces
   -- 他のdata型
   , Hover
   , MarkedString
-  , MarkupKind(..)
+  , MarkupKind
   , MarkupContent
   , ApplyWorkspaceEditResponse
   , WorkspaceClientCapabilities
@@ -106,7 +106,6 @@ import           Data.Extensible                 as E hiding (Nullable, Record,
                                                        record)
 import           Data.Singletons                 (SingI, SingKind (..))
 import           GHC.TypeLits
---import           Safe                              (lookupJust)
 
 import           Data.Kind                       (Constraint)
 import           Neovim.LSP.Protocol.Type.Method
@@ -294,13 +293,10 @@ type VersionedTextDocmentIdentifierF =
    ]
 
 textDocumentIdentifier :: Uri -> TextDocumentIdentifier
-textDocumentIdentifier uri = Record $ #uri @= uri <! nil
+textDocumentIdentifier uri = Record $ uri =<: nil
 
 versionedTextDocmentIdentifier :: Uri -> Version -> VersionedTextDocmentIdentifier
-versionedTextDocmentIdentifier uri version = Record
-                                           $ #uri @= uri
-                                          <! #version @= Some version
-                                          <! nil
+versionedTextDocmentIdentifier uri version = Record (uri =<: Some version =<: nil)
 
 -- TextDocumentItem
 --   An item to transfer a text document from the client to the server.
@@ -332,43 +328,31 @@ type DocumentSelector = [DocumentFilter]
 -- ErrorCode
 ----------------------------------------
 
-data ErrorCode
-  = ParseError
-  | InvalidRequest
-  | MethodNotFound
-  | InvalidParams
-  | InternalError
-  | ServerErrorStart
-  | ServerErrorEnd
-  | ServerNotInitialized
-  | UnknownErrorCode
-  | RequestCancelled
-  | OtherError Int
-  deriving (Show, Eq, Ord)
-
-errorCodeTable :: [(ErrorCode, Int)]
-errorCodeTable =
-  [ (ParseError            , -32700)
-  , (InvalidRequest        , -32600)
-  , (MethodNotFound        , -32601)
-  , (InvalidParams         , -32602)
-  , (InternalError         , -32603)
-  , (ServerErrorStart      , -32099)
-  , (ServerErrorEnd        , -32000)
-  , (ServerNotInitialized  , -32002)
-  , (UnknownErrorCode      , -32001)
-  , (RequestCancelled      , -32800)
-  ]
-
-instance FromJSON ErrorCode where
-  parseJSON (Number n) = case revLookup (round n) errorCodeTable of
-    Just err -> return err
-    Nothing  -> return (OtherError (round n))
-  parseJSON _ = mzero
-
-instance ToJSON ErrorCode where
-  toJSON (OtherError n) = Number $ fromIntegral n
-  toJSON err = Number $ fromIntegral $ lookupJust err errorCodeTable
+type ErrorCode = EnumAs "ErrorCode" ErrorCodeF
+type ErrorCodeF =
+  '[ "parseError"
+   , "invalidRequest"
+   , "methodNotFound"
+   , "invalidParams"
+   , "internalError"
+   , "serverErrorStart"
+   , "serverErrorEnd"
+   , "serverNotInitialized"
+   , "unknownErrorCode"
+   , "requestCancelled"
+   ]
+instance EnumAsDef "ErrorCode" ErrorCodeF where
+  enumAsDict _ = Const @_ @"parseError"           (Number (-32700))
+              <! Const @_ @"invalidRequest"       (Number (-32600))
+              <! Const @_ @"methodNotFound"       (Number (-32601))
+              <! Const @_ @"invalidParams"        (Number (-32602))
+              <! Const @_ @"internalError"        (Number (-32603))
+              <! Const @_ @"serverErrorStart"     (Number (-32099))
+              <! Const @_ @"serverErrorEnd"       (Number (-32000))
+              <! Const @_ @"serverNotInitialized" (Number (-32002))
+              <! Const @_ @"unknownErrorCode"     (Number (-32001))
+              <! Const @_ @"requestCancelled"     (Number (-32800))
+              <! nil
 
 -- DiagnosticSeverity
 ----------------------------------------
@@ -411,20 +395,13 @@ instance ToJSON DiagnosticSeverity where
   toJSON Hint              = toJSON (4 :: Int)
   toJSON (OtherSeverity m) = toJSON m
 
-data TextDocumentSyncKind = SynkNone | SynkFull | SynkIncremental
-  deriving (Show, Eq, Ord)
-
-instance FromJSON TextDocumentSyncKind where
-  parseJSON (Number n) = case round @_ @Int n of
-      0 -> return SynkNone
-      1 -> return SynkFull
-      2 -> return SynkIncremental
-      _ -> mzero
-  parseJSON _ = mzero
-instance ToJSON TextDocumentSyncKind where
-  toJSON SynkNone        = Number 0
-  toJSON SynkFull        = Number 1
-  toJSON SynkIncremental = Number 2
+type TextDocumentSyncKind = EnumAs "SyncKind" TextDocumentSyncKindF
+type TextDocumentSyncKindF = '[ "none", "full", "incremental" ]
+instance EnumAsDef "SyncKind" TextDocumentSyncKindF where
+  enumAsDict _ = Const @_ @"none"        (Number 0)
+              <! Const @_ @"full"        (Number 1)
+              <! Const @_ @"incremental" (Number 2)
+              <! nil
 
 -------------------------------------------------------------------------------
 --- Param
@@ -527,23 +504,7 @@ type instance ResError 'InitializeK = Record
 -- Other Data
 --------------
 
---アホみたいにコンパイルに時間かかる
---type Trace = Enum' '[ "off", "messages", "verbose" ]
---traceOff, traceMessages, traceVerbose :: Trace
---traceOff = mkEnum' #off
---traceMessages = mkEnum' #messages
---traceVerbose = mkEnum' #verbose
-data Trace = TraceOff | TraceMessages | TraceVerbose
-  deriving (Show, Eq, Ord)
-instance FromJSON Trace where
-  parseJSON (String "off")      = return TraceOff
-  parseJSON (String "messages") = return TraceMessages
-  parseJSON (String "verbose")  = return TraceVerbose
-  parseJSON _                   = mzero
-instance ToJSON Trace where
-  toJSON TraceOff      = String "off"
-  toJSON TraceMessages = String "messages"
-  toJSON TraceVerbose  = String "verbose"
+type Trace = Enum' '[ "off", "messages", "verbose" ]
 
 type ClientCapabilities = Record
   '[ "workspace"    >: Option WorkspaceClientCapabilities
@@ -666,15 +627,7 @@ type MarkupContent = Record
   '[ "kind"  >: MarkupKind
    , "value" >: String
    ]
-data MarkupKind = PlainText | Markdown
-  deriving (Show, Eq, Ord)
-instance FromJSON MarkupKind where
-  parseJSON (String "plaintext") = return PlainText
-  parseJSON (String "markdown")  = return Markdown
-  parseJSON _                    = mempty
-instance ToJSON MarkupKind where
-  toJSON PlainText = String "plaintext"
-  toJSON Markdown  = String "markdown"
+type MarkupKind = Enum' '[ "plaintext", "markdown" ]
 
 -- 後回し
 type SymbolKind = Value
@@ -1085,25 +1038,33 @@ type instance NotificationParam 'WindowShowMessageK = Record
    , "message" >: Text
    ]
 
-data MessageType
-  = MessageError
-  | MessageWarning
-  | MessageInfo
-  | MessageLog
-  deriving (Show,Eq,Ord)
-instance ToJSON MessageType where-- {{{
-  toJSON MessageError   = Number 1
-  toJSON MessageWarning = Number 2
-  toJSON MessageInfo    = Number 3
-  toJSON MessageLog     = Number 4
-instance FromJSON MessageType where
-  parseJSON (Number n) = case round @_ @Int n of
-    1 -> pure MessageError
-    2 -> pure MessageWarning
-    3 -> pure MessageInfo
-    4 -> pure MessageLog
-    _ -> mzero
-  parseJSON _ = mzero
+type MessageType = EnumAs "MessageType" MessageTypeF
+type MessageTypeF = '[ "error", "warning", "info", "log" ]
+instance EnumAsDef "MessageType" MessageTypeF where
+  enumAsDict _ = Const @_ @"error"   (Number 1)
+              <! Const @_ @"warning" (Number 2)
+              <! Const @_ @"info"    (Number 3)
+              <! Const @_ @"log"     (Number 3)
+              <! nil
+--data MessageType
+--  = MessageError
+--  | MessageWarning
+--  | MessageInfo
+--  | MessageLog
+--  deriving (Show,Eq,Ord)
+--instance ToJSON MessageType where-- {{{
+--  toJSON MessageError   = Number 1
+--  toJSON MessageWarning = Number 2
+--  toJSON MessageInfo    = Number 3
+--  toJSON MessageLog     = Number 4
+--instance FromJSON MessageType where
+--  parseJSON (Number n) = case round @_ @Int n of
+--    1 -> pure MessageError
+--    2 -> pure MessageWarning
+--    3 -> pure MessageInfo
+--    4 -> pure MessageLog
+--    _ -> mzero
+--  parseJSON _ = mzero
 -- }}}
 
 -- WindowLogMessage
@@ -1188,12 +1149,4 @@ type instance ResResult    ('ServerRequestMiscK s) = Value
 type instance ResError     ('ServerRequestMiscK s) = Value
 
 --}}}
-
--------------------------------------------------------------------------------
--- Util
--------------------------------------------------------------------------------
-
-revLookup :: Eq a => a -> [(b,a)] -> Maybe b
-revLookup x = lookup x . map swap
-  where swap (a,b) = (b,a)
 
