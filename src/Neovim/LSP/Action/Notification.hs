@@ -1,10 +1,8 @@
 
+{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# OPTIONS_GHC -Wall #-}
 
-module Neovim.LSP.Action.Notification
-  --(
-  --)
-  where
+module Neovim.LSP.Action.Notification where
 
 import           RIO
 import qualified RIO.Map                      as M
@@ -17,6 +15,15 @@ import           Neovim.LSP.Base
 import           Neovim.LSP.Protocol.Messages
 import           Neovim.LSP.Protocol.Type
 import           Neovim.LSP.Util
+
+-------------------------------------------------------------------------------
+-- アレ
+-------------------------------------------------------------------------------
+
+pushNotification :: forall (m :: ClientNotificationMethodK) env
+                 .  (ImplNotification m, HasOutChan env)
+                 => NotificationParam m -> Neovim env ()
+pushNotification param = push $ notification @m param
 
 -- didOpen: newly opened text document
 -- didChange: change text document

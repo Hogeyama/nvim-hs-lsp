@@ -1,23 +1,23 @@
 
-{-# LANGUAGE AllowAmbiguousTypes  #-}
-{-# LANGUAGE DeriveGeneric        #-}
-{-# LANGUAGE EmptyCase            #-}
-{-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE AllowAmbiguousTypes        #-}
+{-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE EmptyCase                  #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE UndecidableSuperClasses #-}
-{-# OPTIONS_GHC -Wall             #-}
+{-# LANGUAGE UndecidableInstances       #-}
+{-# LANGUAGE UndecidableSuperClasses    #-}
+{-# OPTIONS_GHC -Wall                   #-}
+{-# OPTIONS_GHC -Wno-orphans            #-}
 
 module Neovim.LSP.Protocol.Type.Interfaces
-  ( Nullable
-  , (:|:)(..), pattern L, pattern R
-  , ID(..)
+  ( ID(..)
   , Number
   , Version
   , Uri(..)
-  , ErrorCode(..)
+  , ErrorCode--(..)
+  , prettyResponceError
   , DiagnosticSeverity(..)
   , TextDocumentSync(..)
-  , TextDocumentSyncKind(..)
+  , TextDocumentSyncKind--(..)
   , TextDocumentSyncOptions
 
   , Message
@@ -87,38 +87,30 @@ module Neovim.LSP.Protocol.Type.Interfaces
   , uriToFilePath
   , textDocumentIdentifier
   , versionedTextDocmentIdentifier
-  -- reexport
-  , Option(..)
 
   -- TODO
-  , Enum'(..)
-  , mkEnum
-  , mkEnum'
-  , mkEnum''
   , CodeAction
   , CodeActionKind
-
-  , Record(..)
-  , __
   )
   where
 
-import           RIO                               hiding (Void)
-import           RIO.Char                          (toLower)
-import           RIO.Char.Partial                  (digitToInt)
-import           RIO.List.Partial                  (tail)
-import qualified RIO.Text                          as T
-import           Prelude                           (Enum (toEnum))
+import           Prelude                         (Enum (toEnum))
+import           RIO                             hiding (Void)
+import           RIO.Char                        (toLower)
+import           RIO.Char.Partial                (digitToInt)
+import           RIO.List.Partial                (tail)
+import qualified RIO.Text                        as T
 
-import           Data.Aeson                        hiding (Error)
-import           Data.Extensible                   as E hiding (Nullable, Record, record)
-import           Data.Singletons                   (SingI, SingKind (..))
+import           Data.Aeson                      hiding (Error)
+import           Data.Extensible                 as E hiding (Nullable, Record,
+                                                       record)
+import           Data.Singletons                 (SingI, SingKind (..))
 import           GHC.TypeLits
-import           Safe                              (lookupJust)
+--import           Safe                              (lookupJust)
 
-import           Neovim.LSP.Protocol.Type.Record
+import           Data.Kind                       (Constraint)
 import           Neovim.LSP.Protocol.Type.Method
-import Data.Kind (Constraint)
+import           Neovim.LSP.Protocol.Type.Record
 
 
 -- Interfaces defined in
@@ -163,6 +155,13 @@ type ResponseErrorF e =
    , "message" >: Text
    , "data"    >: Option e
    ]
+prettyResponceError :: Show e => ResponseError e -> Text
+prettyResponceError err =
+    tshow (err^. #code) <> ": " <> err^. #message <> mdata
+  where
+    mdata = case err^. #data of
+      None   -> mempty
+      Some d -> ": " <> tshow d
 
 -- Notification Message
 -----------------------
@@ -382,20 +381,20 @@ data DiagnosticSeverity
   | OtherSeverity Int
   deriving (Show, Eq)
 
-toInt :: DiagnosticSeverity -> Int
-toInt = \case
-  Error           -> 1
-  Warning         -> 2
-  Information     -> 3
-  Hint            -> 4
-  OtherSeverity m -> m
-
 -- |
 -- >>> :m Data.List Neovim.LSP.Protocol.Type.Interfaces
 -- >>> sort [Error, Warning, Hint]
 -- [Error,Warning,Hint]
 instance Ord DiagnosticSeverity where
   compare = compare `on` toInt
+    where
+      toInt = \case
+        Error           -> 1
+        Warning         -> 2
+        Information     -> 3
+        Hint            -> 4
+        OtherSeverity m -> m
+
 
 instance FromJSON DiagnosticSeverity where
   parseJSON (Number n) = return $ case round n of
@@ -904,40 +903,6 @@ type CodeAction = Record
    , "command"     >: Command
    ]
 
-newtype Enum' (xs :: [Symbol]) = Enum' (Proxy :| xs)
-deriving instance Forall (Instance1 Eq   Proxy) xs => Eq   (Enum' xs)
-deriving instance (Forall (Instance1 Eq   Proxy) xs, Forall (Instance1 Ord  Proxy) xs) => Ord  (Enum' xs)
-deriving instance Forall (Instance1 Show Proxy) xs => Show (Enum' xs)
-instance Forall KnownSymbol xs => ToJSON (Enum' xs) where
-  toJSON (Enum' v) = matchWith
-      (\c _ -> toJSON $ getConst' c)
-      (htabulateFor (Proxy @KnownSymbol) (Const' . symbolVal))
-      v
-instance Forall KnownSymbol xs => FromJSON (Enum' xs) where
-  parseJSON = withText "Enum" $ \s ->
-      hfoldMapWithIndexFor @_ @xs (Proxy @KnownSymbol)
-        (\i x -> if s == fromString (symbolVal x)
-                 then return (remember i (mkEnum x))
-                 else mempty)
-        vacancy
-
-mkEnum :: forall x xs proxy. Member xs x => proxy x -> Enum' xs
-mkEnum _ = Enum' (embed (Proxy @x))
-
--- | use with overloaded labels:
---
--- >>> mkEnum' #refactor :: CodeActionKind
--- Enum' (EmbedAt $(mkMembership 1) Proxy)
-mkEnum' :: Member xs x => Proxy x -> Enum' xs
-mkEnum' p = Enum' (embed p)
-
--- | use with type application:
---
--- >>> mkEnum'' @"refactor.inline" :: CodeActionKind
--- Enum' (EmbedAt $(mkMembership 3) Proxy)
-mkEnum'' :: forall x xs. Member xs x => Enum' xs
-mkEnum'' = Enum' (embed (Proxy @x))
-
 -- }}}
 
 -- TextDocumentDocumentSymbol {{{
@@ -1020,7 +985,7 @@ type family FOField' x :: Constraint where
   FOField' Number = ()
   FOField' Bool = ()
   FOField' String = ()
-  FOField' x = 'True ~ 'False
+  FOField' x = TypeError ('Text "damedesu") -- TODO
 class FOField' x => FOField x
 instance FOField' x => FOField x
 -- }}}

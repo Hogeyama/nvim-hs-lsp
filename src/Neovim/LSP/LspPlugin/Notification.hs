@@ -7,14 +7,15 @@ module Neovim.LSP.LspPlugin.Notification
 
 import           RIO
 import qualified RIO.Map                  as M
-import qualified Data.Text                as T
+import qualified RIO.Text                 as T
 
 import           Control.Lens             ((%~))
+import           Data.Extensible.Rexport
 
 import           Neovim                   hiding (Plugin, whenM)
 import           Neovim.LSP.Base
-import           Neovim.LSP.Util
 import           Neovim.LSP.Protocol.Type
+import           Neovim.LSP.Util
 
 notificationHandler :: Plugin
 notificationHandler = Plugin "noti" notificationPluginAction
@@ -41,7 +42,6 @@ showDiagnotics :: ServerNotification 'TextDocumentPublishDiagnosticsK
 showDiagnotics (Notification noti) = do
     let uri         = noti^. #params.__#uri
         diagnostics = noti^. #params.__#diagnostics
-    logError $ displayShow diagnostics
     modifyContext $ #otherState.diagnosticsMap %~ M.insert uri diagnostics
     -- 今開いてるBufferは優先的に表示する
     -- curiとuriは必ずしも一致しないことに注意

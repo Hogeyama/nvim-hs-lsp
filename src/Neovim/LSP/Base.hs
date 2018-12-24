@@ -171,8 +171,8 @@ methodOf (SomeNoti noti) = InNoti $ fromSing $ singByProxy noti
 methodOf (SomeReq  req ) = InReq  $ fromSing $ singByProxy req
 methodOf (SomeResp resp) = InResp $ fromSing $ singByProxy resp
 
-toInMessage :: Map ID ClientRequestMethod -> J.Value -> Either String InMessage
-toInMessage map' v@(J.Object o) = mmethod >>= \case
+parseMessage :: Map ID ClientRequestMethod -> J.Value -> Either String InMessage
+parseMessage map' v@(J.Object o) = mmethod >>= \case
     InReq (toSing -> SomeSing (s :: Sing m))
       -> withDict (prfServerReq s) $ SomeReq  @m <$> fromJSONEither v
     InNoti (toSing -> SomeSing (s :: Sing m))
@@ -191,7 +191,7 @@ toInMessage map' v@(J.Object o) = mmethod >>= \case
           = return $ InResp m
       | otherwise
           = Left "そんなバナナ1"
-toInMessage _ _ = Left "そんなバナナ2"
+parseMessage _ _ = Left "そんなバナナ2"
 
 fromJSONEither :: J.FromJSON a => J.Value -> Either String a
 fromJSONEither = resultEither . J.fromJSON
@@ -314,7 +314,7 @@ updateLspConfig =
 
     toBool (fromObject @Bool -> Right b) = b
     toBool (fromObject @Int  -> Right 0) = False
-    toBool _ = True
+    toBool _                             = True
 
 isInitialized :: NeovimLsp Bool
 isInitialized = usesTV #serverHandles isJust
@@ -480,7 +480,7 @@ dispatch hs = do
       rawInput <- atomically (readTChan inChG)
       let Just !v = J.decode (fromStrictBytes rawInput)
       idMethodMap <- view #idMethodMap <$> readTVarIO ctx
-      case toInMessage idMethodMap v of
+      case parseMessage idMethodMap v of
         Right !msg -> forM_ inChs $ atomically . flip writeTChan msg
         Left e -> logError $ fromString $ init $ unlines
             [ "dispatcher: could not parse input."

@@ -1,5 +1,4 @@
 
-{-# LANGUAGE AllowAmbiguousTypes #-}
 {-# OPTIONS_GHC -Wall            #-}
 
 module Neovim.LSP.Util where
@@ -12,18 +11,53 @@ import qualified RIO.Map                      as M
 
 import           Control.Lens                 ((^.))
 import           Data.Extensible.Rexport
-import           Data.Singletons
 
 import           Neovim
 import           Neovim.LSP.Base
-import           Neovim.LSP.Protocol.Messages
 import           Neovim.LSP.Protocol.Type
+
+-------------------------------------------------------------------------------
+
+vimCallFunction :: String -> [Object] -> Neovim env (Either NeovimException Object)
+vimCallFunction func args = do
+  func' <- evaluate (force func)
+  args' <- evaluate (force args)
+  vim_call_function func' args'
+
+vimCallFunction' :: String -> [Object] -> Neovim env Object
+vimCallFunction' func args = do
+  func' <- evaluate (force func)
+  args' <- evaluate (force args)
+  vim_call_function' func' args'
+
+nvimEcho :: String -> Neovim env ()
+nvimEcho s = vim_command' $ "echo " ++ show s
+
+nvimEchom :: String -> Neovim env ()
+nvimEchom s = vim_command' $ "echomsg " ++ show s
+
+nvimEchoe :: String -> Neovim env ()
+nvimEchoe s =
+    vim_command' $ L.intercalate "|"
+      [ "echohl ErrorMsg"
+      , "echomsg " ++ show s
+      , "echohl None"
+      ]
+
+nvimEchow :: String -> Neovim env ()
+nvimEchow s =
+    vim_command' $ L.intercalate "|"
+      [ "echohl WarningMsg"
+      , "echomsg " ++ show s
+      , "echohl None"
+      ]
+
+-------------------------------------------------------------------------------
 
 getBufLanguage :: (HasLogFunc env)
                => Buffer -> Neovim env (Maybe String)
 getBufLanguage b = nvim_buf_get_var b "current_syntax" >>= \case
-    Right (fromObject -> Right x) ->
-      return (Just x)
+    Right (fromObject -> Right x) -> return (Just x)
     _ -> return Nothing
 
 getBufUri :: Buffer -> Neovim env Uri
@@ -48,50 +82,8 @@ getTextDocumentPositionParams b p = do
   return pos
 
 -------------------------------------------------------------------------------
--- TODO To be moved
+-- Pos
 -------------------------------------------------------------------------------
-
--- この関数どこに置こうか
-
--- | Because @m@ is not uniquely determined by type @RequestParam 'Client m@,
---   type annotation is always required when you use this function.
---   The GHC extension @-XTypeApplication@ is useful to do this.
---
--- > pushRequest @'InitializeK (initializeParam Nothing Nothing)
---
--- >>> :set -XTypeApplications -XDataKinds
--- >>> let wellTyped _ = "OK"
--- >>> wellTyped $ pushRequest @'InitializeK @LspEnv (initializeParam Nothing Nothing)
--- "OK"
---
--- TODO これをユーザーに見せるのはどうなのか．でもtype checkはして欲しいしなあ
-pushRequest :: forall (m :: ClientRequestMethodK) env a
-            .  (ImplRequest m, HasOutChan env, HasContext env)
-            => RequestParam m
-            -> Maybe (CallbackOf m a)
-            -> Neovim env (Maybe (TMVar a))
-pushRequest param mcallback = do
-    let method = fromSing (sing :: Sing m)
-    id' <- genUniqueID
-    addIdMethodMap id' method
-    push $ request @m id' param
-    case mcallback of
-      Just callback -> do
-        var <- newEmptyTMVarIO
-        registerCallback id' $ Callback var callback
-        return (Just var)
-      Nothing -> return Nothing
-
-pushRequest' :: forall (m :: ClientRequestMethodK) env
-             .  (ImplRequest m, HasOutChan env, HasContext env)
-             => RequestParam m
-             -> Neovim env ()
-pushRequest' param = void $ pushRequest @m param Nothing
-
-pushNotification :: forall (m :: ClientNotificationMethodK) env
-                 .  (ImplNotification m, HasOutChan env)
-                 => NotificationParam m -> Neovim env ()
-pushNotification param = push $ notification @m param
 
 -- TODO ちゃんとdata型にする
 type NvimPos = (Int,Int)
@@ -104,28 +96,6 @@ nvimPosToPosition (line,char) = Record $
 
 positionToNvimPos :: Position -> NvimPos
 positionToNvimPos pos = (1 + pos^. #line, 1 + pos^. #character)
-
-nvimEcho :: String -> Neovim env ()
-nvimEcho s = vim_command' $ "echo " ++ show s
-
-nvimEchom :: String -> Neovim env ()
-nvimEchom s = vim_command' $ "echomsg " ++ show s
-
-nvimEchoe :: String -> Neovim env ()
-nvimEchoe s =
-    vim_command' $ L.intercalate "|"
-      [ "echohl ErrorMsg"
-      , "echomsg " ++ show s
-      , "echohl None"
-      ]
-
-nvimEchow :: String -> Neovim env ()
-nvimEchow s =
-    vim_command' $ L.intercalate "|"
-      [ "echohl WarningMsg"
-      , "echomsg " ++ show s
-      , "echohl None"
-      ]
 
 -------------------------------------------------------------------------------
 -- Completion
@@ -168,22 +138,10 @@ type QfItem = OrigRecord
    ]
 
 replaceQfList :: HasLogFunc env => [QfItem] -> Neovim env ()
-replaceQfList qs = void $ vimCallFunction "setqflist" $! qs +: ['r'] +: []
+replaceQfList qs = void $ vimCallFunction' "setqflist" $! qs +: ['r'] +: []
 
 replaceLocList :: HasLogFunc env => Int -> [QfItem] -> Neovim env ()
-replaceLocList winId qs = void $ vimCallFunction "setloclist" $! winId +: qs +: ['r'] +: []
-
-vimCallFunction :: String -> [Object] -> Neovim env (Either NeovimException Object)
-vimCallFunction func args = do
-  func' <- evaluate (force func)
-  args' <- evaluate (force args)
-  vim_call_function func' args'
-
-vimCallFunction' :: String -> [Object] -> Neovim env Object
-vimCallFunction' func args = do
-  func' <- evaluate (force func)
-  args' <- evaluate (force args)
-  vim_call_function' func' args'
+replaceLocList winId qs = void $ vimCallFunction' "setloclist" $! winId +: qs +: ['r'] +: []
 
 diagnosticToQfItems :: Uri -> Diagnostic -> [QfItem]
 diagnosticToQfItems uri d = header : rest

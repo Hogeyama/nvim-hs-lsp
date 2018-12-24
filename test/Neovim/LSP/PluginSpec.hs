@@ -17,7 +17,7 @@ import           Neovim.Context.Internal
 
 import           Neovim
 
-import           Neovim.LSP.Action.Notification    (didChangeBuffer, didOpenBuffer)
+import           Neovim.LSP.Action.Notification
 import           Neovim.LSP.Action.Request
 import           Neovim.LSP.Base
 import           Neovim.LSP.Plugin

@@ -26,7 +26,7 @@ plugin = do
             , $(command' 'nvimHsLspHover) ["async"]
             , $(command' 'nvimHsLspInfo) ["async"]
             , $(command' 'nvimHsLspDefinition) ["async"]
-            , $(command' 'nvimHsLspCodeAction) ["async"]
+            , $(command' 'nvimHsLspCodeAction) []
             , $(command' 'nvimHsLspFormatting) ["async", "!", "%"]
             , $(command' 'nvimHsLspReferences) ["async"]
             , $(command' 'nvimHsLspHieCaseSplit) ["async"]

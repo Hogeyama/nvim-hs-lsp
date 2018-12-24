@@ -55,8 +55,7 @@ nvimHsLspInitialize _ = loggingErrorImmortal $ do
             Just Right{} <- addAutocmd "BufWrite"
                               pat (nvimHsLspSaveBuffer arg)
             nvimHsLspOpenBuffer def
-            whenM (readContext . view $ #lspConfig.autoLoadQuickfix) $
-              vim_command' "botright copen"
+            whenM (readContext . view $ #lspConfig.autoLoadQuickfix) (vim_command' "copen")
             vim_out_write' $
               "nvim-hs-lsp: Initialized for filetype `" ++ ft ++ "`\n"
           _ ->
@@ -224,7 +223,7 @@ nvimHsLspLoadQuickfix arg = do
     replaceQfList qfItems
     if null qfItems
       then vim_command' "cclose" >> nvimEcho "nvim-hs-lsp: no diagnostics"
-      else vim_command' "botright copen"
+      else vim_command' "ccopen"
   where
     showAll = Just True == bang arg
 

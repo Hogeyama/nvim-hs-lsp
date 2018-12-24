@@ -1,5 +1,6 @@
 
 {-# OPTIONS_GHC -Wall #-}
+{-# LANGUAGE AllowAmbiguousTypes #-}
 
 module Neovim.LSP.Action.Request where
 
@@ -8,20 +9,76 @@ import           RIO
 import           RIO.List
 import           RIO.List.Partial         (head)
 import qualified RIO.Map                  as M
-import           RIO.Partial              (fromJust)
 import qualified RIO.Text                 as T
 
 import           Control.Lens             (views)
 import           Data.Aeson
 import           Data.Coerce              (coerce)
 import           Data.Extensible.Rexport
-
+import           Data.Singletons
 import           Data.Either.Combinators  (whenLeft)
+
 import           Neovim                   hiding (Plugin, range, (<>))
 import           Neovim.LSP.Base
 import           Neovim.LSP.Protocol.Type
+import           Neovim.LSP.Protocol.Messages
 import           Neovim.LSP.Util
 import qualified Neovim.User.Choice       as Choice
+
+-------------------------------------------------------------------------------
+-- アレ
+-------------------------------------------------------------------------------
+
+-- | Because @m@ is not uniquely determined by type @RequestParam 'Client m@,
+--   type annotation is always required when you use this function.
+--   The GHC extension @-XTypeApplication@ is useful to do this.
+--
+-- > pushRequest @'InitializeK (initializeParam Nothing Nothing)
+--
+-- >>> :set -XTypeApplications -XDataKinds
+-- >>> let wellTyped _ = "OK"
+-- >>> wellTyped $ pushRequest @'InitializeK @LspEnv (initializeParam Nothing Nothing)
+-- "OK"
+--
+-- TODO これをユーザーに見せるのはどうなのか．でもtype checkはして欲しいしなあ
+pushRequest :: forall (m :: ClientRequestMethodK) env a
+            .  (ImplRequest m, HasOutChan env, HasContext env)
+            => RequestParam m
+            -> CallbackOf m a
+            -> Neovim env (TMVar a)
+pushRequest param callback = do
+    let method = fromSing (sing :: Sing m)
+    id' <- genUniqueID
+    addIdMethodMap id' method
+    push $ request @m id' param
+    var <- newEmptyTMVarIO
+    registerCallback id' $ Callback var callback
+    return var
+
+pushRequest' :: forall (m :: ClientRequestMethodK) env
+             .  (ImplRequest m, ImplResponse m, HasOutChan env, HasContext env)
+             => RequestParam m
+             -> Neovim env ()
+pushRequest' param = void $ pushRequest @m param nopCallback
+
+nopCallback :: ImplResponse m => CallbackOf m ()
+nopCallback (Response resp) = void $ withResult resp (const (return ()))
+
+withResult :: (HasLogFunc env, Show e)
+           => ResponseMessage a e
+           -> (a -> Neovim env ret)
+           -> Neovim env (Maybe ret)
+withResult resp k =
+  case resp^. #error of
+    Some e -> vim_report_error' msg >> return Nothing
+      where msg = "nvim-hs-lsp: error from server:"  <> T.unpack (prettyResponceError e)
+    None -> case resp^. #result of
+      None   -> logError "withResult: wrong input" >> return Nothing
+      Some x -> Just <$> k x
+
+waitCallback :: MonadIO m => m (TMVar a) -> m a
+waitCallback m = atomically . takeTMVar =<< m
+
 
 -------------------------------------------------------------------------------
 -- TextDocumentHover {{{
@@ -34,7 +91,7 @@ hoverRequest :: (HasOutChan env, HasContext env)
              -> Neovim env (TMVar a)
 hoverRequest b p callback = do
   param <- getTextDocumentPositionParams b p
-  fromJust <$> pushRequest param (Just callback)
+  pushRequest param callback
 
 callbackHoverPreview :: CallbackOf 'TextDocumentHoverK ()
 callbackHoverPreview (Response resp) = do
@@ -95,7 +152,7 @@ signatureHelpRequest :: (HasOutChan env, HasContext env)
                      -> Neovim env (TMVar a)
 signatureHelpRequest b p callback = do
   param <- getTextDocumentPositionParams b p
-  fromJust <$> pushRequest param (Just callback)
+  pushRequest param callback
 
 -- TODO callback
 
@@ -112,7 +169,7 @@ definitionRequest :: (HasOutChan env, HasContext env)
                   -> Neovim env (TMVar a)
 definitionRequest b p callback = do
   param <- getTextDocumentPositionParams b p
-  fromJust <$> pushRequest param (Just callback)
+  pushRequest param callback
 
 callbackDefinition :: CallbackOf 'TextDocumentDefinitionK ()
 callbackDefinition (Response resp) = do
@@ -154,7 +211,10 @@ executeCommandRequest cmd margs mcallback = do
             $ #command   @= cmd
            <! #arguments @= margs
            <! nil
-  pushRequest param mcallback
+  case mcallback of
+    Just callback -> Just <$> pushRequest param callback
+    Nothing -> do pushRequest' @'WorkspaceExecuteCommandK param
+                  return Nothing
 
 --}}}
 
@@ -166,8 +226,8 @@ workspaceSymbol
   => String
   -> CallbackOf 'WorkspaceSymbolK a
   -> Neovim env (TMVar a)
-workspaceSymbol sym mcallback =
-    fromJust <$> pushRequest (Record (#query @= sym <! nil)) (Just mcallback)
+workspaceSymbol sym callback =
+    pushRequest (Record (#query @= sym <! nil)) callback
 
 callbackWorkspaceSymbol :: CallbackOf 'WorkspaceSymbolK ()
 callbackWorkspaceSymbol (Response resp) = void $ withResult resp $ \case
@@ -175,7 +235,7 @@ callbackWorkspaceSymbol (Response resp) = void $ withResult resp $ \case
     Just symbolInfos -> do
       logInfo $ "workspace/Symbol: " <> displayShow symbolInfos
       replaceLocList 0 $ map symbolInfomartionToQfItem symbolInfos
-      unless (null symbolInfos) $ vim_command' "botright lopen"
+      unless (null symbolInfos) (vim_command' "copen")
   where
     symbolInfomartionToQfItem symInfo =
         locationToQfItem (symInfo^. #location) (symInfo^. #name)
@@ -206,7 +266,7 @@ completionRequest b p callback = do
             <! #position     @= nvimPosToPosition p
             <! #context      @= None
             <! nil
-  fromJust <$> pushRequest params (Just callback)
+  pushRequest params callback
 
 -- TODO error processing
 callbackComplete :: CallbackOf 'TextDocumentCompletionK [VimCompleteItem]
@@ -303,23 +363,19 @@ codeAction b (start,end) callback = do
             line   = fst
         in line start' <= line start && line start <= line end'
 
-  fromJust <$> pushRequest params (Just callback)
+  pushRequest params callback
 
 callbackCodeAction :: CallbackOf 'TextDocumentCodeActionK ()
-callbackCodeAction (Response resp) = do
-    m <- withResult resp $ \case
-      Nothing -> do
-        logDebug "callbackCodeAction: got Nothing"
-        return ()
-      Just xs -> do
-        let cmds = lefts $ coerce @_ @[Either _ CodeAction] xs
-        case cmds of
-          [] -> nvimEchom "no code action"
-          [cmd] -> executeCommandOrNot cmd
-          _ -> chooseCommandAndExecute cmds
-    case m of
-      Nothing -> return ()
-      Just () -> return ()
+callbackCodeAction (Response resp) = void $ withResult resp $ \case
+    Nothing -> do
+      logDebug "callbackCodeAction: got Nothing"
+      return ()
+    Just xs -> do
+      let cmds = lefts $ coerce @_ @[Either _ CodeAction] xs
+      case cmds of
+        [] -> nvimEchom "no code action"
+        [cmd] -> executeCommandOrNot cmd
+        _ -> chooseCommandAndExecute cmds
 
 chooseCommandAndExecute :: [Command] -> Neovim PluginEnv ()
 chooseCommandAndExecute cmds = do
@@ -336,7 +392,7 @@ executeCommandOrNot cmd = do
     when b $ executeCommand cmd
 
 executeCommand :: Command -> Neovim PluginEnv ()
-executeCommand cmd = void $ executeCommandRequest (cmd^. #command) (cmd^. #arguments) Nothing
+executeCommand cmd = void $ executeCommandRequest (cmd^. #command) (cmd^. #arguments) (Just nopCallback)
 
 --}}}
 
@@ -355,7 +411,7 @@ textDocumentFormatting b fopts = do
               $ #textDocument @= Record (#uri @= uri <! nil)
              <! #options @= fopts
              <! nil
-    fromJust <$> pushRequest param (Just (callbackTextDocumentFormatting uri))
+    pushRequest param (callbackTextDocumentFormatting uri)
 
 textDocumentRangeFormatting
   :: (HasOutChan env, HasContext env, HasLogFunc env)
@@ -374,7 +430,7 @@ textDocumentRangeFormatting b (start,end) fopts = do
               $ #start @= nvimPosToPosition start
              <! #end @= nvimPosToPosition end
              <! nil
-    fromJust <$> pushRequest param (Just (callbackTextDocumentRangeFormatting uri))
+    pushRequest param (callbackTextDocumentRangeFormatting uri)
 
 callbackTextDocumentFormatting :: Uri -> CallbackOf 'TextDocumentFormattingK ()
 callbackTextDocumentFormatting uri (Response resp) = callbackTextEdits uri resp
@@ -383,7 +439,8 @@ callbackTextDocumentRangeFormatting :: Uri -> CallbackOf 'TextDocumentRangeForma
 callbackTextDocumentRangeFormatting uri (Response resp) = callbackTextEdits uri resp
 
 callbackTextEdits
-  :: Uri
+  :: Show e
+  => Uri
   -> ResponseMessage (Nullable [TextEdit]) e
   -> Neovim PluginEnv ()
 callbackTextEdits uri resp =
@@ -411,7 +468,7 @@ textDocumentReferences b p callback = do
         context = Record
                 $ #includeDeclaration @= True
                <! nil
-    fromJust <$> pushRequest param (Just callback)
+    pushRequest param callback
 
 callbackTextDocumentReferences :: CallbackOf 'TextDocumentReferencesK ()
 callbackTextDocumentReferences (Response resp) = void $ withResult resp $ \case
@@ -446,7 +503,7 @@ textDocumentDocumentSymbol b = do
     let params = Record
                $ #textDocument @= textDocumentIdentifier uri
               <! nil
-    fromJust <$> pushRequest params (Just (callbackTextDocumentDocumentSymbol uri))
+    pushRequest params  (callbackTextDocumentDocumentSymbol uri)
 
 callbackTextDocumentDocumentSymbol :: Uri -> CallbackOf 'TextDocumentDocumentSymbolK ()
 callbackTextDocumentDocumentSymbol uri (Response resp) = void $ withResult resp $ \case
@@ -486,27 +543,6 @@ callbackTextDocumentDocumentSymbol uri (Response resp) = void $ withResult resp 
 --   , "range" >: Range
 --   , "children" >: Option [DocumentSymbol]
 --   ])
-
---}}}
-
--------------------------------------------------------------------------------
--- Util {{{
--------------------------------------------------------------------------------
-
-withResult :: (HasLogFunc env)
-           => ResponseMessage a e
-           -> (a -> Neovim env ret)
-           -> Neovim env (Maybe ret)
-withResult resp k =
-  case resp^. #error of
-    Some e -> vim_report_error' msg >> return Nothing
-      where msg = "nvim-hs-lsp: error from server: " <> T.unpack (e^. #message)
-    None -> case resp^. #result of
-      None   -> logError "withResult: wrong input" >> return Nothing
-      Some x -> Just <$> k x
-
-waitCallback :: MonadIO m => m (TMVar a) -> m a
-waitCallback m = atomically . takeTMVar =<< m
 
 --}}}
 

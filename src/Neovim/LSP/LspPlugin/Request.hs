@@ -8,7 +8,7 @@ module Neovim.LSP.LspPlugin.Request
 
 import           RIO
 import qualified RIO.Map                      as M
-import qualified Data.Text                    as T
+import qualified RIO.Text                     as T
 
 import           Data.Extensible
 
@@ -76,11 +76,9 @@ respondWorkspaceAplyEdit (Request req) = do
               (Some (Record (#applied @= x <! nil)))
               None
 
--- just apply edits from bottom to top.
--- TODO consider the case of multiple edits with the same start.
 applyChanges :: Map Uri [TextEdit] -> PluginAction Bool
 applyChanges cs = do
-  forM_ (M.toList cs) $ \(uri,es) -> U.applyTextEdit uri es
+  mapM_ (uncurry U.applyTextEdit) (M.toList cs)
   return True
 
 -- hieが対応していないので後回しで良い
