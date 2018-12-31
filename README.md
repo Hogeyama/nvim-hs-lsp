@@ -24,6 +24,9 @@ Implemented most functionality
 
 ### Completion
 
++ `completefunc`
++ [`deoplete`](https://github.com/Shougo/deoplete.nvim) source
+
 <img src="./screenshot/Completion.gif" width="600">
 
 
