@@ -8,7 +8,7 @@ Implemented most functionality
 
 + Diagnostics
 + Completion
-+ Jump to Definition
++ Jump to definition
 + Code action
 + Hover etc.
 
