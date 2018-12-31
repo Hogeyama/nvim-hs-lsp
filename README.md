@@ -2,29 +2,20 @@
 
 [Language Server Protcol](https://microsoft.github.io/language-server-protocol/specification) implementation for neovim using [nvim-hs](https://github.com/neovimhaskell/nvim-hs).
 
-## Screen shot(s)
-
-![](https://github.com/Hogeyama/nvim-hs-lsp/blob/media/screenshot/Sample.gif)
-
-
-## Implemented
-
-+ Realtime diagnostics/lint messages
-+ Jump to definition
-+ Hover (get identifier infomation)
-+ Apply refact of [hie](https://github.com/haskell/haskell-ide-engine) (halfway).
-
 ## TODO
 
-- [ ] add/improve test
+## Screen shots
 
-- [ ] complete applyRefact for hie
+### CodeAction
 
-     + partialiy implemented
+<img src="./screenshot/CodeAction.gif" width="400">
 
-- [x] implement completion
+### Jump to definition
 
-- [ ] implement rename
+<img src="./screenshot/Definition.gif" width="400">
 
-- [x] add callback
+### Completion
+
+<img src="./screenshot/Completion.gif" width="400">
+
 
