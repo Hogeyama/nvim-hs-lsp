@@ -972,6 +972,10 @@ type instance ResError     ('ClientRequestMiscK s) = Value
 -- Client Notification --{{{
 -------------------------------------------------------------------------------
 
+-- Initialized
+type instance NotificationParam 'InitializedK = Record '[]
+
+
 -- Exit
 ----------------------------------------
 data Void

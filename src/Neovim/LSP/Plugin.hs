@@ -45,7 +45,10 @@ nvimHsLspInitialize _ = loggingErrorImmortal $ do
             initializeLsp cwd cmd args
             #fileType .== Just ft
             dispatch [notificationHandler, requestHandler, callbackHandler]
-            pushRequest' @'InitializeK (initializeParam Nothing (Just cwdUri))
+            waitCallback $ pushRequest @'InitializeK
+                (initializeParam Nothing (Just cwdUri))
+                nopCallback
+            pushNotification @'InitializedK (Record nil)
             let pat = def { acmdPattern = "*" }
                 arg = def { bang = Just True }
             Just Right{} <- addAutocmd "BufRead,BufNewFile"
