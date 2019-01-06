@@ -45,6 +45,19 @@ dependencies:
 - base >= 4.7 && < 5
 - rio >= 0.1.5.0
 
+executables:
+  nvim-hs-lsp:
+    main:                Main.hs
+    source-dirs:         app
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    - -Wall
+    dependencies:
+    - nvim-hs
+    - nvim-hs-lsp
+
 library:
   source-dirs: src
   ghc-options:
