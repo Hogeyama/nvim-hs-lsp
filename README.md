@@ -38,7 +38,7 @@
 
 ### More Precise definition of the protocol
 
-Language Server Protocol is described in Type Script, the type system of which has quite strong expressive power.
+The [specification](https://microsoft.github.io/language-server-protocol/specification) of Language Server Protocol is written in Type Script, the type system of which has quite strong expressive power.
 For example, `FormattingOptions` is defined as follows:
 
 ```typescript
@@ -49,7 +49,7 @@ interface FormattingOptions {
 }
 ```
 
-This interface means that the object `obj` is `FormattingOptions` if and only if
+This interface means that an object `obj` is `FormattingOptions` if and only if
 
 + `obj` contains `'tabSize'` field of type `number`,
 + `obj` contains `'insertSpaces'` field of type `boolean`, and
@@ -119,12 +119,21 @@ Examples:
         arising from a use of ‘FormattingOptions’
 >>> :{
 let bad2 = FormattingOptions $ Record $
-               #tabSize @= 2
-            <! #insertSpaces @= True
-            <! #foo @= ([] :: [Int])
-            <! nil
+>>>            #tabSize @= 2
+>>>         <! #insertSpaces @= True
+>>>         <! #foo @= ([] :: [Int])
+>>>         <! nil
 >>> :}
 <interactive>:10:12: error:
     • Unexpected Type for FormattingOptions: [Int]
 ```
+
+### Less boilerplate
+
+I also made the use of `extensible` library to reduce boilerplates.
+In `haskell-lsp-types`, again, many boilerplates is used to make lenses or `ToJSON`/`FromJSON` instances (see [this file][haskell-lsp-types-lens] for example).
+In `nvim-hs-lsp`, all lenses and `ToJSON`/`FromJSON` instances are defined at once in [this file][nvim-hs-lsp-record].
+
+[haskell-lsp-types-lens]: https://github.com/alanz/haskell-lsp/blob/master/haskell-lsp-types/src/Language/Haskell/LSP/Types/Lens.hs
+[nvim-hs-lsp-record]: ./src/Neovim/LSP/Protocol/Type/Record.hs
 
