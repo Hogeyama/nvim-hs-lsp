@@ -938,7 +938,7 @@ type family FOField' x :: Constraint where
   FOField' Number = ()
   FOField' Bool = ()
   FOField' String = ()
-  FOField' x = TypeError ('Text "damedesu") -- TODO
+  FOField' x = TypeError ('Text "Unexpected Type for FOField: " ':<>: 'ShowType x)
 class FOField' x => FOField x
 instance FOField' x => FOField x
 -- }}}
