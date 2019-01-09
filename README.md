@@ -118,7 +118,7 @@ Examples:
                      with ‘'Expecting (n0 ':> Bool)’
         arising from a use of ‘FormattingOptions’
 >>> :{
-let bad2 = FormattingOptions $ Record $
+>>> let bad2 = FormattingOptions $ Record $
 >>>            #tabSize @= 2
 >>>         <! #insertSpaces @= True
 >>>         <! #foo @= ([] :: [Int])
