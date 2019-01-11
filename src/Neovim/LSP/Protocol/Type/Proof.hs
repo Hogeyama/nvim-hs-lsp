@@ -18,77 +18,77 @@ import           Neovim.LSP.Protocol.Type.Method
 prfClientReq :: forall (m :: ClientRequestMethodK). Sing m -> Dict (ImplRequest m)
 prfClientReq = \case -- {{{
     SInitialize                      -> Dict
-    SShutdown                        -> notImplemented
+    SShutdown                        -> Dict
     SWorkspaceSymbol                 -> Dict
     SWorkspaceExecuteCommand         -> Dict
-    STextDocumentWillSaveWaitUntil   -> notImplemented
+    STextDocumentWillSaveWaitUntil   -> Dict
     STextDocumentCompletion          -> Dict
-    SCompletionItemResolve           -> notImplemented
+    SCompletionItemResolve           -> Dict
     STextDocumentHover               -> Dict
     STextDocumentSignatureHelp       -> Dict
     STextDocumentReferences          -> Dict
-    STextDocumentDocumentHighlight   -> notImplemented
+    STextDocumentDocumentHighlight   -> Dict
     STextDocumentDocumentSymbol      -> Dict
     STextDocumentFormatting          -> Dict
     STextDocumentRangeFormatting     -> Dict
-    STextDocumentOnTypeFormatting    -> notImplemented
+    STextDocumentOnTypeFormatting    -> Dict
     STextDocumentDefinition          -> Dict
     STextDocumentCodeAction          -> Dict
-    STextDocumentCodeLens            -> notImplemented
-    SCodeLensResolve                 -> notImplemented
-    STextDocumentDocumentLink        -> notImplemented
-    SDocumentLinkResolve             -> notImplemented
-    STextDocumentRename              -> notImplemented
+    STextDocumentCodeLens            -> Dict
+    SCodeLensResolve                 -> Dict
+    STextDocumentDocumentLink        -> Dict
+    SDocumentLinkResolve             -> Dict
+    STextDocumentRename              -> Dict
     SClientRequestMisc SSym          -> Dict
 -- }}}
 
 prfClientNoti :: forall (m :: ClientNotificationMethodK). Sing m -> Dict (ImplNotification m)
 prfClientNoti = \case-- {{{
     SInitialized                     -> Dict
-    SExit                            -> notImplemented
-    SWorkspaceDidChangeConfiguration -> notImplemented
-    SWorkspaceDidChangeWatchedFiles  -> notImplemented
+    SExit                            -> Dict
+    SClientCancel                    -> Dict
+    SWorkspaceDidChangeConfiguration -> Dict
+    SWorkspaceDidChangeWatchedFiles  -> Dict
     STextDocumentDidOpen             -> Dict
     STextDocumentDidChange           -> Dict
-    STextDocumentWillSave            -> notImplemented
+    STextDocumentWillSave            -> Dict
     STextDocumentDidSave             -> Dict
-    STextDocumentDidClose            -> notImplemented
-    SClientCancel                    -> Dict
+    STextDocumentDidClose            -> Dict
     SClientNotificationMisc SSym     -> Dict
   -- }}}
 
 prfServerResp :: forall (m :: ClientRequestMethodK). Sing m -> Dict (ImplResponse m)
 prfServerResp = \case  -- {{{
     SInitialize                      -> Dict
-    SShutdown                        -> notImplemented
+    SShutdown                        -> Dict
     SWorkspaceSymbol                 -> Dict
     SWorkspaceExecuteCommand         -> Dict
-    STextDocumentWillSaveWaitUntil   -> notImplemented
+    STextDocumentWillSaveWaitUntil   -> Dict
     STextDocumentCompletion          -> Dict
-    SCompletionItemResolve           -> notImplemented
+    SCompletionItemResolve           -> Dict
     STextDocumentHover               -> Dict
     STextDocumentSignatureHelp       -> Dict
     STextDocumentReferences          -> Dict
-    STextDocumentDocumentHighlight   -> notImplemented
+    STextDocumentDocumentHighlight   -> Dict
     STextDocumentDocumentSymbol      -> Dict
     STextDocumentFormatting          -> Dict
     STextDocumentRangeFormatting     -> Dict
-    STextDocumentOnTypeFormatting    -> notImplemented
+    STextDocumentOnTypeFormatting    -> Dict
     STextDocumentDefinition          -> Dict
     STextDocumentCodeAction          -> Dict
-    STextDocumentCodeLens            -> notImplemented
-    SCodeLensResolve                 -> notImplemented
-    STextDocumentDocumentLink        -> notImplemented
-    SDocumentLinkResolve             -> notImplemented
-    STextDocumentRename              -> notImplemented
+    STextDocumentCodeLens            -> Dict
+    SCodeLensResolve                 -> Dict
+    STextDocumentDocumentLink        -> Dict
+    SDocumentLinkResolve             -> Dict
+    STextDocumentRename              -> Dict
     SClientRequestMisc SSym          -> Dict
 -- }}}
 
 prfServerReq :: forall (m :: ServerRequestMethodK). Sing m -> Dict (ImplRequest m)
 prfServerReq = \case -- {{{
-  SWindowShowMessageRequest       -> notImplemented
-  SClientRegisterCapability       -> notImplemented
-  SClientUnregisterCapability     -> notImplemented
+  SWindowShowMessageRequest       -> Dict
+  SClientRegisterCapability       -> Dict
+  SClientUnregisterCapability     -> Dict
   SWorkspaceApplyEdit             -> Dict
   SServerRequestMisc SSym         -> Dict
 -- }}}

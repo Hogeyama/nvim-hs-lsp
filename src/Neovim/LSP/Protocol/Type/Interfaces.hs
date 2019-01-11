@@ -1,7 +1,6 @@
 
 {-# LANGUAGE AllowAmbiguousTypes        #-}
 {-# LANGUAGE DeriveGeneric              #-}
-{-# LANGUAGE EmptyCase                  #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE UndecidableInstances       #-}
 {-# LANGUAGE UndecidableSuperClasses    #-}
@@ -702,47 +701,17 @@ instance ToJSON TextDocumentSync where
 
 -- Shutdown {{{
 ----------------------------------------
-
--- TODO
-
+type instance RequestParam 'ShutdownK = Option Void
+type instance ResResult    'ShutdownK = Record '[]
+type instance ResError     'ShutdownK = Value
 -- }}}
 
--- Cancel {{{
+-- WorkspaceSymbol {{{
 ----------------------------------------
-type instance NotificationParam 'ClientCancelK = Record '[ "id" >: ID ]
-
--- }}}
-
--- TextDocumentHover {{{
-----------------------------------------
-type instance RequestParam 'TextDocumentHoverK = TextDocumentPositionParams
-type instance ResResult    'TextDocumentHoverK = Nullable Hover
-type instance ResError     'TextDocumentHoverK = Value
-  --  "error: code and message set in case an exception happens during the hover request."
-
-type Hover = Record
-  '[ "contents" >: (MarkedString :|: [MarkedString] :|: MarkupContent)
-   , "range"    >: Option Range
-   ]
-
--- }}}
-
--- TextDocumentSignatureHelp {{{
-----------------------------------------
-type instance RequestParam 'TextDocumentSignatureHelpK = TextDocumentPositionParams
-type instance ResResult    'TextDocumentSignatureHelpK = SignatureHelp
-type instance ResError     'TextDocumentSignatureHelpK = Value
-
-type SignatureHelp = Value
-  -- HIEが対応していないので後回しで良い
-
--- }}}
-
--- TextDocumentDefinition {{{
-----------------------------------------
-type instance RequestParam 'TextDocumentDefinitionK = TextDocumentPositionParams
-type instance ResResult    'TextDocumentDefinitionK = Nullable [Location]
-type instance ResError     'TextDocumentDefinitionK = String
+type instance RequestParam 'WorkspaceSymbolK = Record
+  '[ "query" >: String ]
+type instance ResResult    'WorkspaceSymbolK = Nullable [SymbolInformation]
+type instance ResError     'WorkspaceSymbolK = Value
 
 -- }}}
 
@@ -759,12 +728,22 @@ type ExecuteCommandParams = Record
 
 -- }}}
 
--- WorkspaceSymbol {{{
+-- TextDocumentWillSaveWaitUntil {{{
 ----------------------------------------
-type instance RequestParam 'WorkspaceSymbolK = Record
-  '[ "query" >: String ]
-type instance ResResult    'WorkspaceSymbolK = Nullable [SymbolInformation]
-type instance ResError     'WorkspaceSymbolK = Value
+type instance RequestParam 'TextDocumentWillSaveWaitUntilK = WillSaveTextDocumentParams
+type instance ResResult    'TextDocumentWillSaveWaitUntilK = Void
+type instance ResError     'TextDocumentWillSaveWaitUntilK = Value
+type WillSaveTextDocumentParams = Record
+  '[ "textDocument" >: TextDocumentIdentifier
+   , "reason"       >: TextDocumentSaveReason
+   ]
+type TextDocumentSaveReason = EnumAs "TextDocumentSaveReason" TextDocumentSaveReasonF
+type TextDocumentSaveReasonF = '[ "manual", "afterDelay", "focusOut" ]
+instance EnumAsDef "TextDocumentSaveReason" TextDocumentSaveReasonF where
+  enumAsDict _ = Const @_ @"manual"     (Number 1)
+              <! Const @_ @"afterDelay" (Number 2)
+              <! Const @_ @"focusOut"   (Number 3)
+              <! nil
 
 -- }}}
 
@@ -805,6 +784,47 @@ type CompletionContext = Value
 
 -- }}}
 
+-- CompletionItemResolve {{{
+----------------------------------------
+type instance RequestParam 'CompletionItemResolveK = CompletionItem
+type instance ResResult    'CompletionItemResolveK = CompletionItem
+type instance ResError     'CompletionItemResolveK = Value
+
+-- }}}
+
+-- TextDocumentHover {{{
+----------------------------------------
+type instance RequestParam 'TextDocumentHoverK = TextDocumentPositionParams
+type instance ResResult    'TextDocumentHoverK = Nullable Hover
+type instance ResError     'TextDocumentHoverK = Value
+  --  "error: code and message set in case an exception happens during the hover request."
+
+type Hover = Record
+  '[ "contents" >: (MarkedString :|: [MarkedString] :|: MarkupContent)
+   , "range"    >: Option Range
+   ]
+
+-- }}}
+
+-- TextDocumentSignatureHelp {{{
+----------------------------------------
+type instance RequestParam 'TextDocumentSignatureHelpK = TextDocumentPositionParams
+type instance ResResult    'TextDocumentSignatureHelpK = SignatureHelp
+type instance ResError     'TextDocumentSignatureHelpK = Value
+
+type SignatureHelp = Value
+  -- HIEが対応していないので後回しで良い
+
+-- }}}
+
+-- TextDocumentDefinition {{{
+----------------------------------------
+type instance RequestParam 'TextDocumentDefinitionK = TextDocumentPositionParams
+type instance ResResult    'TextDocumentDefinitionK = Nullable [Location]
+type instance ResError     'TextDocumentDefinitionK = String
+
+-- }}}
+
 -- TextDocumentReferences {{{
 ----------------------------------------
 type instance RequestParam 'TextDocumentReferencesK = ReferenceParams
@@ -822,39 +842,22 @@ type ReferenceContext = Record
 
 -- }}}
 
--- TextDocumentCodeAction {{{
+-- TextDocumentDocumentHighlight {{{
 ----------------------------------------
-
-type instance RequestParam 'TextDocumentCodeActionK = CodeActionParams
-type instance ResResult 'TextDocumentCodeActionK = Nullable [Command :|: CodeAction]
-type instance ResError  'TextDocumentCodeActionK = CodeActionParams
-
-type CodeActionParams = Record
-  '[ "textDocument" >: TextDocumentIdentifier
-   , "range"        >: Range
-   , "context"      >: CodeActionContext
+type instance RequestParam 'TextDocumentDocumentHighlightK = TextDocumentPositionParams
+type instance ResResult    'TextDocumentDocumentHighlightK = Nullable [DocumentHighlight]
+type instance ResError     'TextDocumentDocumentHighlightK = Value
+type DocumentHighlight = Record
+  '[ "range" >: Range
+   , "kind"  >: Option DocumentHighlightKind
    ]
-type CodeActionContext = Record
-  '[ "diagnostics" >: [Diagnostic]
-   , "only"        >: Option [CodeActionKind]
-   ]
-
-type CodeActionKind = Enum'
-  '[ "quickfix"
-   , "refactor"
-   , "refactor.extract"
-   , "refactor.inline"
-   , "refactor.rewrite"
-   , "source"
-   ]
-
-type CodeAction = Record
-  '[ "title"       >: String
-   , "kind"        >: Option CodeActionKind
-   , "diagnostics" >: Option [Diagnostic]
-   , "edit"        >: Option WorkspaceEdit
-   , "command"     >: Command
-   ]
+type DocumentHighlightKind = EnumAs "DocumentHighlightKind" DocumentHighlightKindF
+type DocumentHighlightKindF = '[ "text", "read", "write" ]
+instance EnumAsDef "DocumentHighlightKind" DocumentHighlightKindF where
+  enumAsDict _ = Const @_ @"text"  (Number 1)
+              <! Const @_ @"read"  (Number 2)
+              <! Const @_ @"write" (Number 3)
+              <! nil
 
 -- }}}
 
@@ -949,13 +952,118 @@ instance FOField' x => FOField x
 ----------------------------------------
 type instance RequestParam 'TextDocumentRangeFormattingK = Record
   '[ "textDocument" >: TextDocumentIdentifier
-   , "range" >: Range
-   , "options" >: FormattingOptions
+   , "range"        >: Range
+   , "options"      >: FormattingOptions
    ]
 type instance ResResult    'TextDocumentRangeFormattingK = Nullable [TextEdit]
 type instance ResError     'TextDocumentRangeFormattingK = String
 
 --}}}
+
+-- TextDocumentOnTypeFormatting {{{
+----------------------------------------
+type instance RequestParam 'TextDocumentOnTypeFormattingK = Record
+  '[ "textDocument" >: TextDocumentIdentifier
+   , "position"     >: Position
+   , "ch"           >: String
+   , "options"      >: FormattingOptions
+   ]
+type instance ResResult    'TextDocumentOnTypeFormattingK = Nullable [TextEdit]
+type instance ResError     'TextDocumentOnTypeFormattingK = Value
+
+--}}}
+
+-- TextDocumentCodeAction {{{
+----------------------------------------
+
+type instance RequestParam 'TextDocumentCodeActionK = CodeActionParams
+type instance ResResult 'TextDocumentCodeActionK = Nullable [Command :|: CodeAction]
+type instance ResError  'TextDocumentCodeActionK = Value
+
+type CodeActionParams = Record
+  '[ "textDocument" >: TextDocumentIdentifier
+   , "range"        >: Range
+   , "context"      >: CodeActionContext
+   ]
+type CodeActionContext = Record
+  '[ "diagnostics" >: [Diagnostic]
+   , "only"        >: Option [CodeActionKind]
+   ]
+
+type CodeActionKind = Enum'
+  '[ "quickfix"
+   , "refactor"
+   , "refactor.extract"
+   , "refactor.inline"
+   , "refactor.rewrite"
+   , "source"
+   ]
+
+type CodeAction = Record
+  '[ "title"       >: String
+   , "kind"        >: Option CodeActionKind
+   , "diagnostics" >: Option [Diagnostic]
+   , "edit"        >: Option WorkspaceEdit
+   , "command"     >: Command
+   ]
+
+-- }}}
+
+-- TextDocumentCodeLens {{{
+----------------------------------------
+
+type instance RequestParam 'TextDocumentCodeLensK = Record
+  '[ "textDocument" >: TextDocumentIdentifier
+   ]
+type instance ResResult    'TextDocumentCodeLensK = Nullable [CodeLens]
+type instance ResError     'TextDocumentCodeLensK = Value
+
+type CodeLens = Record
+  '[ "range"   >: Range
+   , "command" >: Option Command
+   , "data"    >: Option Value
+   ]
+
+-- }}}
+
+-- CodeLensResolve {{{
+----------------------------------------
+type instance RequestParam 'CodeLensResolveK = CodeLens
+type instance ResResult    'CodeLensResolveK = CodeLens
+type instance ResError     'CodeLensResolveK = Value
+
+-- }}}
+
+-- TextDocumentDocumentLink {{{
+type instance RequestParam 'TextDocumentDocumentLinkK = Record
+  '[ "textDocument" >: TextDocumentIdentifier
+   ]
+type instance ResResult    'TextDocumentDocumentLinkK = Nullable DocumentLink
+type instance ResError     'TextDocumentDocumentLinkK = Value
+
+type DocumentLink = Record
+  '[ "range"  >: Range
+   , "target" >: Option Uri
+   , "data"   >: Option Value
+   ]
+-- }}}
+
+-- DocumentLinkResolve {{{
+type instance RequestParam 'DocumentLinkResolveK = DocumentLink
+type instance ResResult    'DocumentLinkResolveK = DocumentLink
+type instance ResError     'DocumentLinkResolveK = Value
+-- }}}
+
+-- TextDocumentRename {{{
+type instance RequestParam 'TextDocumentRenameK = Record
+  '[ "textDocument" >: TextDocumentIdentifier
+   , "position"     >: Position
+   , "newName"      >: String
+   ]
+type instance ResResult    'TextDocumentRenameK = Nullable WorkspaceEdit
+type instance ResError     'TextDocumentRenameK = Value
+
+-- }}}
 
 -- Misc {{{
 ----------------------------------------
@@ -972,33 +1080,49 @@ type instance ResError     ('ClientRequestMiscK s) = Value
 -- Client Notification --{{{
 -------------------------------------------------------------------------------
 
--- Initialized
+-- Initialized {{{
 type instance NotificationParam 'InitializedK = Record '[]
+-- }}}
 
-
--- Exit
+-- Exit{{{
 ----------------------------------------
-data Void
-instance Eq       Void where _ == _      = True
-instance Show     Void where show        = \case{}
-instance ToJSON   Void where toJSON      = \case{}
-instance FromJSON Void where parseJSON _ = mempty
-
 type instance NotificationParam 'ExitK = Option Void
+-- }}}
 
--- TextDocumentDidOpen
+-- ClientCancel {{{
+----------------------------------------
+type instance NotificationParam 'ClientCancelK = Record '[ "id" >: ID ]
+
+-- }}}
+
+-- WorkspaceDidChangeConfiguration {{{
+type instance NotificationParam 'WorkspaceDidChangeConfigurationK = Value
+-- }}}
+
+-- WorkspaceDidChangeWatchedFiles {{{
+type instance NotificationParam 'WorkspaceDidChangeWatchedFilesK = [FileEvent]
+type FileEvent = Record
+  '[ "uri"  >: Uri
+   , "type" >: FileChangeType
+   ]
+type FileChangeType = EnumAs "FileChangeType" FileChangeTypeF
+type FileChangeTypeF = '[ "created", "changed", "deleted" ]
+instance EnumAsDef "FileChangeType" FileChangeTypeF where
+  enumAsDict _ = Const @_ @"created" (Number 1)
+              <! Const @_ @"changed" (Number 2)
+              <! Const @_ @"deleted" (Number 3)
+              <! nil
+
+-- }}}
+
+-- TextDocumentDidOpen {{{
 ----------------------------------------
 type instance NotificationParam 'TextDocumentDidOpenK = Record
   '[ "textDocument" >: TextDocumentItem
    ]
+-- }}}
 
--- TextDocumentDidClose
-----------------------------------------
-type instance NotificationParam 'TextDocumentDidCloseK = Record
-  '[ "textDocument" >: TextDocumentIdentifier
-   ]
-
--- TextDocumentDidChange
+-- TextDocumentDidChange {{{
 ----------------------------------------
 type instance NotificationParam 'TextDocumentDidChangeK = Record
   '[ "textDocument"   >: VersionedTextDocmentIdentifier
@@ -1010,17 +1134,113 @@ type TextDocumentContentChangeEvent = Record
    , "text"        >: Text
    ]
   -- None,None,FullTextにすればよい
+-- }}}
 
--- TextDocumentDidSave
+-- TextDocumentWillSave {{{
+type instance NotificationParam 'TextDocumentWillSaveK = Record
+  '[ "textDocument" >: TextDocumentIdentifier
+   , "reason"       >: TextDocumentSaveReason
+   ]
+-- }}}
+
+-- TextDocumentDidSave {{{
 ----------------------------------------
 type instance NotificationParam 'TextDocumentDidSaveK = Record
   '[ "textDocument" >: TextDocumentIdentifier
    , "text"         >: Option Text
    ]
+-- }}}
 
--- Misc
+-- TextDocumentDidClose {{{
+----------------------------------------
+type instance NotificationParam 'TextDocumentDidCloseK = Record
+  '[ "textDocument" >: TextDocumentIdentifier
+   ]
+-- }}}
+
+-- Misc {{{
 ----------------------------------------
 type instance NotificationParam ('ClientNotificationMiscK s) = Value
+-- }}}
+
+--}}}
+
+-------------------------------------------------------------------------------
+-- Server Request --{{{
+-------------------------------------------------------------------------------
+
+-- WindowShowMessageRequest {{{
+type instance NotificationParam 'WindowShowMessageRequestK = Record
+  '[ "type" >: MessageType
+   , "message" >: Text
+   , "actions" >: Option [MessageActionItem]
+   ]
+
+type MessageActionItem = Record
+  '[ "title" >: String ]
+-- }}}
+
+-- ClientRegisterCapability{{{
+----------------------------------------
+type instance RequestParam 'ClientRegisterCapabilityK = Record
+  '[ "registrationParams" >: [Registration]
+   ]
+type instance ResResult 'ClientRegisterCapabilityK = Void
+type instance ResError  'ClientRegisterCapabilityK = Value
+
+type Registration = Record
+  '[ "id" >: String
+   , "method" >: String
+   , "registerOptions" >: Option Value
+   ]
+-- }}}
+
+-- WorkspaceApplyEdit {{{
+----------------------------------------
+type instance RequestParam 'WorkspaceApplyEditK = ApplyWorkspaceEditParams
+type instance ResResult    'WorkspaceApplyEditK = ApplyWorkspaceEditResponse
+type instance ResError     'WorkspaceApplyEditK = String
+
+type ApplyWorkspaceEditParams = Record
+  '[ "label" >: Option String
+   , "edit"  >: WorkspaceEdit
+   ]
+type ApplyWorkspaceEditResponse = Record
+  '[ "applied" >: Bool
+   ]
+--}}}
+
+-- WindowShowMessageRequest {{{
+----------------------------------------
+type instance RequestParam 'WindowShowMessageRequestK = Record
+  '[ "type"    >: MessageType
+   , "message" >: Text
+   , "actions" >: Option [MessageActionItem]
+   ]
+type instance ResResult 'WindowShowMessageRequestK = Nullable MessageActionItem
+type instance ResError  'WindowShowMessageRequestK = Value
+--}}}
+
+-- ClientUnregisterCapability {{{
+----------------------------------------
+type instance RequestParam 'ClientUnregisterCapabilityK = Record
+  '[ "registrationParams" >: [Unregistration]
+   ]
+type instance ResResult 'ClientUnregisterCapabilityK = Void
+type instance ResError  'ClientUnregisterCapabilityK = Value
+
+type Unregistration = Record
+  '[ "id" >: String
+   , "method" >: String
+   ]
+--}}}
+
+-- Misc {{{
+----------------------------------------
+type instance RequestParam ('ServerRequestMiscK s) = Value
+type instance ResResult    ('ServerRequestMiscK s) = Value
+type instance ResError     ('ServerRequestMiscK s) = Value
+--}}}
 
 --}}}
 
@@ -1028,14 +1248,15 @@ type instance NotificationParam ('ClientNotificationMiscK s) = Value
 -- Server Notification --{{{
 -------------------------------------------------------------------------------
 
--- TextDocumentPublishDiagnostics
+-- TextDocumentPublishDiagnostics {{{
 ----------------------------------------
 type instance NotificationParam 'TextDocumentPublishDiagnosticsK = Record
   '[ "uri"         >: Uri
    , "diagnostics" >: [Diagnostic]
    ]
+--}}}
 
--- WindowShowMessage
+-- WindowShowMessage {{{
 ----------------------------------------
 type instance NotificationParam 'WindowShowMessageK = Record
   '[ "type"    >: MessageType
@@ -1070,87 +1291,29 @@ instance EnumAsDef "MessageType" MessageTypeF where
 --    _ -> mzero
 --  parseJSON _ = mzero
 -- }}}
+--}}}
 
--- WindowLogMessage
+-- WindowLogMessage {{{
 ----------------------------------------
 type instance NotificationParam 'WindowLogMessageK = Record
   '[ "type"    >: MessageType
    , "message" >: Text
    ]
-
--- TelemetryEvent
-----------------------------------------
-type instance NotificationParam 'TelemetryEventK = Value
-
--- Misc
-----------------------------------------
-type instance NotificationParam ('ServerNotificationMiscK s) = Value
-
 --}}}
 
--------------------------------------------------------------------------------
--- Server Request --{{{
--------------------------------------------------------------------------------
+-- TelemetryEvent {{{
+---------------------------------------
+type instance NotificationParam 'TelemetryEventK = Value
+--}}}
 
--- WorkspaceApplyEdit
+-- Cancel {{{
+type instance NotificationParam 'ServerCancelK = Record '[ "id" >: ID ]
+-- }}}
+
+-- Misc {{{
 ----------------------------------------
-type instance RequestParam 'WorkspaceApplyEditK = ApplyWorkspaceEditParams
-type instance ResResult    'WorkspaceApplyEditK = ApplyWorkspaceEditResponse
-type instance ResError     'WorkspaceApplyEditK = String
-
-type ApplyWorkspaceEditParams = Record
-  '[ "label" >: Option String
-   , "edit"  >: WorkspaceEdit
-   ]
-type ApplyWorkspaceEditResponse = Record
-  '[ "applied" >: Bool
-   ]
-
--- WindowShowMessageRequest
-----------------------------------------
-type instance RequestParam 'WindowShowMessageRequestK = Record
-  '[ "type"    >: MessageType
-   , "message" >: Text
-   , "actions" >: Option [MessageActionItem]
-   ]
-type instance ResResult 'WindowShowMessageRequestK = Nullable MessageActionItem
-type instance ResError  'WindowShowMessageRequestK = Value -- TODO
-
-type MessageActionItem = Record
-  '[ "title" >: String ]
-
--- ClientRegisterCapability
-----------------------------------------
-type instance RequestParam 'ClientRegisterCapabilityK = Record
-  '[ "registrationParams" >: [Registration]
-   ]
-type instance ResResult 'ClientRegisterCapabilityK = Void
-type instance ResError  'ClientRegisterCapabilityK = Value -- TODO
-
-type Registration = Record
-  '[ "id" >: String
-   , "method" >: String
-   , "registerOptions" >: Option Value
-   ]
-
--- ClientUnregisterCapability
-----------------------------------------
-type instance RequestParam 'ClientUnregisterCapabilityK = Record
-  '[ "registrationParams" >: [Unregistration]
-   ]
-type instance ResResult 'ClientUnregisterCapabilityK = Void
-type instance ResError  'ClientUnregisterCapabilityK = Value -- TODO
-
-type Unregistration = Record
-  '[ "id" >: String
-   , "method" >: String
-   ]
-
--- Misc
-----------------------------------------
-type instance RequestParam ('ServerRequestMiscK s) = Value
-type instance ResResult    ('ServerRequestMiscK s) = Value
-type instance ResError     ('ServerRequestMiscK s) = Value
+type instance NotificationParam ('ServerNotificationMiscK s) = Value
+--}}}
 
 --}}}
 

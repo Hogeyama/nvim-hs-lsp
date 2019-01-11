@@ -1,16 +1,18 @@
 
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE DeriveGeneric              #-}
+{-# LANGUAGE EmptyCase                  #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE UndecidableInstances       #-}
 
-{-# LANGUAGE AllowAmbiguousTypes  #-}
+{-# LANGUAGE AllowAmbiguousTypes        #-}
 
 {-# OPTIONS_GHC -Wall                   #-}
 {-# OPTIONS_GHC -Wno-orphans            #-}
 
 module Neovim.LSP.Protocol.Type.Record
   ( Option(..)
+  , Void
   , (:|:)(..), pattern L, pattern R
   , Nullable
   , FieldJSON
@@ -31,7 +33,7 @@ module Neovim.LSP.Protocol.Type.Record
   , caseOfEnumAs
   ) where
 
-import           RIO
+import           RIO                     hiding (Void)
 import qualified RIO.HashMap             as HM
 import qualified RIO.Map                 as M
 
@@ -39,8 +41,8 @@ import           Data.Aeson              hiding (KeyValue, Object)
 import qualified Data.Aeson.Types        as J
 import           Data.Extensible.Rexport
 import           GHC.Generics            (Generic, Generic1)
-import           GHC.TypeLits            (Symbol, KnownSymbol, symbolVal)
 import           GHC.OverloadedLabels
+import           GHC.TypeLits            (KnownSymbol, Symbol, symbolVal)
 import           Unsafe.Coerce           (unsafeCoerce)
 
 import           Neovim                  (NvimObject (..))
@@ -141,6 +143,12 @@ instance (FromJSON a, FromJSON b) => FromJSON (a :|: b) where
 instance (ToJSON a, ToJSON b) => ToJSON (a :|: b) where
   toJSON (L o) = toJSON o
   toJSON (R o) = toJSON o
+
+data Void
+instance Eq       Void where _ == _      = True
+instance Show     Void where show        = \case{}
+instance ToJSON   Void where toJSON      = \case{}
+instance FromJSON Void where parseJSON _ = mempty
 
 -------------------------------------------------------------------------------
 -- JSON
