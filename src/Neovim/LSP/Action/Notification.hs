@@ -95,5 +95,5 @@ didChangeBuffer b = do
 
 resetDiagnostics :: HasContext env => Uri -> Neovim env ()
 resetDiagnostics uri =
-  modifyContext $ over (#otherState.diagnosticsMap) $ M.delete uri
+    modifyContext $ over #diagnosticsMap $ M.delete uri
 

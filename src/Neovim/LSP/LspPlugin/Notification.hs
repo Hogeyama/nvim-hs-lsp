@@ -42,12 +42,12 @@ showDiagnotics :: ServerNotification 'TextDocumentPublishDiagnosticsK
 showDiagnotics (Notification noti) = do
     let uri         = noti^. #params.__#uri
         diagnostics = noti^. #params.__#diagnostics
-    modifyContext $ #otherState.diagnosticsMap %~ M.insert uri diagnostics
+    modifyContext $ #diagnosticsMap %~ M.insert uri diagnostics
     -- 今開いてるBufferは優先的に表示する
     -- curiとuriは必ずしも一致しないことに注意
     --    e.g. hieではapp/Main.hsを編集するとsrc/Lib.hsのdiagも送られてくることがある
     whenM (readContext . view $ #lspConfig.autoLoadQuickfix) $ do
-      allDiagnostics <- readContext . view $ #otherState.diagnosticsMap
+      allDiagnostics <- readContext . view $ #diagnosticsMap
       curi <- getBufUri =<< nvim_get_current_buf'
       replaceQfList $ diagnosticsToQfItems curi allDiagnostics
 

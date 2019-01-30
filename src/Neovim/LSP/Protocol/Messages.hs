@@ -71,7 +71,7 @@ initializeParam processId rootUri
     workspaceOption :: WorkspaceClientCapabilities
     workspaceOption -- {{{
       =  Record
-      $ #applyEdit @= Some True
+      $  #applyEdit @= Some True
       <! #workspaceEdit @= Some Record {
               fields = #documentChanges @= Some False <! nil
             }
@@ -140,7 +140,6 @@ initializeParam processId rootUri
       <! nil
     -- }}}
     noDyn = Some Record { fields = #dynamicRegistration @= Some False <! nil }
-
 
 -------------------------------------------------------------------------------
 -- Exit

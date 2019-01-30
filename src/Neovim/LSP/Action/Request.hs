@@ -344,7 +344,7 @@ codeAction :: (HasOutChan env, HasContext env)
 codeAction b (start,end) callback = do
   uri <- getBufUri b
   allDiagnostics <- readContext $
-    views (#otherState.diagnosticsMap) (fromMaybe [] . M.lookup uri)
+    views #diagnosticsMap (fromMaybe [] . M.lookup uri)
   let params = Record
              $ #textDocument @= textDocumentIdentifier uri
             <! #range        @= Record { fields =

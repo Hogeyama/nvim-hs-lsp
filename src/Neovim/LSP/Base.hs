@@ -7,32 +7,23 @@
 module Neovim.LSP.Base where
 
 import           RIO
-import qualified RIO.ByteString           as B
 import qualified RIO.HashMap              as HM
-import           RIO.List                 (isPrefixOf)
 import           RIO.List.Partial         (init)
 import qualified RIO.Map                  as M
-import           RIO.Partial              (read)
-import qualified RIO.Text                 as T
 
 import           Control.Lens             (makeLenses, views)
 import           Control.Lens.Operators
-import           Control.Monad            (forM, forM_, forever, (>=>))
+import           Control.Monad            (forM, forM_, forever)
 import           Control.Monad.IO.Class   (MonadIO, liftIO)
 import qualified Data.Aeson               as J
 import           Data.Constraint          (withDict)
 import           Data.Extensible.Rexport
-import           Data.Maybe               (isJust)
 import           Data.Singletons          (Sing, SomeSing (..), fromSing,
                                            singByProxy, toSing)
 import           GHC.Stack
 import           GHC.TypeLits             (Symbol)
-import           System.Exit              (exitSuccess)
-import           System.IO                (IOMode (..), hGetLine, openFile)
-import           System.IO.Error          (isEOFError)
-import           System.Process           (CreateProcess (..), ProcessHandle,
-                                           StdStream (..), createProcess, proc,
-                                           terminateProcess)
+import           System.IO                (openFile)
+import           System.Process           (ProcessHandle, terminateProcess)
 
 import           Neovim                   hiding (Plugin, (<>))
 import qualified Neovim.Context.Internal  as Internal
@@ -51,7 +42,6 @@ type LspEnv = OrigRecord
    , "otherHandles"     >: TVar OtherHandles
    , "inChan"           >: TChan ByteString
    , "outChan"          >: TChan ByteString
-   , "openedFiles"      >: TVar (Map Uri Version)
    , "context"          >: TVar Context
    , "logFunc"          >: LogFunc
    , "logFileHandle"    >: Handle
@@ -67,7 +57,6 @@ initialEnvM = do
            <! #otherHandles     <@=> newTVarIO (OtherHandles [])
            <! #inChan           <@=> newTChanIO
            <! #outChan          <@=> newTChanIO
-           <! #openedFiles      <@=> newTVarIO M.empty
            <! #context          <@=> newTVarIO initialContext
            <! #logFunc          <@=> return lf
            <! #logFileHandle    <@=> return h
@@ -91,13 +80,14 @@ type PluginEnv = OrigRecord
 
 -- | Context shared with main thread and all plugins.
 type Context = OrigRecord
-  '[ "idMethodMap"   >: Map ID ClientRequestMethod
-   , "uniqueID"      >: Int
-   , "uniqueVersion" >: Version
-   , "versionMap"    >: Map Uri Version
-   , "callbacks"     >: Map ID Callback
-   , "lspConfig"     >: LspConfig
-   , "otherState"    >: OtherState
+  '[ "idMethodMap"    >: Map ID ClientRequestMethod
+   , "uniqueID"       >: Int
+   , "uniqueVersion"  >: Version
+   , "versionMap"     >: Map Uri Version
+   , "callbacks"      >: Map ID Callback
+   , "lspConfig"      >: LspConfig
+   , "diagnosticsMap" >: Map Uri [Diagnostic]
+   , "openedFiles"    >: Map Uri Version
    ]
 
 data Callback where
@@ -106,24 +96,21 @@ type CallbackOf m a = ServerResponse m -> PluginAction a
 
 initialContext :: Context
 initialContext =
-     #idMethodMap   @= M.empty
-  <! #uniqueID      @= 0
-  <! #uniqueVersion @= 0
-  <! #versionMap    @= M.empty
-  <! #callbacks     @= M.empty
-  <! #lspConfig     @= LspConfig
-                     { _autoLoadQuickfix = False
-                     }
-  <! #otherState    @= OtherState
-                     { _diagnosticsMap = M.empty
-                     }
+     #idMethodMap    @= M.empty
+  <! #uniqueID       @= 0
+  <! #uniqueVersion  @= 0
+  <! #versionMap     @= M.empty
+  <! #callbacks      @= M.empty
+  <! #lspConfig      @= defaultLspConfig
+  <! #diagnosticsMap @= M.empty
+  <! #openedFiles    @= M.empty
   <! nil
 
 data ServerHandles = ServerHandles
   { serverIn  :: Handle
   , serverOut :: Handle
   , serverErr :: Handle
-  , serverPH  :: ProcessHandle
+  , serverProcHandle  :: ProcessHandle
   }
 
 -- sender, receiver, watcher of serverErr, dispatcher, plugins
@@ -137,7 +124,17 @@ data OtherState = OtherState
 
 data LspConfig = LspConfig
   { _autoLoadQuickfix :: Bool
+  , _settingsPath :: Maybe FilePath
+  , _lspCommands :: Map Language [String]
   }
+defaultLspConfig :: LspConfig
+defaultLspConfig =  LspConfig
+  { _autoLoadQuickfix = False
+  , _settingsPath = Nothing
+  , _lspCommands = M.empty
+  }
+
+type Language = Text
 
 -------------------------------------------------------------------------------
 -- Plugin
@@ -165,6 +162,7 @@ data InMessageMethod
   = InReq  ServerRequestMethod
   | InNoti ServerNotificationMethod
   | InResp ClientRequestMethod
+  deriving (Show)
 
 methodOf :: InMessage -> InMessageMethod
 methodOf (SomeNoti noti) = InNoti $ fromSing $ singByProxy noti
@@ -248,144 +246,21 @@ infix 4 .==
 infix 4 %==
 
 -------------------------------------------------------------------------------
--- Initialize
--------------------------------------------------------------------------------
-
-initializeLsp :: FilePath -> String -> [String] -> NeovimLsp ()
-initializeLsp cwd cmd args = do
-    (Just hin, Just hout, Just herr, ph) <-
-        liftIO $ createProcess $ (proc cmd args)
-          { cwd     = Just cwd
-          , std_in  = CreatePipe
-          , std_out = CreatePipe
-          , std_err = CreatePipe
-          }
-    #serverHandles .== Just ServerHandles
-          { serverIn  = hin
-          , serverOut = hout
-          , serverErr = herr
-          , serverPH  = ph
-          }
-    liftIO $ do
-      hSetBuffering hin  NoBuffering
-      hSetBuffering hout NoBuffering
-      hSetBuffering herr NoBuffering
-    inCh <- view #inChan
-    outCh <- view #outChan
-    registerAsyncHandle "sender" =<< async (sender hin outCh)
-    registerAsyncHandle "receiver" =<< async (receiver hout inCh)
-    registerAsyncHandle "herr-watcher" =<< async (watcher herr)
-    loadLspConfig
-    logInfo $ fromString $ unlines
-        [ ""
-        , "＿人人人人人人＿"
-        , "＞　__init__　＜"
-        , "￣Y^Y^Y^Y^Y^Y^Y￣"
-        ]
-  where
-    watcher herr = forever $
-        do s <- B.hGetLine herr
-           showAndLog $ "STDERR: " <> displayBytesUtf8 s
-      `catchIO` \e ->
-        if isEOFError e
-        then throwIO e
-        else showAndLog $ "STDERR: Exception: " <> displayShow e
-
-    showAndLog msg = do
-        logError msg
-        vim_report_error' $ T.unpack $ utf8BuilderToText msg
-        -- なんでRIOには'Utf8Builder -> String'の関数がないんだ
-        -- rlsがうるさいのでreportやめます
-
-loadLspConfig :: HasContext env => Neovim env ()
-loadLspConfig = do
-    before <- readContext $ view #lspConfig
-    after <- updateLspConfig before
-    modifyContext $ #lspConfig .~ after
-
-updateLspConfig :: LspConfig -> Neovim env LspConfig
-updateLspConfig =
-    update "NvimHsLsp_autoLoadQuickfix" (\o -> autoLoadQuickfix .~ toBool o) >=>
-    return
-  where
-    update var f before = vim_get_var var >>= \case
-      Right o -> return $ f o before
-      Left _ -> return before
-
-    toBool (fromObject @Bool -> Right b) = b
-    toBool (fromObject @Int  -> Right 0) = False
-    toBool _                             = True
-
-isInitialized :: NeovimLsp Bool
-isInitialized = usesTV #serverHandles isJust
-
-uninitializedError :: a
-uninitializedError = error "not initialized (TODO: fabulous message)"
-
-registerAsyncHandle :: String -> Async () -> NeovimLsp ()
-registerAsyncHandle name a =
-    #otherHandles %== (\(OtherHandles hs) -> OtherHandles ((name,a):hs))
-
--------------------------------------------------------------------------------
 -- Finalize
 -------------------------------------------------------------------------------
 
-finalizeLSP :: NeovimLsp ()
-finalizeLSP = do
+finalize :: NeovimLsp ()
+finalize = do
     mapM_ (cancel.snd) =<< usesTV #otherHandles unOtherHandles
     useTV #serverHandles >>= \case
       Nothing -> return ()
-      Just sh -> liftIO $ terminateProcess (serverPH sh)
+      Just sh -> liftIO $ terminateProcess (serverProcHandle sh)
     liftIO =<< view #logFuncFinalizer
     hClose =<< view #logFileHandle
 
 -------------------------------------------------------------------------------
 -- Communication with Server
 -------------------------------------------------------------------------------
-
-sender :: (MonadUnliftIO m, MonadReader env m, HasLogFunc env)
-       => Handle -> TChan ByteString -> m ()
-sender serverIn chan = forever $ loggingErrorDeep $ do
-    bs <- atomically $ readTChan chan
-    hPutBuilder serverIn $ getUtf8Builder $ mconcat
-        [ "Content-Length: "
-        , displayShow $ B.length bs
-        , "\r\n\r\n"
-        , displayBytesUtf8 bs
-        ]
-    logDebug $ "=> " <> displayBytesUtf8 bs
-
-
-receiver :: (MonadUnliftIO m, MonadReader env m, HasLogFunc env)
-         => Handle -> TChan ByteString -> m ()
-receiver serverOut chan = forever $ loggingErrorDeep $ do
-    v <- receive serverOut
-    atomically $ writeTChan chan v
-  where
-    receive h = do
-        len <- liftIO $ contentLength <$> readHeader h
-        content <- B.hGet h len
-        logDebug $ "<= " <> displayBytesUtf8 content
-        return content
-
-    readHeader h = go Header { contentLength = error "broken header"
-                             , contentType   = Nothing }
-      where
-        go header = do
-          x <- hGetLine h
-          if | "Content-Length: " `isPrefixOf` x ->
-                  go $ header { contentLength = read (drop 16 x) }
-             | "Content-Type: " `isPrefixOf` x ->
-                  go $ header { contentType = Just (drop 14 x) }
-             | "\r" == x          -> return header
-             | "ExitSuccess" == x -> exitSuccess -- TODO hieだけだよね，これ
-             | otherwise          -> error $ "unknown input: " ++ show x
-
-data Header = Header
-  { contentLength :: ~Int -- lazy initialization
-  , contentType   :: Maybe String
-  } deriving (Eq, Show)
-
 
 -------------------------------------------------------------------------------
 -- Access Context
@@ -442,11 +317,11 @@ registerCallback id' callback = modifyContext (#callbacks %~ M.insert id' callba
 
 getCallback :: (MonadReader env m, MonadIO m, HasContext env)
             => ID -> m (Maybe Callback)
-getCallback id' = readContext (views #callbacks (M.lookup id'))
+getCallback id' = readContext $ views #callbacks (M.lookup id')
 
 removeCallback :: (MonadReader env m, MonadIO m, HasContext env)
                => ID -> m ()
-removeCallback id' = modifyContext (#callbacks %~ M.delete id')
+removeCallback id' = modifyContext $ #callbacks %~ M.delete id'
 
 -------------------------------------------------------------------------------
 -- Dispatcher
@@ -481,12 +356,18 @@ dispatch hs = do
       let Just !v = J.decode (fromStrictBytes rawInput)
       idMethodMap <- view #idMethodMap <$> readTVarIO ctx
       case parseMessage idMethodMap v of
-        Right !msg -> forM_ inChs $ atomically . flip writeTChan msg
+        Right !msg -> do
+            logInfo $ displayShow (methodOf msg)
+            forM_ inChs $ atomically . flip writeTChan msg
         Left e -> logError $ fromString $ init $ unlines
             [ "dispatcher: could not parse input."
             , "error: " ++ e
             ]
     registerAsyncHandle "dispatcher" dispatcher
+
+registerAsyncHandle :: String -> Async () -> NeovimLsp ()
+registerAsyncHandle name a =
+    #otherHandles %== (\(OtherHandles hs) -> OtherHandles ((name,a):hs))
 
 -------------------------------------------------------------------------------
 -- Util

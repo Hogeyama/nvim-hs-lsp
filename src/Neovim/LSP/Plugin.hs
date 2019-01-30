@@ -5,15 +5,28 @@ module Neovim.LSP.Plugin where
 
 import           RIO
 import           RIO.Char                          (isAlphaNum)
+import qualified RIO.ByteString           as B
 import           RIO.List                          (isPrefixOf, partition)
 import qualified RIO.Map                           as M
+import           RIO.Partial                       (read)
 
-import           Control.Monad.Extra               (ifM, whenJust)
+import           Control.Lens                      (views)
+import           Control.Lens.Operators
+import           Control.Monad.Extra               (ifM, whenJust, whenJustM)
 import           Data.Aeson                        hiding (Object)
+import qualified Data.ByteString.Char8             as BC
 import           Data.Extensible
-import qualified Data.ByteString.Char8             as B
+import           Data.Maybe                        (isJust)
+import           System.Exit                       (exitSuccess)
+import           System.IO                         (hGetLine)
+import           System.IO.Error                   (isEOFError)
+import           System.Process                    (CreateProcess (..),
+                                                    StdStream (..),
+                                                    createProcess, proc,
+                                                    terminateProcess,
+                                                    waitForProcess)
 
-import           Neovim                            hiding (whenM, unlessM, (<>))
+import           Neovim                            hiding (unlessM, whenM, (<>))
 import           Neovim.LSP.Action.Notification
 import           Neovim.LSP.Action.Request
 import           Neovim.LSP.Base
@@ -23,6 +36,151 @@ import           Neovim.LSP.LspPlugin.Request      (requestHandler)
 import           Neovim.LSP.Protocol.Messages
 import           Neovim.LSP.Protocol.Type
 import           Neovim.LSP.Util
+
+-------------------------------------------------------------------------------
+-- Start Server
+-------------------------------------------------------------------------------
+
+startServer :: FilePath -> String -> [String] -> NeovimLsp ()
+startServer cwd cmd args = do
+    -- spawn
+    --------
+    (Just hin, Just hout, Just herr, ph) <-
+        liftIO $ createProcess $ (proc cmd args)
+          { cwd = Just cwd
+          , std_in = CreatePipe
+          , std_out = CreatePipe
+          , std_err = CreatePipe
+          }
+    #serverHandles .== Just ServerHandles
+          { serverIn = hin
+          , serverOut = hout
+          , serverErr = herr
+          , serverProcHandle = ph
+          }
+    liftIO $ do
+      hSetBuffering hin  NoBuffering
+      hSetBuffering hout NoBuffering
+      hSetBuffering herr NoBuffering
+
+    -- create connection
+    --------------------
+    inCh <- view #inChan
+    outCh <- view #outChan
+    registerAsyncHandle "sender" =<< async (sender hin outCh)
+    registerAsyncHandle "receiver" =<< async (receiver hout inCh)
+    registerAsyncHandle "herr-watcher" =<< async (watcher herr)
+
+    -- settings
+    -----------
+    cfg <- loadLspConfig
+    modifyContext $ #lspConfig .~ cfg
+    dispatch [notificationHandler, requestHandler, callbackHandler]
+
+    logInfo $ fromString $ unlines
+        [ ""
+        , "＿人人人人人人＿"
+        , "＞　__init__　＜"
+        , "￣Y^Y^Y^Y^Y^Y^Y￣"
+        ]
+    -- communication
+    ----------------
+    waitCallback $ pushRequest @'InitializeK
+        (initializeParam Nothing (Just (filePathToUri cwd)))
+        nopCallback
+    pushNotification @'InitializedK (Record nil)
+    whenJustM getWorkspaceSettings $ \v -> do
+      let param = Record (#settings @= v <! nil)
+      pushNotification @'WorkspaceDidChangeConfigurationK param
+  where
+    loadLspConfig :: HasContext env => Neovim env LspConfig
+    loadLspConfig = updateLspConfig defaultLspConfig
+      where
+        updateLspConfig =
+            update' "NvimHsLsp_autoLoadQuickfix" autoLoadQuickfix >=>
+            update' "NvimHsLsp_settingsPath" settingsPath >=>
+            update' "NvimHsLsp_serverCommands" lspCommands >=>
+            return
+          where
+            update' var field before = vim_get_var var >>= \case
+              Right o -> case fromObject o of
+                Right new -> return $ before & field .~ new
+                Left{} -> do
+                  nvimEchoe $ "invalid config: " <> var
+                  return before
+              _ -> return before
+
+    getWorkspaceSettings :: HasContext env => Neovim env (Maybe Value)
+    getWorkspaceSettings = readContext (view (#lspConfig . settingsPath)) >>= \case
+        Just file -> liftIO $ decodeFileStrict' file
+        Nothing -> return Nothing
+
+    watcher :: (MonadUnliftIO m, MonadReader env m, HasLogFunc env)
+            => Handle -> m ()
+    watcher herr =
+        do s <- B.hGetLine herr
+           showAndLog $ "STDERR: " <> displayBytesUtf8 s
+      `catchIO` \e ->
+        if isEOFError e
+        then throwIO e
+        else showAndLog $ "STDERR: Exception: " <> displayShow e
+      where
+        showAndLog msg = do
+            logError msg
+            --vim_report_error' $ T.unpack $ utf8BuilderToText msg
+            -- なんでRIOには'Utf8Builder -> String'の関数がないんだ
+            -- rlsがうるさいのでreportやめます
+
+    sender :: (MonadUnliftIO m, MonadReader env m, HasLogFunc env)
+           => Handle -> TChan ByteString -> m ()
+    sender serverIn chan = forever $ loggingErrorDeep $ do
+        bs <- atomically $ readTChan chan
+        hPutBuilder serverIn $ getUtf8Builder $ mconcat
+            [ "Content-Length: "
+            , displayShow $ B.length bs
+            , "\r\n\r\n"
+            , displayBytesUtf8 bs
+            ]
+        logDebug $ "=> " <> displayBytesUtf8 bs
+
+
+    receiver :: (MonadUnliftIO m, MonadReader env m, HasLogFunc env)
+             => Handle -> TChan ByteString -> m ()
+    receiver serverOut chan = forever $ loggingErrorDeep $ do
+        v <- receive serverOut
+        atomically $ writeTChan chan v
+      where
+        receive h = do
+            len <- liftIO $ contentLength <$> readHeader h
+            content <- B.hGet h len
+            logDebug $ "<= " <> displayBytesUtf8 content
+            return content
+
+        readHeader h = go Header { contentLength = error "broken header"
+                                 , contentType   = Nothing }
+          where
+            go header = do
+              x <- hGetLine h
+              if | "Content-Length: " `isPrefixOf` x ->
+                      go $ header { contentLength = read (drop 16 x) }
+                 | "Content-Type: " `isPrefixOf` x ->
+                      go $ header { contentType = Just (drop 14 x) }
+                 | "\r" == x          -> return header
+                 | "ExitSuccess" == x -> exitSuccess -- TODO hieだけだよね，これ
+                 | otherwise          -> error $ "unknown input: " ++ show x
+
+data Header = Header
+  { contentLength :: ~Int -- lazy initialization
+  , contentType   :: Maybe String
+  } deriving (Eq, Show)
+
+
+
+isInitialized :: NeovimLsp Bool
+isInitialized = usesTV #serverHandles isJust
+
+uninitializedError :: a
+uninitializedError = error "not initialized (TODO: fabulous message)"
 
 -------------------------------------------------------------------------------
 -- Initialize
@@ -41,14 +199,8 @@ nvimHsLspInitialize _ = loggingErrorImmortal $ do
         case M.lookup ft map' of
           Just (cmd:args) -> do
             cwd <- errOnInvalidResult (vimCallFunction "getcwd" [])
-            let cwdUri = filePathToUri cwd
-            initializeLsp cwd cmd args
+            startServer cwd cmd args
             #fileType .== Just ft
-            dispatch [notificationHandler, requestHandler, callbackHandler]
-            waitCallback $ pushRequest @'InitializeK
-                (initializeParam Nothing (Just cwdUri))
-                nopCallback
-            pushNotification @'InitializedK (Record nil)
             let pat = def { acmdPattern = "*" }
                 arg = def { bang = Just True }
             Just Right{} <- addAutocmd "BufRead,BufNewFile"
@@ -78,6 +230,27 @@ whenInitialized :: NeovimLsp () -> NeovimLsp ()
 whenInitialized = whenInitialized' False
 
 -------------------------------------------------------------------------------
+-- stop server
+-------------------------------------------------------------------------------
+
+stopServer :: NeovimLsp ()
+stopServer = do
+    push $ notification @'ExitK exitParam
+    useTV #serverHandles >>= \case
+      Nothing -> return ()
+      Just sh -> do
+        stillAlive <- fmap isNothing $ timeout (1 * 1000 * 1000) $
+          liftIO $ waitForProcess (serverProcHandle sh)
+        when stillAlive $
+          liftIO $ terminateProcess (serverProcHandle sh)
+    mapM_ (cancel.snd) =<< usesTV #otherHandles unOtherHandles
+    #serverHandles .== Nothing
+    #fileType .== Nothing
+
+    -- TODO
+    -- #context .== initialContext
+
+-------------------------------------------------------------------------------
 -- Notification
 -------------------------------------------------------------------------------
 
@@ -90,7 +263,8 @@ whenAlreadyOpened :: NeovimLsp () -> NeovimLsp ()
 whenAlreadyOpened = whenAlreadyOpened' False
 
 alreadyOpened :: Uri -> NeovimLsp Bool
-alreadyOpened uri = M.member uri <$> useTV #openedFiles
+alreadyOpened uri = -- M.member uri <$> useTV #openedFiles
+  readContext (views #openedFiles (M.member uri))
 
 nvimHsLspOpenBuffer :: CommandArguments -> NeovimLsp ()
 nvimHsLspOpenBuffer arg = whenInitialized' silent $ do
@@ -101,7 +275,7 @@ nvimHsLspOpenBuffer arg = whenInitialized' silent $ do
     when (Just ft == serverFT) $ do
       uri <- getBufUri b
       unlessM (alreadyOpened uri) $ do
-        #openedFiles %== M.insert uri 0
+        modifyContext $ #openedFiles %~ M.insert uri 0
         didOpenBuffer b
   where silent = Just True == bang arg
 
@@ -110,7 +284,7 @@ nvimHsLspCloseBuffer _ = whenInitialized $ do
   b <- vim_get_current_buffer'
   uri <- getBufUri b
   ifM (not <$> alreadyOpened uri) (vim_out_write' "nvim-hs-lsp: Not opened yet\n") $ do
-    #openedFiles %== M.delete uri
+    modifyContext $ #openedFiles %~ M.delete uri
     didCloseBuffer b
 
 nvimHsLspChangeBuffer :: CommandArguments -> NeovimLsp ()
@@ -125,8 +299,8 @@ nvimHsLspSaveBuffer arg = whenInitialized' silent $ whenAlreadyOpened' silent $
 
 nvimHsLspExit :: CommandArguments -> NeovimLsp ()
 nvimHsLspExit _ = whenInitialized $ do
-  push $ notification @'ExitK exitParam
-  finalizeLSP
+  stopServer
+  finalize
 
 -------------------------------------------------------------------------------
 -- Request
@@ -168,7 +342,7 @@ nvimHsLspComplete findstart base = do
     let findStart = case findstart of
           ObjectInt n -> n
           ObjectString s
-            | Just n <- readMaybe (B.unpack s) -> n
+            | Just n <- readMaybe (BC.unpack s) -> n
           _ -> error "流石にここに来たら怒っていいよね"
     if findStart == 1 then do
       s   <- nvim_get_current_line'
@@ -215,7 +389,7 @@ nvimHsCompleteResultVar = "NvimHsLspCompleteResult"
 
 nvimHsLspLoadQuickfix :: CommandArguments -> NeovimLsp ()
 nvimHsLspLoadQuickfix arg = do
-    allDiagnostics <- readContext $ view (#otherState.diagnosticsMap)
+    allDiagnostics <- readContext $ view #diagnosticsMap
     curi <- getBufUri =<< nvim_get_current_buf'
     let qfItems = if showAll
                   then diagnosticsToQfItems curi allDiagnostics
