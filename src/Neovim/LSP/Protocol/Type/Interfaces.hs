@@ -1185,7 +1185,7 @@ type MessageActionItem = Record
 -- ClientRegisterCapability{{{
 ----------------------------------------
 type instance RequestParam 'ClientRegisterCapabilityK = Record
-  '[ "registrationParams" >: [Registration]
+  '[ "registrations" >: [Registration]
    ]
 type instance ResResult 'ClientRegisterCapabilityK = Void
 type instance ResError  'ClientRegisterCapabilityK = Value
