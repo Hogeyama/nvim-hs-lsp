@@ -1096,7 +1096,9 @@ type instance NotificationParam 'ClientCancelK = Record '[ "id" >: ID ]
 -- }}}
 
 -- WorkspaceDidChangeConfiguration {{{
-type instance NotificationParam 'WorkspaceDidChangeConfigurationK = Value
+type instance NotificationParam 'WorkspaceDidChangeConfigurationK = Record
+  '[ "settings" >: Value
+   ]
 -- }}}
 
 -- WorkspaceDidChangeWatchedFiles {{{
