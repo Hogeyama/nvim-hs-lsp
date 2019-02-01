@@ -327,11 +327,8 @@ removeCallback id' = modifyContext $ #callbacks %~ M.delete id'
 -- Dispatcher
 -------------------------------------------------------------------------------
 
-asyncNeovim :: NFData a => iEnv -> Neovim iEnv a -> Neovim env (Async ())
-asyncNeovim r a = do
-    cfg <- Internal.ask'
-    let threadConfig = Internal.retypeConfig r cfg
-    liftIO . async . void $ Internal.runNeovim threadConfig a
+asyncNeovim :: NFData a => iEnv -> Neovim iEnv a -> Neovim env (Async a)
+asyncNeovim r a = async $ retypeEnvNeovim (const r) a
 
 dispatch :: [Plugin] -> NeovimLsp ()
 dispatch hs = do
@@ -395,4 +392,11 @@ catchAndDisplay
   :: HasLogFunc env
   => Neovim env () -> Neovim env ()
 catchAndDisplay = handleAnyDeep $ \e -> logError (displayShow e) >> vim_report_error' (show e)
+
+retypeEnvNeovim :: (env -> env') -> Neovim env' a -> Neovim env a
+retypeEnvNeovim f (Internal.Neovim m) =
+  Internal.Neovim $
+    transResourceT
+      (withReaderT $ \cfg -> Internal.retypeConfig (f (Internal.customConfig cfg)) cfg)
+      m
 
