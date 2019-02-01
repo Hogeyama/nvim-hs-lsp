@@ -3,7 +3,7 @@
 
 module Neovim.LSP.Plugin where
 
-import           RIO
+import           RIO                               hiding ((^.))
 import           RIO.Char                          (isAlphaNum)
 import qualified RIO.ByteString           as B
 import           RIO.List                          (isPrefixOf, partition)
@@ -16,7 +16,6 @@ import           Control.Monad.Extra               (ifM, whenJust, whenJustM)
 import           Data.Aeson                        hiding (Object)
 import qualified Data.ByteString.Char8             as BC
 import           Data.Extensible
-import           Data.Maybe                        (isJust)
 import           System.Exit                       (exitSuccess)
 import           System.IO                         (hGetLine)
 import           System.IO.Error                   (isEOFError)
@@ -36,64 +35,82 @@ import           Neovim.LSP.LspPlugin.Request      (requestHandler)
 import           Neovim.LSP.Protocol.Messages
 import           Neovim.LSP.Protocol.Type
 import           Neovim.LSP.Util
+import Data.Maybe (fromMaybe)
 
 -------------------------------------------------------------------------------
 -- Start Server
 -------------------------------------------------------------------------------
 
-startServer :: FilePath -> String -> [String] -> NeovimLsp ()
-startServer cwd cmd args = do
+startServer :: Language -> FilePath -> String -> [String] -> NeovimLsp ()
+startServer lang cwd cmd args = do
     -- spawn
     --------
     (Just hin, Just hout, Just herr, ph) <-
-        liftIO $ createProcess $ (proc cmd args)
-          { cwd = Just cwd
-          , std_in = CreatePipe
-          , std_out = CreatePipe
-          , std_err = CreatePipe
-          }
-    #serverHandles .== Just ServerHandles
-          { serverIn = hin
-          , serverOut = hout
-          , serverErr = herr
-          , serverProcHandle = ph
-          }
+       liftIO $ createProcess $ (proc cmd args)
+         { cwd = Just cwd
+         , std_in = CreatePipe
+         , std_out = CreatePipe
+         , std_err = CreatePipe
+         }
     liftIO $ do
       hSetBuffering hin  NoBuffering
       hSetBuffering hout NoBuffering
       hSetBuffering herr NoBuffering
 
-    -- create connection
-    --------------------
-    inCh <- view #inChan
-    outCh <- view #outChan
-    registerAsyncHandle "sender" =<< async (sender hin outCh)
-    registerAsyncHandle "receiver" =<< async (receiver hout inCh)
-    registerAsyncHandle "herr-watcher" =<< async (watcher herr)
+    ---- create language env
+    ------------------------
+    logFunc <- view #logFunc
+    let serverHandles = ServerHandles
+          { serverIn = hin
+          , serverOut = hout
+          , serverErr = herr
+          , serverProcHandle = ph
+          }
+    emptyOtherHandles <- newTVarIO (OtherHandles [])
+    inCh <- newTChanIO
+    outCh <- newTChanIO
+    lspConfig <- loadLspConfig
+    newContext <- newTVarIO initialContext
+    atomically $ modifyTVar newContext (#lspConfig .~ lspConfig)
 
-    -- settings
-    -----------
-    cfg <- loadLspConfig
-    modifyContext $ #lspConfig .~ cfg
-    dispatch [notificationHandler, requestHandler, callbackHandler]
+    ---- register
+    -------------
+    let languageEnv = #logFunc @= logFunc
+                   <! #language @= lang
+                   <! #serverHandles @= serverHandles
+                   <! #otherHandles @= emptyOtherHandles
+                   <! #inChan @= inCh
+                   <! #outChan @= outCh
+                   <! #context @= newContext
+                   <! nil :: LanguageEnv
+    #languageMap %== M.insert lang languageEnv
 
+    -- setup
+    --------
     logInfo $ fromString $ unlines
-        [ ""
-        , "＿人人人人人人＿"
-        , "＞　__init__　＜"
-        , "￣Y^Y^Y^Y^Y^Y^Y￣"
-        ]
-    -- communication
-    ----------------
-    waitCallback $ pushRequest @'InitializeK
-        (initializeParam Nothing (Just (filePathToUri cwd)))
-        nopCallback
-    pushNotification @'InitializedK (Record nil)
-    whenJustM getWorkspaceSettings $ \v -> do
-      let param = Record (#settings @= v <! nil)
-      pushNotification @'WorkspaceDidChangeConfigurationK param
+       [ ""
+       , "＿人人人人人人＿"
+       , "＞　__init__　＜"
+       , "￣Y^Y^Y^Y^Y^Y^Y￣"
+       ]
+
+    void $ focusLang lang $ do
+      registerAsyncHandle "sender" =<< async (sender hin outCh)
+      registerAsyncHandle "receiver" =<< async (receiver hout inCh)
+      registerAsyncHandle "herr-watcher" =<< async (watcher herr)
+      dispatch [notificationHandler, requestHandler, callbackHandler]
+
+      ---- communication
+      ------------------
+      waitCallback $ pushRequest @'InitializeK
+         (initializeParam Nothing (Just (filePathToUri cwd)))
+         nopCallback
+      pushNotification @'InitializedK (Record nil)
+      whenJustM (getWorkspaceSettings lspConfig) $ \v -> do
+        let param = Record (#settings @= v <! nil)
+        pushNotification @'WorkspaceDidChangeConfigurationK param
   where
-    loadLspConfig :: HasContext env => Neovim env LspConfig
+    loadLspConfig :: Neovim env LspConfig
     loadLspConfig = updateLspConfig defaultLspConfig
       where
         updateLspConfig =
@@ -110,8 +127,8 @@ startServer cwd cmd args = do
                   return before
               _ -> return before
 
-    getWorkspaceSettings :: HasContext env => Neovim env (Maybe Value)
-    getWorkspaceSettings = readContext (view (#lspConfig . settingsPath)) >>= \case
+    getWorkspaceSettings :: LspConfig -> Neovim env (Maybe Value)
+    getWorkspaceSettings x = case x^.settingsPath of
         Just file -> liftIO $ decodeFileStrict' file
         Nothing -> return Nothing
 
@@ -174,10 +191,8 @@ data Header = Header
   , contentType   :: Maybe String
   } deriving (Eq, Show)
 
-
-
 isInitialized :: NeovimLsp Bool
-isInitialized = usesTV #serverHandles isJust
+isInitialized = usesTV #languageMap (not . null)
 
 uninitializedError :: a
 uninitializedError = error "not initialized (TODO: fabulous message)"
@@ -188,34 +203,37 @@ uninitializedError = error "not initialized (TODO: fabulous message)"
 
 nvimHsLspInitialize :: CommandArguments -> NeovimLsp ()
 nvimHsLspInitialize _ = loggingErrorImmortal $ do
-  initialized <- isInitialized
-  if initialized then do
-    vim_out_write' $ "nvim-hs-lsp: Already initialized" ++ "\n"
-  else do
     mft <- getBufLanguage =<< vim_get_current_buffer'
     case mft of
-      Just ft -> do
-        map' <- errOnInvalidResult $ vim_get_var "NvimHsLsp_serverCommands"
-        case M.lookup ft map' of
-          Just (cmd:args) -> do
-            cwd <- errOnInvalidResult (vimCallFunction "getcwd" [])
-            startServer cwd cmd args
-            #fileType .== Just ft
-            let pat = def { acmdPattern = "*" }
-                arg = def { bang = Just True }
-            Just Right{} <- addAutocmd "BufRead,BufNewFile"
-                              pat (nvimHsLspOpenBuffer arg)
-            Just Right{} <- addAutocmd "TextChanged,TextChangedI"
-                              pat (nvimHsLspChangeBuffer arg)
-            Just Right{} <- addAutocmd "BufWrite"
-                              pat (nvimHsLspSaveBuffer arg)
-            nvimHsLspOpenBuffer def
-            whenM (readContext . view $ #lspConfig.autoLoadQuickfix) (vim_command' "copen")
-            vim_out_write' $
-              "nvim-hs-lsp: Initialized for filetype `" ++ ft ++ "`\n"
-          _ ->
-            vim_report_error' $
-              "no language server registered for filetype `" ++ ft ++ "`"
+      Just lang -> do
+        languageMap <- useTV #languageMap
+        if M.member (fromString lang) languageMap then
+          vim_out_write' $ "nvim-hs-lsp: Already initialized" ++ "\n"
+        else do
+          map' <- errOnInvalidResult $ vim_get_var "NvimHsLsp_serverCommands"
+          case M.lookup lang map' of
+            Just (cmd:args) -> do
+              cwd <- errOnInvalidResult (vimCallFunction "getcwd" [])
+              startServer (fromString lang) cwd cmd args
+              logDebug "startServer completed"
+              -- #fileType .== Just ft
+              let pat = def { acmdPattern = "*" }
+                  arg = def { bang = Just True }
+              Just Right{} <- addAutocmd "BufRead,BufNewFile"
+                                pat (nvimHsLspOpenBuffer arg)
+              Just Right{} <- addAutocmd "TextChanged,TextChangedI"
+                                pat (nvimHsLspChangeBuffer arg)
+              Just Right{} <- addAutocmd "BufWrite"
+                                pat (nvimHsLspSaveBuffer arg)
+              nvimHsLspOpenBuffer def
+              -- TODO lspConfig
+              void $ focusLang (fromString lang) $
+                whenM (readContext . view $ #lspConfig.autoLoadQuickfix) (vim_command' "copen")
+              vim_out_write' $
+                "nvim-hs-lsp: Initialized for filetype `" ++ lang ++ "`\n"
+            _ ->
+              vim_report_error' $
+                "no language server registered for filetype `" ++ lang ++ "`"
       Nothing ->
         vim_report_error'
           "nvim-hs-lsp: Could not initialize: Could not determine the filetype"
@@ -233,54 +251,63 @@ whenInitialized = whenInitialized' False
 -- stop server
 -------------------------------------------------------------------------------
 
-stopServer :: NeovimLsp ()
-stopServer = do
+stopServer :: Language -> NeovimLsp ()
+stopServer lang = void $ focusLang lang $ do
     push $ notification @'ExitK exitParam
-    useTV #serverHandles >>= \case
-      Nothing -> return ()
-      Just sh -> do
-        stillAlive <- fmap isNothing $ timeout (1 * 1000 * 1000) $
-          liftIO $ waitForProcess (serverProcHandle sh)
-        when stillAlive $
-          liftIO $ terminateProcess (serverProcHandle sh)
+    sh <- view #serverHandles 
+    stillAlive <- fmap isNothing $ timeout (1 * 1000 * 1000) $
+      liftIO $ waitForProcess (serverProcHandle sh)
+    when stillAlive $
+      liftIO $ terminateProcess (serverProcHandle sh)
     mapM_ (cancel.snd) =<< usesTV #otherHandles unOtherHandles
-    #serverHandles .== Nothing
-    #fileType .== Nothing
-
-    -- TODO
-    -- #context .== initialContext
+    -- TODO これで十分？解放し忘れない？
 
 -------------------------------------------------------------------------------
 -- Notification
 -------------------------------------------------------------------------------
 
-whenAlreadyOpened' :: Bool -> NeovimLsp () -> NeovimLsp ()
+-- TODO silent flag 必要
+focusLang' :: Bool -> Neovim LanguageEnv () -> NeovimLsp ()
+focusLang' silent m = vim_get_current_buffer' >>= getBufLanguage >>= \case
+    Nothing -> error' "unknown filetype"
+    Just lang ->
+      focusLang (fromString lang) m >>= \case
+        Nothing -> error' $ "language server for " ++ lang ++ " is not yet awaken"
+        Just () -> return ()
+  where
+    error' = if silent then const (return ()) else error
+
+whenAlreadyOpened' :: Bool -> Neovim LanguageEnv () -> Neovim LanguageEnv ()
 whenAlreadyOpened' silent m = do
   uri <- getBufUri =<< vim_get_current_buffer'
-  ifM (alreadyOpened uri) m (unless silent $ vim_out_write' "nvim-hs-lsp: Not opened yet\n")
+  ifM (alreadyOpened uri)
+    m
+    (unless silent $ vim_out_write' "nvim-hs-lsp: Not opened yet\n")
 
-whenAlreadyOpened :: NeovimLsp () -> NeovimLsp ()
+whenAlreadyOpened :: Neovim LanguageEnv () -> Neovim LanguageEnv ()
 whenAlreadyOpened = whenAlreadyOpened' False
 
-alreadyOpened :: Uri -> NeovimLsp Bool
+alreadyOpened :: HasContext env => Uri -> Neovim env Bool
 alreadyOpened uri = -- M.member uri <$> useTV #openedFiles
   readContext (views #openedFiles (M.member uri))
 
 nvimHsLspOpenBuffer :: CommandArguments -> NeovimLsp ()
-nvimHsLspOpenBuffer arg = whenInitialized' silent $ do
+--nvimHsLspOpenBuffer arg = whenInitialized' silent $ do
+nvimHsLspOpenBuffer _arg = focusLang' True $ do
   b   <- vim_get_current_buffer'
   mft <- getBufLanguage b
   whenJust mft $ \ft -> do
-    serverFT <- useTV #fileType
-    when (Just ft == serverFT) $ do
+    --serverFT <- useTV #fileType
+    serverFT <- view #language
+    when (fromString ft == serverFT) $ do
       uri <- getBufUri b
       unlessM (alreadyOpened uri) $ do
         modifyContext $ #openedFiles %~ M.insert uri 0
         didOpenBuffer b
-  where silent = Just True == bang arg
+  --where silent = Just True == bang arg
 
 nvimHsLspCloseBuffer :: CommandArguments -> NeovimLsp ()
-nvimHsLspCloseBuffer _ = whenInitialized $ do
+nvimHsLspCloseBuffer _ = focusLang' True $ do
   b <- vim_get_current_buffer'
   uri <- getBufUri b
   ifM (not <$> alreadyOpened uri) (vim_out_write' "nvim-hs-lsp: Not opened yet\n") $ do
@@ -288,19 +315,22 @@ nvimHsLspCloseBuffer _ = whenInitialized $ do
     didCloseBuffer b
 
 nvimHsLspChangeBuffer :: CommandArguments -> NeovimLsp ()
-nvimHsLspChangeBuffer arg = whenInitialized' silent $ whenAlreadyOpened' silent $
-  didChangeBuffer =<< vim_get_current_buffer'
+nvimHsLspChangeBuffer arg = whenInitialized' silent $ focusLang' True $ whenAlreadyOpened' silent $
+    didChangeBuffer =<< vim_get_current_buffer'
   where silent = Just True == bang arg
 
 nvimHsLspSaveBuffer :: CommandArguments -> NeovimLsp ()
-nvimHsLspSaveBuffer arg = whenInitialized' silent $ whenAlreadyOpened' silent $
-  didSaveBuffer =<< vim_get_current_buffer'
+nvimHsLspSaveBuffer arg = whenInitialized' silent $ focusLang' True $ whenAlreadyOpened' silent $
+    didSaveBuffer =<< vim_get_current_buffer'
   where silent = Just True == bang arg
 
+-- TODO Exit -> StopServerにrename
+-- Exitは別に作る
 nvimHsLspExit :: CommandArguments -> NeovimLsp ()
-nvimHsLspExit _ = whenInitialized $ do
-  stopServer
-  finalize
+nvimHsLspExit _ = vim_get_current_buffer' >>= getBufLanguage >>= \case
+    Nothing -> return () -- TODO error
+    Just lang -> stopServer (fromString lang)
+  --finalize
 
 -------------------------------------------------------------------------------
 -- Request
@@ -309,13 +339,13 @@ nvimHsLspExit _ = whenInitialized $ do
 -- Hover
 --------
 nvimHsLspInfo :: CommandArguments -> NeovimLsp ()
-nvimHsLspInfo _ = whenInitialized . whenAlreadyOpened . loggingError $ do
+nvimHsLspInfo _ = whenInitialized $ focusLang' False $ whenAlreadyOpened . loggingError $ do
   b <- vim_get_current_buffer'
   pos <- getNvimPos
   void $ hoverRequest b pos callbackHoverOneLine
 
 nvimHsLspHover :: CommandArguments -> NeovimLsp ()
-nvimHsLspHover _ = whenInitialized . whenAlreadyOpened $ do
+nvimHsLspHover _ = whenInitialized $ focusLang' False $ whenAlreadyOpened $ do
   b <- vim_get_current_buffer'
   pos <- getNvimPos
   void $ hoverRequest b pos callbackHoverPreview
@@ -323,7 +353,7 @@ nvimHsLspHover _ = whenInitialized . whenAlreadyOpened $ do
 -- Definition
 -------------
 nvimHsLspDefinition :: CommandArguments -> NeovimLsp ()
-nvimHsLspDefinition _ = whenInitialized . whenAlreadyOpened $ do
+nvimHsLspDefinition _ = whenInitialized $ focusLang' False $ whenAlreadyOpened $ do
   b <- vim_get_current_buffer'
   pos <- getNvimPos
   void $ definitionRequest b pos callbackDefinition
@@ -334,27 +364,27 @@ nvimHsLspDefinition _ = whenInitialized . whenAlreadyOpened $ do
 -- Sync
 nvimHsLspComplete :: Object -> String
                   -> NeovimLsp (Either Int [VimCompleteItem])
-nvimHsLspComplete findstart base = do
-  notInitialized <- not <$> isInitialized
-  if notInitialized then
-    return (Left (-1))
-  else do
-    let findStart = case findstart of
-          ObjectInt n -> n
-          ObjectString s
-            | Just n <- readMaybe (BC.unpack s) -> n
-          _ -> error "流石にここに来たら怒っていいよね"
-    if findStart == 1 then do
-      s   <- nvim_get_current_line'
-      col <- snd <$> getNvimPos
-      return $ Left $ completionFindStart s col
-    else do
-      curPos <- getNvimPos
-      let compPos = completionPos base curPos
-      b <- vim_get_current_buffer'
-      xs <- waitCallback $ completionRequest b compPos callbackComplete
-      let sorted = uncurry (++) $ partition (isPrefixOf base . view #word . fields)  xs
-      return (Right sorted)
+nvimHsLspComplete findstart base =
+  vim_get_current_buffer' >>= getBufLanguage >>= \case
+    Nothing -> return (Left (-1))
+    Just (fromString -> lang) -> fmap (fromMaybe (Left (-1))) $
+      focusLang lang $ do
+        let findStart = case findstart of
+              ObjectInt n -> n
+              ObjectString s
+                | Just n <- readMaybe (BC.unpack s) -> n
+              _ -> error "流石にここに来たら怒っていいよね"
+        if findStart == 1 then do
+          s   <- nvim_get_current_line'
+          col <- snd <$> getNvimPos
+          return $ Left $ completionFindStart s col
+        else do
+          curPos <- getNvimPos
+          let compPos = completionPos base curPos
+          b <- vim_get_current_buffer'
+          xs <- waitCallback $ completionRequest b compPos callbackComplete
+          let sorted = uncurry (++) $ partition (isPrefixOf base . view #word . fields)  xs
+          return (Right sorted)
 
 completionFindStart :: String -> Int -> Int
 completionFindStart curLine col =
@@ -368,17 +398,22 @@ completionPos base (line, col) = (line, col+length base)
 
 -- Async
 nvimHsLspAsyncComplete :: Int -> Int -> NeovimLsp ()
-nvimHsLspAsyncComplete lnum col = do
-  initialized <- isInitialized
-  if initialized then do
-    b <- vim_get_current_buffer'
-    s <- nvim_get_current_line'
-    logDebug $ "COMPLETION: async: col = " <> displayShow col
-    logDebug $ "COMPLETION: async: s   = " <> displayShow (take col s)
-    xs <- waitCallback $ completionRequest b (lnum,col) callbackComplete
-    nvim_set_var' nvimHsCompleteResultVar (toObject xs)
-  else do
-    nvim_set_var' nvimHsCompleteResultVar (toObject ([]::[VimCompleteItem]))
+nvimHsLspAsyncComplete lnum col = 
+  vim_get_current_buffer' >>= getBufLanguage >>= \case
+    Just (fromString -> lang) -> check $ focusLang lang $ do
+      b <- vim_get_current_buffer'
+      s <- nvim_get_current_line'
+      logDebug $ "COMPLETION: async: col = " <> displayShow col
+      logDebug $ "COMPLETION: async: s   = " <> displayShow (take col s)
+      xs <- waitCallback $ completionRequest b (lnum,col) callbackComplete
+      nvim_set_var' nvimHsCompleteResultVar (toObject xs)
+    Nothing ->
+      recover
+  where
+    check m = m >>= \case
+      Nothing -> recover
+      Just () -> return ()
+    recover = nvim_set_var' nvimHsCompleteResultVar (toObject ([]::[VimCompleteItem]))
 
 nvimHsCompleteResultVar :: String
 nvimHsCompleteResultVar = "NvimHsLspCompleteResult"
@@ -388,7 +423,7 @@ nvimHsCompleteResultVar = "NvimHsLspCompleteResult"
 -------------------------------------------------------------------------------
 
 nvimHsLspLoadQuickfix :: CommandArguments -> NeovimLsp ()
-nvimHsLspLoadQuickfix arg = do
+nvimHsLspLoadQuickfix arg = focusLang' False $ do
     allDiagnostics <- readContext $ view #diagnosticsMap
     curi <- getBufUri =<< nvim_get_current_buf'
     let qfItems = if showAll
@@ -409,7 +444,7 @@ nvimHsLspLoadQuickfix arg = do
 -------------------------------------------------------------------------------
 
 nvimHsLspCodeAction :: CommandArguments -> NeovimLsp ()
-nvimHsLspCodeAction _ = whenInitialized . whenAlreadyOpened $ do
+nvimHsLspCodeAction _ = whenInitialized $ focusLang' False $ whenAlreadyOpened $ do
     b <- vim_get_current_buffer'
     pos <- getNvimPos
     waitCallback $ codeAction b (pos,pos) callbackCodeAction
@@ -421,7 +456,7 @@ nvimHsLspHieCaseSplit :: CommandArguments -> NeovimLsp ()
 nvimHsLspHieCaseSplit _ = hiePointCommand "ghcmod:casesplit"
 
 hiePointCommand :: String -> NeovimLsp ()
-hiePointCommand cmd =  whenInitialized . whenAlreadyOpened $ do
+hiePointCommand cmd =  whenInitialized $ focusLang' False $ whenAlreadyOpened $ do
     uri <- getBufUri =<< vim_get_current_buffer'
     pos <- getNvimPos
     let arg = toJSON $ #file @= uri
@@ -429,8 +464,9 @@ hiePointCommand cmd =  whenInitialized . whenAlreadyOpened $ do
                     <! nil @(Field Identity)
     void $ executeCommandRequest cmd (Some [arg]) Nothing
 
+-- TODO haskellに限定して良い
 nvimHsLspHieHsImport :: CommandArguments -> String -> NeovimLsp ()
-nvimHsLspHieHsImport _ moduleToImport = do
+nvimHsLspHieHsImport _ moduleToImport = focusLang' False $ do
     uri <- getBufUri =<< vim_get_current_buffer'
     let arg = toJSON $ #file @= uri
                     <! #moduleToImport @= moduleToImport
@@ -443,7 +479,7 @@ nvimHsLspHieHsImport _ moduleToImport = do
 -------------------------------------------------------------------------------
 
 nvimHsLspFormatting :: CommandArguments -> NeovimLsp ()
-nvimHsLspFormatting CommandArguments{range,bang} = whenInitialized . whenAlreadyOpened $ do
+nvimHsLspFormatting CommandArguments{range,bang} = whenInitialized $ focusLang' False $ whenAlreadyOpened $ do
     b <- vim_get_current_buffer'
     let fopts = FormattingOptions . Record
               $ #tabSize @= 2 -- TODO set by vim variable
@@ -462,7 +498,7 @@ nvimHsLspFormatting CommandArguments{range,bang} = whenInitialized . whenAlready
 -------------------------------------------------------------------------------
 
 nvimHsLspReferences :: CommandArguments -> NeovimLsp ()
-nvimHsLspReferences _ = whenInitialized . whenAlreadyOpened $ do
+nvimHsLspReferences _ = whenInitialized $ focusLang' False $ whenAlreadyOpened $ do
     b <- vim_get_current_buffer'
     p <- getNvimPos
     waitCallback $ textDocumentReferences b p callbackTextDocumentReferences
@@ -472,7 +508,7 @@ nvimHsLspReferences _ = whenInitialized . whenAlreadyOpened $ do
 -------------------------------------------------------------------------------
 
 nvimHsLspDocumentSymbol :: CommandArguments -> NeovimLsp ()
-nvimHsLspDocumentSymbol _ = whenInitialized . whenAlreadyOpened $ do
+nvimHsLspDocumentSymbol _ = whenInitialized $ focusLang' False $ whenAlreadyOpened $ do
     b <- vim_get_current_buffer'
     waitCallback $ textDocumentDocumentSymbol b
 
@@ -481,6 +517,6 @@ nvimHsLspDocumentSymbol _ = whenInitialized . whenAlreadyOpened $ do
 -------------------------------------------------------------------------------
 
 nvimHsLspWorkspaceSymbol :: CommandArguments -> String -> NeovimLsp ()
-nvimHsLspWorkspaceSymbol _ sym = whenInitialized . whenAlreadyOpened $ do
+nvimHsLspWorkspaceSymbol _ sym = whenInitialized $ focusLang' False $ whenAlreadyOpened $ do
     waitCallback $ workspaceSymbol sym callbackWorkspaceSymbol
 

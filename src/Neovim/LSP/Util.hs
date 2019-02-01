@@ -13,7 +13,7 @@ import           Control.Lens                 ((^.))
 import           Data.Extensible.Rexport
 
 import           Neovim
-import           Neovim.LSP.Base
+--import           Neovim.LSP.Base
 import           Neovim.LSP.Protocol.Type
 
 -------------------------------------------------------------------------------
@@ -144,7 +144,9 @@ replaceLocList :: HasLogFunc env => Int -> [QfItem] -> Neovim env ()
 replaceLocList winId qs = void $ vimCallFunction' "setloclist" $! winId +: qs +: ['r'] +: []
 
 diagnosticToQfItems :: Uri -> Diagnostic -> [QfItem]
-diagnosticToQfItems uri d = header : rest
+diagnosticToQfItems uri d
+    | d^. #source == Some "pyflakes" = [] -- temporal measure for pyls
+    | otherwise = header : rest
   where
     header = #filename @= Some (uriToFilePath uri)
           <! #lnum     @= Some lnum
@@ -195,7 +197,7 @@ locationToQfItem loc text =
 -- TextEdit
 -------------------------------------------------------------------------------
 
-applyTextEdit :: Uri -> [TextEdit] -> PluginAction ()
+applyTextEdit :: Uri -> [TextEdit] -> Neovim env ()
 applyTextEdit uri edits = do
     text <- errOnInvalidResult $ vimCallFunction "readfile" (uriToFilePath uri+:[])
     let filePath = uriToFilePath uri

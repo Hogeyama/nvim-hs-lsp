@@ -59,6 +59,8 @@ deriving instance (Forall (Instance1 Eq   (Field Identity)) xs) => Eq   (Record 
 deriving instance ((Forall (Instance1 Eq   (Field Identity)) xs),
                    (Forall (Instance1 Ord  (Field Identity)) xs)) => Ord  (Record xs)
 
+-- (<!) :: Field Identity (k >: v) -> Record xs -> Record (k >: v ': xs)
+-- x <! xs = Record $ x E.<! fields xs
 type LensLike  f s t a b = (a -> f b) -> s -> f t
 
 type LensLike' f s a = LensLike f s s a a

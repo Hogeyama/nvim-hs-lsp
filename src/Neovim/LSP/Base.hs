@@ -7,26 +7,28 @@
 module Neovim.LSP.Base where
 
 import           RIO
-import qualified RIO.HashMap              as HM
-import           RIO.List.Partial         (init)
-import qualified RIO.Map                  as M
+import qualified RIO.HashMap                  as HM
+import           RIO.List.Partial             (init)
+import qualified RIO.Map                      as M
 
-import           Control.Lens             (makeLenses, views)
+import           Control.Lens                 (makeLenses, views)
 import           Control.Lens.Operators
-import           Control.Monad            (forM, forM_, forever)
-import           Control.Monad.IO.Class   (MonadIO, liftIO)
-import qualified Data.Aeson               as J
-import           Data.Constraint          (withDict)
+import           Control.Monad                (forM, forM_, forever)
+import           Control.Monad.IO.Class       (MonadIO, liftIO)
+import           Control.Monad.Reader         (withReaderT)
+import           Control.Monad.Trans.Resource (transResourceT)
+import qualified Data.Aeson                   as J
+import           Data.Constraint              (withDict)
 import           Data.Extensible.Rexport
-import           Data.Singletons          (Sing, SomeSing (..), fromSing,
-                                           singByProxy, toSing)
-import           GHC.Stack
-import           GHC.TypeLits             (Symbol)
-import           System.IO                (openFile)
-import           System.Process           (ProcessHandle, terminateProcess)
+import           Data.Singletons              (Sing, SomeSing (..), fromSing,
+                                               singByProxy, toSing)
+import           GHC.Stack                    (callStack, popCallStack)
+import           GHC.TypeLits                 (Symbol)
+import           System.IO                    (openFile)
+import           System.Process               (ProcessHandle {-, terminateProcess-})
 
-import           Neovim                   hiding (Plugin, (<>))
-import qualified Neovim.Context.Internal  as Internal
+import           Neovim                       hiding (Plugin, (<>))
+import qualified Neovim.Context.Internal      as Internal
 import           Neovim.LSP.Protocol.Type
 
 -------------------------------------------------------------------------------
@@ -37,30 +39,30 @@ type NeovimLsp = Neovim LspEnv
 
 -- | Enviroment of the main thread.
 type LspEnv = OrigRecord
-  '[ "serverHandles"    >: TVar (Maybe ServerHandles)
-   , "fileType"         >: TVar (Maybe String)
+  '[ "logFunc"          >: LogFunc
+   , "logFileHandle"    >: Handle
+   , "logFuncFinalizer" >: IO ()
+   , "languageMap"      >: TVar (Map Language LanguageEnv)
+   ]
+
+type LanguageEnv = OrigRecord
+  '[ "logFunc"          >: LogFunc
+   , "language"         >: Language
+   , "serverHandles"    >: ServerHandles
    , "otherHandles"     >: TVar OtherHandles
    , "inChan"           >: TChan ByteString
    , "outChan"          >: TChan ByteString
    , "context"          >: TVar Context
-   , "logFunc"          >: LogFunc
-   , "logFileHandle"    >: Handle
-   , "logFuncFinalizer" >: IO ()
    ]
 
 initialEnvM :: MonadIO m => m LspEnv
 initialEnvM = do
   h <- liftIO $ openFile "/tmp/nvim-hs-lsp.log" AppendMode
   (lf, lfFinalizer) <- liftIO $ makeLogFunc h
-  hsequence $ #serverHandles    <@=> newTVarIO Nothing
-           <! #fileType         <@=> newTVarIO Nothing
-           <! #otherHandles     <@=> newTVarIO (OtherHandles [])
-           <! #inChan           <@=> newTChanIO
-           <! #outChan          <@=> newTChanIO
-           <! #context          <@=> newTVarIO initialContext
-           <! #logFunc          <@=> return lf
+  hsequence $ #logFunc          <@=> return lf
            <! #logFileHandle    <@=> return h
            <! #logFuncFinalizer <@=> return lfFinalizer
+           <! #languageMap      <@=> newTVarIO M.empty
            <! nil
   where
     makeLogFunc h = do
@@ -107,10 +109,10 @@ initialContext =
   <! nil
 
 data ServerHandles = ServerHandles
-  { serverIn  :: Handle
-  , serverOut :: Handle
-  , serverErr :: Handle
-  , serverProcHandle  :: ProcessHandle
+  { serverIn         :: Handle
+  , serverOut        :: Handle
+  , serverErr        :: Handle
+  , serverProcHandle :: ProcessHandle
   }
 
 -- sender, receiver, watcher of serverErr, dispatcher, plugins
@@ -124,8 +126,8 @@ data OtherState = OtherState
 
 data LspConfig = LspConfig
   { _autoLoadQuickfix :: Bool
-  , _settingsPath :: Maybe FilePath
-  , _lspCommands :: Map Language [String]
+  , _settingsPath     :: Maybe FilePath
+  , _lspCommands      :: Map Language [String]
   }
 defaultLspConfig :: LspConfig
 defaultLspConfig =  LspConfig
@@ -246,23 +248,6 @@ infix 4 .==
 infix 4 %==
 
 -------------------------------------------------------------------------------
--- Finalize
--------------------------------------------------------------------------------
-
-finalize :: NeovimLsp ()
-finalize = do
-    mapM_ (cancel.snd) =<< usesTV #otherHandles unOtherHandles
-    useTV #serverHandles >>= \case
-      Nothing -> return ()
-      Just sh -> liftIO $ terminateProcess (serverProcHandle sh)
-    liftIO =<< view #logFuncFinalizer
-    hClose =<< view #logFileHandle
-
--------------------------------------------------------------------------------
--- Communication with Server
--------------------------------------------------------------------------------
-
--------------------------------------------------------------------------------
 -- Access Context
 -------------------------------------------------------------------------------
 
@@ -363,7 +348,7 @@ dispatch hs = do
             ]
     registerAsyncHandle "dispatcher" dispatcher
 
-registerAsyncHandle :: String -> Async () -> NeovimLsp ()
+registerAsyncHandle :: String -> Async () -> Neovim LanguageEnv ()
 registerAsyncHandle name a =
     #otherHandles %== (\(OtherHandles hs) -> OtherHandles ((name,a):hs))
 
@@ -400,4 +385,9 @@ retypeEnvNeovim f (Internal.Neovim m) =
     transResourceT
       (withReaderT $ \cfg -> Internal.retypeConfig (f (Internal.customConfig cfg)) cfg)
       m
+
+focusLang :: Language -> Neovim LanguageEnv a -> Neovim LspEnv (Maybe a)
+focusLang lang m = usesTV #languageMap (M.lookup lang) >>= \case
+    Nothing -> return Nothing
+    Just x -> Just <$> retypeEnvNeovim (const x) m
 
