@@ -5,7 +5,7 @@ module Neovim.LSP (plugin) where
 
 import RIO
 import Neovim
-import Neovim.LSP.Base        hiding (Plugin)
+import Neovim.LSP.Base
 import Neovim.LSP.Plugin
 
 plugin :: Neovim (StartupConfig NeovimConfig) NeovimPlugin

@@ -442,7 +442,7 @@ callbackTextEdits
   :: Show e
   => Uri
   -> ResponseMessage (Nullable [TextEdit]) e
-  -> Neovim PluginEnv ()
+  -> Neovim WorkerEnv ()
 callbackTextEdits uri resp =
     void $ withResult resp $ \case
       Nothing -> return ()

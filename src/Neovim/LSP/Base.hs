@@ -71,7 +71,7 @@ initialEnvM = do
         newLogFunc opts
 
 -- | Enviroment of each plugin.
-type PluginEnv = OrigRecord
+type WorkerEnv = OrigRecord
   '[ "inChan"  >: TChan InMessage
    , "outChan" >: TChan ByteString
    , "context" >: TVar Context
@@ -92,7 +92,7 @@ type Context = OrigRecord
 
 data Callback where
   Callback :: Typeable m => TMVar a -> CallbackOf m a -> Callback
-type CallbackOf m a = ServerResponse m -> PluginAction a
+type CallbackOf m a = ServerResponse m -> WorkerAction a
 
 initialContext :: Context
 initialContext =
@@ -137,14 +137,14 @@ defaultLspConfig =  LspConfig
 type Language = Text
 
 -------------------------------------------------------------------------------
--- Plugin
+-- Worker
 -------------------------------------------------------------------------------
 
-type PluginAction = Neovim PluginEnv
+type WorkerAction = Neovim WorkerEnv
 
-data Plugin = Plugin
+data Worker = Worker
   { pluginName   :: String
-  , pluginAction :: PluginAction ()
+  , pluginAction :: WorkerAction ()
   }
 
 data InMessage where
@@ -330,14 +330,15 @@ removeCallback id' = modifyContext $ #callbacks %~ M.delete id'
 asyncNeovim :: NFData a => iEnv -> Neovim iEnv a -> Neovim env (Async a)
 asyncNeovim r a = async $ retypeEnvNeovim (const r) a
 
-dispatch :: [Plugin] -> NeovimLsp ()
+-- focusLangは外で使った方が良いか
+dispatch :: [Worker] -> Neovim LanguageEnv ()
 dispatch hs = do
     inChG   <- view #inChan
     outCh   <- view #outChan
     ctx     <- view #context
     logFunc <- view #logFunc
 
-    inChs <- forM hs $ \(Plugin name action) -> do
+    inChs <- forM hs $ \(Worker name action) -> do
       inCh <- liftIO newTChanIO
       let pluginEnv = #inChan  @= inCh
                    <! #outChan @= outCh

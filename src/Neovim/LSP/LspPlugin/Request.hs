@@ -18,11 +18,11 @@ import           Neovim.LSP.Protocol.Messages
 import           Neovim.LSP.Protocol.Type
 import           Neovim.LSP.Util              as U
 
-requestHandler :: Plugin
-requestHandler = Plugin "req" requestPluginAction
+requestHandler :: Worker
+requestHandler = Worker "req" requestWorkerAction
 
-requestPluginAction :: PluginAction ()
-requestPluginAction = forever $ loggingErrorImmortal $ do
+requestWorkerAction :: WorkerAction ()
+requestWorkerAction = forever $ loggingErrorImmortal $ do
   pull >>= \case
     SomeReq (req@(Request inner) :: ServerRequest m) -> case singByProxy req of
       SWindowShowMessageRequest -> windowShowMessageRequest req
@@ -36,7 +36,7 @@ requestPluginAction = forever $ loggingErrorImmortal $ do
 -- WindowShowMessage
 -------------------------------------------------------------------------------
 
-windowShowMessageRequest :: Request 'WindowShowMessageRequestK -> PluginAction ()
+windowShowMessageRequest :: Request 'WindowShowMessageRequestK -> WorkerAction ()
 windowShowMessageRequest (Request req) = do
     let type'   = req^. #params.__#type
         message = req^. #params.__#message
@@ -62,7 +62,7 @@ windowShowMessageRequest (Request req) = do
 ---------------------------------------
 
 -- TODO ask whether to apply or not
-respondWorkspaceAplyEdit :: Request 'WorkspaceApplyEditK -> PluginAction ()
+respondWorkspaceAplyEdit :: Request 'WorkspaceApplyEditK -> WorkerAction ()
 respondWorkspaceAplyEdit (Request req) = do
   let edit = req^. #params.__#edit
   logDebug $ displayShow edit
@@ -77,13 +77,13 @@ respondWorkspaceAplyEdit (Request req) = do
               (Some (Record (#applied @= x <! nil)))
               None
 
-applyChanges :: Map Uri [TextEdit] -> PluginAction Bool
+applyChanges :: Map Uri [TextEdit] -> WorkerAction Bool
 applyChanges cs = do
   mapM_ (uncurry U.applyTextEdit) (M.toList cs)
   return True
 
 -- hieが対応していないので後回しで良い
-applyDocumentChanges :: [TextDocumentEdit] -> PluginAction Bool
+applyDocumentChanges :: [TextDocumentEdit] -> WorkerAction Bool
 applyDocumentChanges _ = logError "WorkspaceApplyEdit: not implemented for versioned changes"
                       >> return False
 

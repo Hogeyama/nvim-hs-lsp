@@ -11,11 +11,11 @@ import           Neovim                   (vim_report_error')
 import           Neovim.LSP.Base
 import           Neovim.LSP.Protocol.Type
 
-callbackHandler :: Plugin
-callbackHandler = Plugin "callback" callbackPluginAction
+callbackHandler :: Worker
+callbackHandler = Worker "callback" callbackWorkerAction
 
-callbackPluginAction :: PluginAction ()
-callbackPluginAction = forever $ loggingErrorImmortal $
+callbackWorkerAction :: WorkerAction ()
+callbackWorkerAction = forever $ loggingErrorImmortal $
   pull >>= \case
     SomeResp resp@(Response inner) ->
       case inner^. #id of

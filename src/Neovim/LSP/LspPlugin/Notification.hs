@@ -17,11 +17,11 @@ import           Neovim.LSP.Base
 import           Neovim.LSP.Protocol.Type
 import           Neovim.LSP.Util
 
-notificationHandler :: Plugin
-notificationHandler = Plugin "noti" notificationPluginAction
+notificationHandler :: Worker
+notificationHandler = Worker "noti" notificationWorkerAction
 
-notificationPluginAction :: PluginAction ()
-notificationPluginAction = forever $ loggingErrorImmortal $ do
+notificationWorkerAction :: WorkerAction ()
+notificationWorkerAction = forever $ loggingErrorImmortal $ do
     msg <- pull
     case msg of
       SomeNoti noti -> case singByProxy noti of
@@ -38,7 +38,7 @@ notificationPluginAction = forever $ loggingErrorImmortal $ do
 -------------------------------------------------------------------------------
 
 showDiagnotics :: ServerNotification 'TextDocumentPublishDiagnosticsK
-               -> PluginAction ()
+               -> WorkerAction ()
 showDiagnotics (Notification noti) = do
     let uri         = noti^. #params.__#uri
         diagnostics = noti^. #params.__#diagnostics
@@ -56,7 +56,7 @@ showDiagnotics (Notification noti) = do
 -------------------------------------------------------------------------------
 
 windowLogMessage :: ServerNotification 'WindowLogMessageK
-                 -> PluginAction ()
+                 -> WorkerAction ()
 windowLogMessage (Notification noti) = do
     let type'   = noti^. #params.__#type
         message = noti^. #params.__#message
@@ -75,7 +75,7 @@ windowLogMessage (Notification noti) = do
 -------------------------------------------------------------------------------
 
 windowShowMessage :: ServerNotification 'WindowShowMessageK
-                  -> PluginAction ()
+                  -> WorkerAction ()
 windowShowMessage (Notification noti) = do
     let type'   = noti^. #params.__#type
         message = noti^. #params.__#message
@@ -91,7 +91,7 @@ windowShowMessage (Notification noti) = do
 -------------------------------------------------------------------------------
 
 telemetryEvent :: ServerNotification 'TelemetryEventK
-               -> PluginAction ()
+               -> WorkerAction ()
 telemetryEvent (Notification noti) = do
     let params = noti^. #params
     logInfo $ "telemetry/event: " <> displayShow params
