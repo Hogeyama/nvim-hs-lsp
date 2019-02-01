@@ -377,7 +377,7 @@ callbackCodeAction (Response resp) = void $ withResult resp $ \case
         [cmd] -> executeCommandOrNot cmd
         _ -> chooseCommandAndExecute cmds
 
-chooseCommandAndExecute :: [Command] -> Neovim PluginEnv ()
+chooseCommandAndExecute :: (HasOutChan env, HasContext env) => [Command] -> Neovim env ()
 chooseCommandAndExecute cmds = do
     let titles = map (view #title . fields) cmds
     Choice.oneOf titles >>= \case
@@ -386,12 +386,12 @@ chooseCommandAndExecute cmds = do
         Nothing -> error "impossible"
         Just cmd -> executeCommand cmd
 
-executeCommandOrNot :: Command -> Neovim PluginEnv ()
+executeCommandOrNot :: (HasOutChan env, HasContext env) => Command -> Neovim env ()
 executeCommandOrNot cmd = do
     b <- Choice.yesOrNo ("execute this command?: " ++ cmd^. #title)
     when b $ executeCommand cmd
 
-executeCommand :: Command -> Neovim PluginEnv ()
+executeCommand :: (HasOutChan env, HasContext env) => Command -> Neovim env ()
 executeCommand cmd = void $ executeCommandRequest (cmd^. #command) (cmd^. #arguments) (Just nopCallback)
 
 --}}}
