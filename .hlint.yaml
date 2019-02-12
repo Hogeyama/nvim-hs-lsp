@@ -4,6 +4,7 @@
 - ignore: {name: Use newtype instead of data}
 - ignore: {name: Redundant return}
 - ignore: {name: Parse error}
+- ignore: {name: Use ||}
 - functions:
   - {name: undefined}
 

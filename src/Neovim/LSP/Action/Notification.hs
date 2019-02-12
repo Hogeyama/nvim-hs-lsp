@@ -9,6 +9,7 @@ import qualified RIO.Map                      as M
 import           RIO.Partial                  (fromJust)
 
 import           Data.Extensible              (nil, (<!), (@=))
+import           Data.Generics.Product        (field)
 
 import           Neovim
 import           Neovim.LSP.Base
@@ -95,5 +96,5 @@ didChangeBuffer b = do
 
 resetDiagnostics :: HasContext env => Uri -> Neovim env ()
 resetDiagnostics uri =
-    modifyContext $ over #diagnosticsMap $ M.delete uri
+    modifyContext $ over (field @"diagnosticsMap") $ M.delete uri
 

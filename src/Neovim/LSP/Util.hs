@@ -128,7 +128,7 @@ diagnosticsToQfItems prior diagMap = pripri ++ rest
 
 -------------------------------------------------------------------------------
 
-type QfItem = OrigRecord
+type QfItem = Record
   '[ "filename" >: Option String
    , "lnum"     >: Option Int
    , "col"      >: Option Int
@@ -145,10 +145,17 @@ replaceLocList winId qs = void $ vimCallFunction' "setloclist" $! winId +: qs +:
 
 diagnosticToQfItems :: Uri -> Diagnostic -> [QfItem]
 diagnosticToQfItems uri d
-    | d^. #source == Some "pyflakes" = [] -- temporal measure for pyls
+    | ignored = []
     | otherwise = header : rest
   where
-    header = #filename @= Some (uriToFilePath uri)
+    ignored = or
+      [ d^. #source == Some "pyflakes"
+      , d^. #message == "" -- ghc-modがなんか送ってくる (hie-0.6.0.0)
+      , d^. #source == Some "hlint"
+          && "Parse error:" `T.isPrefixOf` (d^. #message)
+      ]
+    header = Record
+           $ #filename @= Some (uriToFilePath uri)
           <! #lnum     @= Some lnum
           <! #col      @= Some col
           <! #type     @= Some errorType
@@ -168,8 +175,8 @@ diagnosticToQfItems uri d
         text = case d^. #source of
             None   -> ""
             Some n -> "[" ++ n ++ "]"
-    rest = flip map (T.lines (d^. #message)) $ \msg ->
-             #filename @= None
+    rest = flip map (T.lines (d^. #message)) $ \msg -> Record
+           $ #filename @= None
           <! #lnum     @= None
           <! #col      @= None
           <! #type     @= None
@@ -178,8 +185,8 @@ diagnosticToQfItems uri d
           <! nil
 
 locationToQfItem :: Location -> String -> QfItem
-locationToQfItem loc text =
-       #filename @= Some filename
+locationToQfItem loc text = Record
+     $ #filename @= Some filename
     <! #lnum     @= Some lnum
     <! #col      @= Some col
     <! #type     @= Some "I"

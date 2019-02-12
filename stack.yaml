@@ -2,3 +2,4 @@ resolver: lts-12.20
 extra-deps:
 - extensible-0.5
 - winery-0.3.1
+- generic-lens-1.1.0.0

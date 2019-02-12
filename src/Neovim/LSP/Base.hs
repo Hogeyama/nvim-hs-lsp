@@ -1,7 +1,9 @@
 
+{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE ImplicitParams  #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# OPTIONS_GHC -Wall        #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
@@ -20,7 +22,7 @@ import           Control.Monad.Reader         (withReaderT)
 import           Control.Monad.Trans.Resource (transResourceT)
 import qualified Data.Aeson                   as J
 import           Data.Constraint              (withDict)
-import           Data.Extensible.Rexport
+import           Data.Generics.Product
 import           Data.Singletons              (Sing, SomeSing (..), fromSing,
                                                singByProxy, toSing)
 import           GHC.Stack                    (callStack, popCallStack)
@@ -38,32 +40,29 @@ import           Neovim.LSP.Protocol.Type
 type NeovimLsp = Neovim LspEnv
 
 -- | Enviroment of the main thread.
-type LspEnv = OrigRecord
-  '[ "logFunc"          >: LogFunc
-   , "logFileHandle"    >: Handle
-   , "logFuncFinalizer" >: IO ()
-   , "languageMap"      >: TVar (Map Language LanguageEnv)
-   ]
+data LspEnv = LspEnv
+  { logFunc          :: LogFunc
+  , logFileHandle    :: Handle
+  , logFuncFinalizer :: IO ()
+  , languageMap      :: TVar (Map Language LanguageEnv)
+  } deriving (Generic)
 
-type LanguageEnv = OrigRecord
-  '[ "logFunc"          >: LogFunc
-   , "language"         >: Language
-   , "serverHandles"    >: ServerHandles
-   , "otherHandles"     >: TVar OtherHandles
-   , "inChan"           >: TChan ByteString
-   , "outChan"          >: TChan ByteString
-   , "context"          >: TVar Context
-   ]
+data LanguageEnv = LanguageEnv
+   { logFunc          :: LogFunc
+   , language         :: Language
+   , serverHandles    :: ServerHandles
+   , otherHandles     :: TVar OtherHandles
+   , inChan           :: TChan ByteString
+   , outChan          :: TChan ByteString
+   , context          :: TVar Context
+   } deriving (Generic)
 
 initialEnvM :: MonadIO m => m LspEnv
 initialEnvM = do
-  h <- liftIO $ openFile "/tmp/nvim-hs-lsp.log" AppendMode
-  (lf, lfFinalizer) <- liftIO $ makeLogFunc h
-  hsequence $ #logFunc          <@=> return lf
-           <! #logFileHandle    <@=> return h
-           <! #logFuncFinalizer <@=> return lfFinalizer
-           <! #languageMap      <@=> newTVarIO M.empty
-           <! nil
+    logFileHandle <- liftIO $ openFile "/tmp/nvim-hs-lsp.log" AppendMode
+    (logFunc, logFuncFinalizer) <- liftIO $ makeLogFunc logFileHandle
+    languageMap <- newTVarIO M.empty
+    return LspEnv {..}
   where
     makeLogFunc h = do
         hSetBuffering h LineBuffering
@@ -73,40 +72,40 @@ initialEnvM = do
         newLogFunc opts
 
 -- | Enviroment of each plugin.
-type WorkerEnv = OrigRecord
-  '[ "inChan"  >: TChan InMessage
-   , "outChan" >: TChan ByteString
-   , "context" >: TVar Context
-   , "logFunc" >: LogFunc
-   ]
+data WorkerEnv = WorkerEnv
+   { inChan  :: TChan InMessage
+   , outChan :: TChan ByteString
+   , context :: TVar Context
+   , logFunc :: LogFunc
+   } deriving (Generic)
 
 -- | Context shared with main thread and all plugins.
-type Context = OrigRecord
-  '[ "idMethodMap"    >: Map ID ClientRequestMethod
-   , "uniqueID"       >: Int
-   , "uniqueVersion"  >: Version
-   , "versionMap"     >: Map Uri Version
-   , "callbacks"      >: Map ID Callback
-   , "lspConfig"      >: LspConfig
-   , "diagnosticsMap" >: Map Uri [Diagnostic]
-   , "openedFiles"    >: Map Uri Version
-   ]
+data Context = Context
+   { idMethodMap    :: Map ID ClientRequestMethod
+   , uniqueID       :: Int
+   , uniqueVersion  :: Version
+   , versionMap     :: Map Uri Version
+   , callbacks      :: Map ID Callback
+   , lspConfig      :: LspConfig
+   , diagnosticsMap :: Map Uri [Diagnostic]
+   , openedFiles    :: Map Uri Version
+   } deriving (Generic)
 
 data Callback where
   Callback :: Typeable m => TMVar a -> CallbackOf m a -> Callback
 type CallbackOf m a = ServerResponse m -> WorkerAction a
 
 initialContext :: Context
-initialContext =
-     #idMethodMap    @= M.empty
-  <! #uniqueID       @= 0
-  <! #uniqueVersion  @= 0
-  <! #versionMap     @= M.empty
-  <! #callbacks      @= M.empty
-  <! #lspConfig      @= defaultLspConfig
-  <! #diagnosticsMap @= M.empty
-  <! #openedFiles    @= M.empty
-  <! nil
+initialContext = Context
+  { idMethodMap    = M.empty
+  , uniqueID       = 0
+  , uniqueVersion  = 0
+  , versionMap     = M.empty
+  , callbacks      = M.empty
+  , lspConfig      = defaultLspConfig
+  , diagnosticsMap = M.empty
+  , openedFiles    = M.empty
+  }
 
 data ServerHandles = ServerHandles
   { serverIn         :: Handle
@@ -119,10 +118,6 @@ data ServerHandles = ServerHandles
 newtype OtherHandles = OtherHandles
   { unOtherHandles :: [(String, Async ())] }
   -- 'String' refers to the name of Handle
-
-data OtherState = OtherState
-  { _diagnosticsMap :: Map Uri [Diagnostic]
-  }
 
 data LspConfig = LspConfig
   { _autoLoadQuickfix :: Bool
@@ -211,26 +206,33 @@ resultEither (J.Error e)   = Left e
 -- Lens
 -------------------------------------------------------------------------------
 
-makeLenses ''OtherState
 makeLenses ''LspConfig
 
-instance Associate "logFunc" LogFunc xs
-  => HasLogFunc (OrigRecord xs) where logFuncL = #logFunc
+instance {-# OVERLAPPABLE #-} HasField' "logFunc" env LogFunc
+    => HasLogFunc env
+  where
+    logFuncL = field' @"logFunc"
 
 class HasContext env where
   contextL :: Lens' env (TVar Context)
-instance Associate "context" (TVar Context) xs => HasContext (OrigRecord xs) where
-  contextL = #context
+instance {-# OVERLAPPABLE #-} HasField' "context" env (TVar Context)
+    => HasContext env
+  where
+    contextL = field' @"context"
 
 class HasInChan env where
   inChanL :: Lens' env (TChan InMessage)
-instance Associate "inChan" (TChan InMessage) xs => HasInChan (OrigRecord xs) where
-  inChanL = #inChan
+instance {-# OVERLAPPABLE #-} HasField' "inChan" env (TChan InMessage)
+    => HasInChan env
+  where
+    inChanL = field' @"inChan"
 
 class HasOutChan env where
   outChanL :: Lens' env (TChan ByteString)
-instance Associate "outChan" (TChan ByteString) xs => HasOutChan (OrigRecord xs) where
-  outChanL = #outChan
+instance {-# OVERLAPPABLE #-} HasField' "outChan" env (TChan ByteString)
+    => HasOutChan env
+  where
+    outChanL = field' @"outChan"
 
 useTV :: (MonadReader r m, MonadIO m) => Lens' r (TVar a) -> m a
 useTV l = readTVarIO =<< view l
@@ -296,28 +298,30 @@ readContext f = do
 
 genUniqueID :: (MonadReader env m, MonadIO m, HasContext env) => m ID
 genUniqueID = modifyReadContext $
-    #uniqueID %~ (+1) &&& views #uniqueID (IDNum . fromIntegral)
+    field @"uniqueID" %~ (+1) &&&
+    views (field @"uniqueID") (IDNum . fromIntegral)
 
 genUniqueVersion :: (MonadReader env m, MonadIO m, HasContext env)
                  => m Version
 genUniqueVersion = modifyReadContext $
-    #uniqueVersion %~ (+1) &&& view #uniqueVersion
+    field @"uniqueVersion" %~ (+1) &&&
+    view (field @"uniqueVersion")
 
 addIdMethodMap :: (MonadReader env m, MonadIO m, HasContext env)
                => ID -> ClientRequestMethod -> m ()
-addIdMethodMap id' m = modifyContext (#idMethodMap %~ M.insert id' m)
+addIdMethodMap id' m = modifyContext (field @"idMethodMap" %~ M.insert id' m)
 
 registerCallback :: (MonadReader env m, MonadIO m, HasContext env)
                  => ID -> Callback -> m ()
-registerCallback id' callback = modifyContext (#callbacks %~ M.insert id' callback)
+registerCallback id' callback = modifyContext (field @"callbacks" %~ M.insert id' callback)
 
 getCallback :: (MonadReader env m, MonadIO m, HasContext env)
             => ID -> m (Maybe Callback)
-getCallback id' = readContext $ views #callbacks (M.lookup id')
+getCallback id' = readContext $ views (field @"callbacks") (M.lookup id')
 
 removeCallback :: (MonadReader env m, MonadIO m, HasContext env)
                => ID -> m ()
-removeCallback id' = modifyContext $ #callbacks %~ M.delete id'
+removeCallback id' = modifyContext $ field @"callbacks" %~ M.delete id'
 
 -------------------------------------------------------------------------------
 -- Dispatcher
@@ -326,29 +330,29 @@ removeCallback id' = modifyContext $ #callbacks %~ M.delete id'
 asyncNeovim :: NFData a => iEnv -> Neovim iEnv a -> Neovim env (Async a)
 asyncNeovim r a = async $ retypeEnvNeovim (const r) a
 
--- focusLangは外で使った方が良いか
 dispatch :: [Worker] -> Neovim LanguageEnv ()
 dispatch hs = do
-    inChG   <- view #inChan
-    outCh   <- view #outChan
-    ctx     <- view #context
-    logFunc <- view #logFunc
+    inChG   <- view $ field @"inChan"
+    outCh   <- view $ field @"outChan"
+    ctx     <- view $ field @"context"
+    logFunc <- view $ field @"logFunc"
 
     inChs <- forM hs $ \(Worker name action) -> do
       inCh <- liftIO newTChanIO
-      let pluginEnv = #inChan  @= inCh
-                   <! #outChan @= outCh
-                   <! #context @= ctx
-                   <! #logFunc @= logFunc
-                   <! nil
-      a <- asyncNeovim pluginEnv $ loggingErrorImmortal action
+      let workerEnv = WorkerEnv
+                    { inChan  = inCh
+                    , outChan = outCh
+                    , context = ctx
+                    , logFunc = logFunc
+                    }
+      a <- asyncNeovim workerEnv $ loggingErrorImmortal action
       registerAsyncHandle name a
       return inCh
 
     dispatcher <- async $ forever $ loggingErrorImmortal $ do
       rawInput <- atomically (readTChan inChG)
       let Just !v = J.decode (fromStrictBytes rawInput)
-      idMethodMap <- view #idMethodMap <$> readTVarIO ctx
+      idMethodMap <- view (field @"idMethodMap") <$> readTVarIO ctx
       case parseMessage idMethodMap v of
         Right !msg -> do
             logInfo $ displayShow (methodOf msg)
@@ -361,7 +365,8 @@ dispatch hs = do
 
 registerAsyncHandle :: String -> Async () -> Neovim LanguageEnv ()
 registerAsyncHandle name a =
-    #otherHandles %== (\(OtherHandles hs) -> OtherHandles ((name,a):hs))
+    -- #otherHandles %== (\(OtherHandles hs) -> OtherHandles ((name,a):hs))
+    field @"otherHandles" %== (\(OtherHandles hs) -> OtherHandles ((name,a):hs))
 
 -------------------------------------------------------------------------------
 -- Util
@@ -398,7 +403,8 @@ retypeEnvNeovim f (Internal.Neovim m) =
       m
 
 focusLang :: Language -> Neovim LanguageEnv a -> Neovim LspEnv (Maybe a)
-focusLang lang m = usesTV #languageMap (M.lookup lang) >>= \case
+focusLang lang m = usesTV (field @"languageMap") (M.lookup lang) >>= \case
+-- focusLang lang m = usesTV #languageMap (M.lookup lang) >>= \case
     Nothing -> return Nothing
     Just x -> Just <$> retypeEnvNeovim (const x) m
 

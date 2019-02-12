@@ -16,6 +16,7 @@ import           Control.Monad.Extra               (ifM, whenJust, whenJustM)
 import           Data.Aeson                        hiding (Object)
 import qualified Data.ByteString.Char8             as BC
 import           Data.Extensible
+import           Data.Generics.Product             (field)
 import           System.Exit                       (exitSuccess)
 import           System.IO                         (hGetLine)
 import           System.IO.Error                   (isEOFError)
@@ -58,7 +59,8 @@ startServer lang cwd cmd args = do
 
     ---- create language env
     ------------------------
-    logFunc <- view #logFunc
+    logFunc <- view (field @"logFunc")
+    -- logFunc <- view #logFunc
     let serverHandles = ServerHandles
           { serverIn = hin
           , serverOut = hout
@@ -70,19 +72,20 @@ startServer lang cwd cmd args = do
     outCh <- newTChanIO
     lspConfig <- loadLspConfig
     newContext <- newTVarIO initialContext
-    atomically $ modifyTVar newContext (#lspConfig .~ lspConfig)
+    atomically $ modifyTVar newContext (field @"lspConfig" .~ lspConfig)
 
     ---- register
     -------------
-    let languageEnv = #logFunc @= logFunc
-                   <! #language @= lang
-                   <! #serverHandles @= serverHandles
-                   <! #otherHandles @= emptyOtherHandles
-                   <! #inChan @= inCh
-                   <! #outChan @= outCh
-                   <! #context @= newContext
-                   <! nil :: LanguageEnv
-    #languageMap %== M.insert lang languageEnv
+    let languageEnv = LanguageEnv
+                    { logFunc = logFunc
+                    , language = lang
+                    , serverHandles = serverHandles
+                    , otherHandles = emptyOtherHandles
+                    , inChan = inCh
+                    , outChan = outCh
+                    , context = newContext
+                    }
+    field @"languageMap" %== M.insert lang languageEnv
 
     -- setup
     --------
@@ -118,9 +121,9 @@ startServer lang cwd cmd args = do
             update' "NvimHsLsp_serverCommands" lspCommands >=>
             return
           where
-            update' var field before = vim_get_var var >>= \case
+            update' var field' before = vim_get_var var >>= \case
               Right o -> case fromObject o of
-                Right new -> return $ before & field .~ new
+                Right new -> return $ before & field' .~ new
                 Left{} -> do
                   nvimEchoe $ "invalid config: " <> var
                   return before
@@ -191,7 +194,8 @@ data Header = Header
   } deriving (Eq, Show)
 
 isInitialized :: NeovimLsp Bool
-isInitialized = usesTV #languageMap (not . null)
+-- isInitialized = usesTV #languageMap (not . null)
+isInitialized = usesTV (field @"languageMap") (not . null)
 
 -------------------------------------------------------------------------------
 -- Initialize
@@ -202,7 +206,8 @@ nvimHsLspInitialize _ = loggingError $ do
     mft <- getBufLanguage =<< vim_get_current_buffer'
     case mft of
       Just lang -> do
-        languageMap <- useTV #languageMap
+        -- languageMap <- useTV #languageMap
+        languageMap <- useTV (field @"languageMap")
         if M.member (fromString lang) languageMap then
           vim_out_write' $ "nvim-hs-lsp: Already initialized" ++ "\n"
         else do
@@ -222,7 +227,7 @@ nvimHsLspInitialize _ = loggingError $ do
               nvimHsLspOpenBuffer def
               -- TODO lspConfig
               void $ focusLang (fromString lang) $
-                whenM (readContext . view $ #lspConfig.autoLoadQuickfix) (vim_command' "copen")
+                whenM (readContext . view $ field @"lspConfig".autoLoadQuickfix) (vim_command' "copen")
               vim_out_write' $
                 "nvim-hs-lsp: Initialized for filetype `" ++ lang ++ "`\n"
             _ ->
@@ -252,13 +257,14 @@ stopServer :: Language -> NeovimLsp ()
 stopServer lang = do
     void $ focusLang lang $ do
       push $ notification @'ExitK exitParam
-      sh <- view #serverHandles
+      sh <- view (field @"serverHandles")
       isStillAlive <- fmap isNothing $ timeout (1 * 1000 * 1000) $
         liftIO $ waitForProcess (serverProcHandle sh)
       when isStillAlive $
         liftIO $ terminateProcess (serverProcHandle sh)
-      mapM_ (cancel.snd) =<< usesTV #otherHandles unOtherHandles
-    #languageMap %== M.delete lang
+      mapM_ (cancel.snd) =<< usesTV (field @"otherHandles") unOtherHandles
+    field @"languageMap" %== M.delete lang
+    -- #languageMap %== M.delete lang
 
 -------------------------------------------------------------------------------
 -- Notification
@@ -285,7 +291,7 @@ whenAlreadyOpened :: Neovim LanguageEnv () -> Neovim LanguageEnv ()
 whenAlreadyOpened = whenAlreadyOpened' False
 
 alreadyOpened :: (MonadReader env m, MonadIO m, HasContext env) => Uri -> m Bool
-alreadyOpened uri = readContext (views #openedFiles (M.member uri))
+alreadyOpened uri = readContext $ views (field @"openedFiles") (M.member uri)
 
 nvimHsLspOpenBuffer :: CommandArguments -> NeovimLsp ()
 --nvimHsLspOpenBuffer arg = whenInitialized' silent $ do
@@ -294,11 +300,11 @@ nvimHsLspOpenBuffer _arg = focusLang' True $ do
   mft <- getBufLanguage b
   whenJust mft $ \ft -> do
     --serverFT <- useTV #fileType
-    serverFT <- view #language
+    serverFT <- view (field @"language")
     when (fromString ft == serverFT) $ do
       uri <- getBufUri b
       unlessM (alreadyOpened uri) $ do
-        modifyContext $ #openedFiles %~ M.insert uri 0
+        modifyContext $ field @"openedFiles" %~ M.insert uri 0
         didOpenBuffer b
   --where silent = Just True == bang arg
 
@@ -307,7 +313,7 @@ nvimHsLspCloseBuffer _ = focusLang' True $ do
   b <- vim_get_current_buffer'
   uri <- getBufUri b
   ifM (not <$> alreadyOpened uri) (vim_out_write' "nvim-hs-lsp: Not opened yet\n") $ do
-    modifyContext $ #openedFiles %~ M.delete uri
+    modifyContext $ field @"openedFiles" %~ M.delete uri
     didCloseBuffer b
 
 nvimHsLspChangeBuffer :: CommandArguments -> NeovimLsp ()
@@ -431,7 +437,7 @@ nvimHsCompleteResultVar = "NvimHsLspCompleteResult"
 
 nvimHsLspLoadQuickfix :: CommandArguments -> NeovimLsp ()
 nvimHsLspLoadQuickfix arg = focusLang' False $ do
-    allDiagnostics <- readContext $ view #diagnosticsMap
+    allDiagnostics <- readContext $ view (field @"diagnosticsMap")
     curi <- getBufUri =<< nvim_get_current_buf'
     let qfItems = if showAll
                   then diagnosticsToQfItems curi allDiagnostics
@@ -489,7 +495,7 @@ nvimHsLspFormatting :: CommandArguments -> NeovimLsp ()
 nvimHsLspFormatting CommandArguments{range,bang} = whenInitialized $ focusLang' False $ whenAlreadyOpened $ do
     b <- vim_get_current_buffer'
     let fopts = FormattingOptions . Record
-              $ #tabSize @= 2 -- TODO set by vim variable
+              $ #tabSize @= 2 -- TODO configured by vim variable
              <! #insertSpaces @= False
              <! nil
     case (bang, range) of

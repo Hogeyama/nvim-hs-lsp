@@ -15,6 +15,7 @@ import           Control.Lens             (views)
 import           Data.Aeson
 import           Data.Coerce              (coerce)
 import           Data.Extensible.Rexport
+import           Data.Generics.Product    (field)
 import           Data.Singletons
 import           Data.Either.Combinators  (whenLeft)
 
@@ -344,7 +345,7 @@ codeAction :: (HasOutChan env, HasContext env)
 codeAction b (start,end) callback = do
   uri <- getBufUri b
   allDiagnostics <- readContext $
-    views #diagnosticsMap (fromMaybe [] . M.lookup uri)
+    views (field @"diagnosticsMap") (fromMaybe [] . M.lookup uri)
   let params = Record
              $ #textDocument @= textDocumentIdentifier uri
             <! #range        @= Record { fields =
@@ -517,8 +518,8 @@ callbackTextDocumentDocumentSymbol uri (Response resp) = void $ withResult resp 
       replaceLocList 0 $ map symbolInfomartionToQfItem symInfos
       unless (null symInfos) $ vim_command' "botright lopen"
   where
-    documentSymbolToQfItem (DocumentSymbol docSym) =
-           #filename @= Some filename
+    documentSymbolToQfItem (DocumentSymbol docSym) = Record
+         $ #filename @= Some filename
         <! #lnum     @= Some lnum
         <! #col      @= Some col
         <! #type     @= Some "I" -- TODO

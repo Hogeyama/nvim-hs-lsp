@@ -40,6 +40,7 @@ import qualified RIO.Map                 as M
 import           Data.Aeson              hiding (KeyValue, Object)
 import qualified Data.Aeson.Types        as J
 import           Data.Extensible.Rexport
+import qualified Data.Extensible         as E
 import           GHC.Generics            (Generic, Generic1)
 import           GHC.OverloadedLabels
 import           GHC.TypeLits            (KnownSymbol, Symbol, symbolVal)
@@ -52,7 +53,7 @@ import qualified Neovim                  as N (Object (..))
 -- Some data types
 -------------------------------------------------------------------------------
 
-newtype Record (xs :: [Assoc Symbol *]) = Record { fields :: OrigRecord xs } deriving (Generic)
+newtype Record (xs :: [Assoc Symbol *]) = Record { fields :: E.Record xs } deriving (Generic)
 deriving instance (Forall (Instance1 NFData (Field Identity)) xs) => NFData (Record xs)
 deriving instance (Forall (Instance1 Show (Field Identity)) xs) => Show (Record xs)
 deriving instance (Forall (Instance1 Eq   (Field Identity)) xs) => Eq   (Record xs)
@@ -82,7 +83,7 @@ instance {-# OVERLAPPING #-}
     fromLabel = __ (Proxy @k)
 
 __ :: forall k v xs f. (Functor f, Associate k v xs) => Proxy k -> LensLike' f (Record xs) v
-__ p = unsafeCoerce (itemAssoc p :: LensLike' f (OrigRecord xs) v)
+__ p = unsafeCoerce (itemAssoc p :: LensLike' f (E.Record xs) v)
 
 type Nullable = Maybe
 
@@ -223,19 +224,6 @@ instance NvimObject o => FieldNvimObject o where
 instance (NFData (Record xs), Forall (KeyValue KnownSymbol FieldNvimObject) xs)
           => NvimObject (Record xs) where
   toObject (Record xs) = N.ObjectMap $ hfoldlWithIndexFor
-    (Proxy @(KeyValue KnownSymbol FieldNvimObject))
-    (\_ m kv ->
-      let key  = N.ObjectString $ fromString $ symbolVal $ proxyAssocKey kv
-          mval = toObject' $ runIdentity $ getField kv
-      in case mval of
-        Nothing  -> m
-        Just val -> M.insert key val m)
-    M.empty
-    xs
-
-instance (NFData (OrigRecord xs), Forall (KeyValue KnownSymbol FieldNvimObject) xs)
-          => NvimObject (OrigRecord xs) where
-  toObject xs = N.ObjectMap $ hfoldlWithIndexFor
     (Proxy @(KeyValue KnownSymbol FieldNvimObject))
     (\_ m kv ->
       let key  = N.ObjectString $ fromString $ symbolVal $ proxyAssocKey kv

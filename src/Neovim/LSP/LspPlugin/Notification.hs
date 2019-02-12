@@ -11,6 +11,7 @@ import qualified RIO.Text                 as T
 
 import           Control.Lens             ((%~))
 import           Data.Extensible.Rexport
+import           Data.Generics.Product    (field)
 
 import           Neovim                   hiding (Plugin, whenM)
 import           Neovim.LSP.Base
@@ -42,12 +43,12 @@ showDiagnotics :: ServerNotification 'TextDocumentPublishDiagnosticsK
 showDiagnotics (Notification noti) = do
     let uri         = noti^. #params.__#uri
         diagnostics = noti^. #params.__#diagnostics
-    modifyContext $ #diagnosticsMap %~ M.insert uri diagnostics
+    modifyContext $ (field @"diagnosticsMap") %~ M.insert uri diagnostics
     -- 今開いてるBufferは優先的に表示する
     -- curiとuriは必ずしも一致しないことに注意
     --    e.g. hieではapp/Main.hsを編集するとsrc/Lib.hsのdiagも送られてくることがある
-    whenM (readContext . view $ #lspConfig.autoLoadQuickfix) $ do
-      allDiagnostics <- readContext . view $ #diagnosticsMap
+    whenM (readContext . view $ (field @"lspConfig").autoLoadQuickfix) $ do
+      allDiagnostics <- readContext . view $ field @"diagnosticsMap"
       curi <- getBufUri =<< nvim_get_current_buf'
       replaceQfList $ diagnosticsToQfItems curi allDiagnostics
 
