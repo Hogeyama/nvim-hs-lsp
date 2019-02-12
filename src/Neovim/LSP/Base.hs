@@ -25,7 +25,7 @@ import           Data.Singletons              (Sing, SomeSing (..), fromSing,
                                                singByProxy, toSing)
 import           GHC.Stack                    (callStack, popCallStack)
 import           System.IO                    (openFile)
-import           System.Process               (ProcessHandle {-, terminateProcess-})
+import           System.Process               (ProcessHandle)
 
 import           Neovim                       hiding (Plugin, (<>))
 import qualified Neovim.Context.Internal      as Internal
@@ -260,46 +260,48 @@ infix 4 %==
 -- Access Context
 -------------------------------------------------------------------------------
 
-pull :: (HasInChan env) => Neovim env InMessage
+pull :: (HasInChan env, MonadReader env m, MonadIO m)
+     => m InMessage
 pull = liftIO . atomically . readTChan =<< view inChanL
 
-push :: (HasOutChan env, J.ToJSON a, Show a) => a -> Neovim env ()
+push :: (HasOutChan env, J.ToJSON a, Show a, MonadReader env m, MonadIO m) 
+     => a -> m ()
 push x = do
     outCh <- view outChanL
     liftIO $ atomically $ writeTChan outCh $ toStrictBytes (J.encode x)
 
 modifyReadContext :: (MonadReader env m, MonadIO m, HasContext env)
-                  => (Context -> Context) -> (Context -> a) -> m a
-modifyReadContext modifier reader = do
+                  => (Context -> (Context, a)) -> m a
+modifyReadContext f = do
     ctxV <- view contextL
-    ctx <- atomically $ do
+    atomically $ do
       ctx <- readTVar ctxV
-      writeTVar ctxV $! modifier ctx
-      return ctx
-    return $ reader ctx
+      let (newCtx, x) = f ctx
+      writeTVar ctxV $! newCtx
+      return x
 
 ---
 
 modifyContext :: (MonadReader env m, MonadIO m, HasContext env)
                => (Context -> Context) -> m ()
-modifyContext modifier = modifyReadContext modifier (const ())
+modifyContext f = modifyReadContext (f &&& const ())
 
 readContext :: (MonadReader env m, MonadIO m, HasContext env)
             => (Context -> a) -> m a
-readContext reader = modifyReadContext id reader
+readContext f = do
+    ctxV <- view contextL
+    f <$> readTVarIO ctxV
 
 ---
 
 genUniqueID :: (MonadReader env m, MonadIO m, HasContext env) => m ID
-genUniqueID = modifyReadContext
-    (#uniqueID %~ (+1))
-    (views #uniqueID (IDNum . fromIntegral))
+genUniqueID = modifyReadContext $
+    #uniqueID %~ (+1) &&& views #uniqueID (IDNum . fromIntegral)
 
 genUniqueVersion :: (MonadReader env m, MonadIO m, HasContext env)
                  => m Version
-genUniqueVersion = modifyReadContext
-    (#uniqueVersion %~ (+1))
-    (view #uniqueVersion)
+genUniqueVersion = modifyReadContext $
+    #uniqueVersion %~ (+1) &&& view #uniqueVersion
 
 addIdMethodMap :: (MonadReader env m, MonadIO m, HasContext env)
                => ID -> ClientRequestMethod -> m ()
