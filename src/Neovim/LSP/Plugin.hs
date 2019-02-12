@@ -5,7 +5,7 @@ module Neovim.LSP.Plugin where
 
 import           RIO                               hiding ((^.))
 import           RIO.Char                          (isAlphaNum)
-import qualified RIO.ByteString           as B
+import qualified RIO.ByteString                    as B
 import           RIO.List                          (isPrefixOf, partition)
 import qualified RIO.Map                           as M
 import           RIO.Partial                       (read)
@@ -35,7 +35,6 @@ import           Neovim.LSP.LspPlugin.Request      (requestHandler)
 import           Neovim.LSP.Protocol.Messages
 import           Neovim.LSP.Protocol.Type
 import           Neovim.LSP.Util
-import Data.Maybe (fromMaybe)
 
 -------------------------------------------------------------------------------
 -- Start Server
@@ -194,15 +193,12 @@ data Header = Header
 isInitialized :: NeovimLsp Bool
 isInitialized = usesTV #languageMap (not . null)
 
-uninitializedError :: a
-uninitializedError = error "not initialized (TODO: fabulous message)"
-
 -------------------------------------------------------------------------------
 -- Initialize
 -------------------------------------------------------------------------------
 
 nvimHsLspInitialize :: CommandArguments -> NeovimLsp ()
-nvimHsLspInitialize _ = loggingErrorImmortal $ do
+nvimHsLspInitialize _ = loggingError $ do
     mft <- getBufLanguage =<< vim_get_current_buffer'
     case mft of
       Just lang -> do
@@ -215,8 +211,6 @@ nvimHsLspInitialize _ = loggingErrorImmortal $ do
             Just (cmd:args) -> do
               cwd <- errOnInvalidResult (vimCallFunction "getcwd" [])
               startServer (fromString lang) cwd cmd args
-              logDebug "startServer completed"
-              -- #fileType .== Just ft
               let pat = def { acmdPattern = "*" }
                   arg = def { bang = Just True }
               Just Right{} <- addAutocmd "BufRead,BufNewFile"
@@ -238,6 +232,9 @@ nvimHsLspInitialize _ = loggingErrorImmortal $ do
         vim_report_error'
           "nvim-hs-lsp: Could not initialize: Could not determine the filetype"
 
+nvimHsLspStartServer :: CommandArguments -> NeovimLsp ()
+nvimHsLspStartServer = nvimHsLspInitialize
+
 whenInitialized' :: Bool -> NeovimLsp () -> NeovimLsp ()
 whenInitialized' silent m = isInitialized >>= \case
   True  -> m
@@ -252,21 +249,21 @@ whenInitialized = whenInitialized' False
 -------------------------------------------------------------------------------
 
 stopServer :: Language -> NeovimLsp ()
-stopServer lang = void $ focusLang lang $ do
-    push $ notification @'ExitK exitParam
-    sh <- view #serverHandles 
-    stillAlive <- fmap isNothing $ timeout (1 * 1000 * 1000) $
-      liftIO $ waitForProcess (serverProcHandle sh)
-    when stillAlive $
-      liftIO $ terminateProcess (serverProcHandle sh)
-    mapM_ (cancel.snd) =<< usesTV #otherHandles unOtherHandles
-    -- TODO これで十分？解放し忘れない？
+stopServer lang = do
+    void $ focusLang lang $ do
+      push $ notification @'ExitK exitParam
+      sh <- view #serverHandles
+      isStillAlive <- fmap isNothing $ timeout (1 * 1000 * 1000) $
+        liftIO $ waitForProcess (serverProcHandle sh)
+      when isStillAlive $
+        liftIO $ terminateProcess (serverProcHandle sh)
+      mapM_ (cancel.snd) =<< usesTV #otherHandles unOtherHandles
+    #languageMap %== M.delete lang
 
 -------------------------------------------------------------------------------
 -- Notification
 -------------------------------------------------------------------------------
 
--- TODO silent flag 必要
 focusLang' :: Bool -> Neovim LanguageEnv () -> NeovimLsp ()
 focusLang' silent m = vim_get_current_buffer' >>= getBufLanguage >>= \case
     Nothing -> error' "unknown filetype"
@@ -287,9 +284,8 @@ whenAlreadyOpened' silent m = do
 whenAlreadyOpened :: Neovim LanguageEnv () -> Neovim LanguageEnv ()
 whenAlreadyOpened = whenAlreadyOpened' False
 
-alreadyOpened :: HasContext env => Uri -> Neovim env Bool
-alreadyOpened uri = -- M.member uri <$> useTV #openedFiles
-  readContext (views #openedFiles (M.member uri))
+alreadyOpened :: (MonadReader env m, MonadIO m, HasContext env) => Uri -> m Bool
+alreadyOpened uri = readContext (views #openedFiles (M.member uri))
 
 nvimHsLspOpenBuffer :: CommandArguments -> NeovimLsp ()
 --nvimHsLspOpenBuffer arg = whenInitialized' silent $ do
@@ -324,6 +320,11 @@ nvimHsLspSaveBuffer arg = whenInitialized' silent $ focusLang' True $ whenAlread
     didSaveBuffer =<< vim_get_current_buffer'
   where silent = Just True == bang arg
 
+nvimHsLspStopServer :: CommandArguments -> NeovimLsp ()
+nvimHsLspStopServer _ = vim_get_current_buffer' >>= getBufLanguage >>= \case
+    Nothing -> return () -- TODO error
+    Just lang -> stopServer (fromString lang)
+  
 -- TODO Exit -> StopServerにrename
 -- Exitは別に作る
 nvimHsLspExit :: CommandArguments -> NeovimLsp ()
@@ -331,6 +332,12 @@ nvimHsLspExit _ = vim_get_current_buffer' >>= getBufLanguage >>= \case
     Nothing -> return () -- TODO error
     Just lang -> stopServer (fromString lang)
   --finalize
+
+-- 関数とかを解放
+-- TODO
+nvimHsLspFinalize :: CommandArguments -> NeovimLsp ()
+nvimHsLspFinalize _ = do
+    undefined
 
 -------------------------------------------------------------------------------
 -- Request

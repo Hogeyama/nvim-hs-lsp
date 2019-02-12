@@ -1,6 +1,7 @@
 
 {-# LANGUAGE ImplicitParams  #-}
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE UndecidableInstances #-}
 {-# OPTIONS_GHC -Wall        #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
@@ -23,7 +24,6 @@ import           Data.Extensible.Rexport
 import           Data.Singletons              (Sing, SomeSing (..), fromSing,
                                                singByProxy, toSing)
 import           GHC.Stack                    (callStack, popCallStack)
-import           GHC.TypeLits                 (Symbol)
 import           System.IO                    (openFile)
 import           System.Process               (ProcessHandle {-, terminateProcess-})
 
@@ -214,14 +214,23 @@ resultEither (J.Error e)   = Left e
 makeLenses ''OtherState
 makeLenses ''LspConfig
 
-type family RecFields' env :: [Assoc Symbol *] where RecFields' (OrigRecord xs) = xs
-type IsRecord' env = OrigRecord (RecFields' env) ~ env
-type Associate' k v env = (IsRecord' env, Associate k v (RecFields' env))
-type HasContext env = Associate' "context" (TVar Context)     env
-type HasInChan  env = Associate' "inChan"  (TChan InMessage)  env
-type HasOutChan env = Associate' "outChan" (TChan ByteString) env
 instance Associate "logFunc" LogFunc xs
   => HasLogFunc (OrigRecord xs) where logFuncL = #logFunc
+
+class HasContext env where
+  contextL :: Lens' env (TVar Context)
+instance Associate "context" (TVar Context) xs => HasContext (OrigRecord xs) where
+  contextL = #context
+
+class HasInChan env where
+  inChanL :: Lens' env (TChan InMessage)
+instance Associate "inChan" (TChan InMessage) xs => HasInChan (OrigRecord xs) where
+  inChanL = #inChan
+
+class HasOutChan env where
+  outChanL :: Lens' env (TChan ByteString)
+instance Associate "outChan" (TChan ByteString) xs => HasOutChan (OrigRecord xs) where
+  outChanL = #outChan
 
 useTV :: (MonadReader r m, MonadIO m) => Lens' r (TVar a) -> m a
 useTV l = readTVarIO =<< view l
@@ -252,17 +261,17 @@ infix 4 %==
 -------------------------------------------------------------------------------
 
 pull :: (HasInChan env) => Neovim env InMessage
-pull = liftIO . atomically . readTChan =<< view #inChan
+pull = liftIO . atomically . readTChan =<< view inChanL
 
 push :: (HasOutChan env, J.ToJSON a, Show a) => a -> Neovim env ()
 push x = do
-    outCh <- view #outChan
+    outCh <- view outChanL
     liftIO $ atomically $ writeTChan outCh $ toStrictBytes (J.encode x)
 
 modifyReadContext :: (MonadReader env m, MonadIO m, HasContext env)
                   => (Context -> Context) -> (Context -> a) -> m a
 modifyReadContext modifier reader = do
-    ctxV <- view #context
+    ctxV <- view contextL
     ctx <- atomically $ do
       ctx <- readTVar ctxV
       writeTVar ctxV $! modifier ctx
