@@ -365,7 +365,6 @@ dispatch hs = do
 
 registerAsyncHandle :: String -> Async () -> Neovim LanguageEnv ()
 registerAsyncHandle name a =
-    -- #otherHandles %== (\(OtherHandles hs) -> OtherHandles ((name,a):hs))
     field @"otherHandles" %== (\(OtherHandles hs) -> OtherHandles ((name,a):hs))
 
 -------------------------------------------------------------------------------
@@ -404,7 +403,6 @@ retypeEnvNeovim f (Internal.Neovim m) =
 
 focusLang :: Language -> Neovim LanguageEnv a -> Neovim LspEnv (Maybe a)
 focusLang lang m = usesTV (field @"languageMap") (M.lookup lang) >>= \case
--- focusLang lang m = usesTV #languageMap (M.lookup lang) >>= \case
     Nothing -> return Nothing
     Just x -> Just <$> retypeEnvNeovim (const x) m
 

@@ -60,7 +60,6 @@ startServer lang cwd cmd args = do
     ---- create language env
     ------------------------
     logFunc <- view (field @"logFunc")
-    -- logFunc <- view #logFunc
     let serverHandles = ServerHandles
           { serverIn = hin
           , serverOut = hout
@@ -206,7 +205,6 @@ nvimHsLspInitialize _ = loggingError $ do
     mft <- getBufLanguage =<< vim_get_current_buffer'
     case mft of
       Just lang -> do
-        -- languageMap <- useTV #languageMap
         languageMap <- useTV (field @"languageMap")
         if M.member (fromString lang) languageMap then
           vim_out_write' $ "nvim-hs-lsp: Already initialized" ++ "\n"
@@ -264,7 +262,6 @@ stopServer lang = do
         liftIO $ terminateProcess (serverProcHandle sh)
       mapM_ (cancel.snd) =<< usesTV (field @"otherHandles") unOtherHandles
     field @"languageMap" %== M.delete lang
-    -- #languageMap %== M.delete lang
 
 -------------------------------------------------------------------------------
 -- Notification
@@ -294,19 +291,16 @@ alreadyOpened :: (MonadReader env m, MonadIO m, HasContext env) => Uri -> m Bool
 alreadyOpened uri = readContext $ views (field @"openedFiles") (M.member uri)
 
 nvimHsLspOpenBuffer :: CommandArguments -> NeovimLsp ()
---nvimHsLspOpenBuffer arg = whenInitialized' silent $ do
 nvimHsLspOpenBuffer _arg = focusLang' True $ do
   b   <- vim_get_current_buffer'
   mft <- getBufLanguage b
   whenJust mft $ \ft -> do
-    --serverFT <- useTV #fileType
     serverFT <- view (field @"language")
     when (fromString ft == serverFT) $ do
       uri <- getBufUri b
       unlessM (alreadyOpened uri) $ do
         modifyContext $ field @"openedFiles" %~ M.insert uri 0
         didOpenBuffer b
-  --where silent = Just True == bang arg
 
 nvimHsLspCloseBuffer :: CommandArguments -> NeovimLsp ()
 nvimHsLspCloseBuffer _ = focusLang' True $ do
@@ -330,14 +324,12 @@ nvimHsLspStopServer :: CommandArguments -> NeovimLsp ()
 nvimHsLspStopServer _ = vim_get_current_buffer' >>= getBufLanguage >>= \case
     Nothing -> return () -- TODO error
     Just lang -> stopServer (fromString lang)
-  
--- TODO Exit -> StopServerにrename
+
 -- Exitは別に作る
 nvimHsLspExit :: CommandArguments -> NeovimLsp ()
 nvimHsLspExit _ = vim_get_current_buffer' >>= getBufLanguage >>= \case
     Nothing -> return () -- TODO error
     Just lang -> stopServer (fromString lang)
-  --finalize
 
 -- 関数とかを解放
 -- TODO
