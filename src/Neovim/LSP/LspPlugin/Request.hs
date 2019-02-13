@@ -12,6 +12,7 @@ import qualified RIO.Text                     as T
 
 import           Data.Extensible
 
+import           Util
 import           Neovim.User.Choice
 import           Neovim.LSP.Base
 import           Neovim.LSP.Protocol.Messages

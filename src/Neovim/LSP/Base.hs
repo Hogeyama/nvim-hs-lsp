@@ -1,20 +1,65 @@
 
+{-# LANGUAGE AllowAmbiguousTypes   #-}
+{-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE ImplicitParams  #-}
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE UndecidableInstances  #-}
 {-# OPTIONS_GHC -Wall        #-}
 {-# OPTIONS_GHC -Wno-orphans #-}
 
-module Neovim.LSP.Base where
+module Neovim.LSP.Base
+  ( NeovimLsp
+  , LspEnv(..)
+  , initialEnvM
+  , LanguageEnv(..)
+  , focusLang
+  , Worker(..)
+  , WorkerEnv(..)
+  , WorkerAction
+  , Context(..)
+  , initialContext
+  , ServerHandles(..)
+  , OtherHandles(..)
+  , LspConfig(..)
+  , defaultLspConfig
+  , Language
+  , InMessage(..)
 
-import           RIO
+  -- Class
+  , HasContext(..)
+  , modifyContext
+  , readContext
+  , genUniqueID
+  , genUniqueVersion
+  , addIdMethodMap
+  , HasInChan(..)
+  , pull
+  , HasOutChan(..)
+  , push
+  , pushRequest
+  , pushRequest'
+  , pushNotification
+
+  , Callback(..)
+  , CallbackOf
+  , registerCallback
+  , getCallbackById
+  , removeCallback
+  , waitCallback
+  , nopCallback
+  , withResponse
+
+  , dispatch
+  , registerAsyncHandle
+  )
+  where
+
+import           RIO                          hiding ((^.))
 import qualified RIO.HashMap                  as HM
 import           RIO.List.Partial             (init)
 import qualified RIO.Map                      as M
+import qualified RIO.Text                     as T
 
-import           Control.Lens                 (makeLenses, views)
+import           Control.Lens                 (views)
 import           Control.Lens.Operators
 import           Control.Monad                (forM, forM_, forever)
 import           Control.Monad.IO.Class       (MonadIO, liftIO)
@@ -22,15 +67,16 @@ import           Control.Monad.Reader         (withReaderT)
 import           Control.Monad.Trans.Resource (transResourceT)
 import qualified Data.Aeson                   as J
 import           Data.Constraint              (withDict)
-import           Data.Generics.Product
+import           Data.Generics.Product        (HasField' (..), field)
 import           Data.Singletons              (Sing, SomeSing (..), fromSing,
-                                               singByProxy, toSing)
-import           GHC.Stack                    (callStack, popCallStack)
+                                               sing, singByProxy, toSing)
 import           System.IO                    (openFile)
 import           System.Process               (ProcessHandle)
 
+import           Util
 import           Neovim                       hiding (Plugin, (<>))
 import qualified Neovim.Context.Internal      as Internal
+import           Neovim.LSP.Protocol.Messages
 import           Neovim.LSP.Protocol.Type
 
 -------------------------------------------------------------------------------
@@ -47,16 +93,6 @@ data LspEnv = LspEnv
   , languageMap      :: TVar (Map Language LanguageEnv)
   } deriving (Generic)
 
-data LanguageEnv = LanguageEnv
-   { logFunc          :: LogFunc
-   , language         :: Language
-   , serverHandles    :: ServerHandles
-   , otherHandles     :: TVar OtherHandles
-   , inChan           :: TChan ByteString
-   , outChan          :: TChan ByteString
-   , context          :: TVar Context
-   } deriving (Generic)
-
 initialEnvM :: MonadIO m => m LspEnv
 initialEnvM = do
     logFileHandle <- liftIO $ openFile "/tmp/nvim-hs-lsp.log" AppendMode
@@ -71,6 +107,21 @@ initialEnvM = do
                 logOptionsHandle h True
         newLogFunc opts
 
+data LanguageEnv = LanguageEnv
+   { logFunc       :: LogFunc
+   , language      :: Language
+   , serverHandles :: ServerHandles
+   , otherHandles  :: TVar OtherHandles
+   , inChan        :: TChan ByteString
+   , outChan       :: TChan ByteString
+   , context       :: TVar Context
+   } deriving (Generic)
+
+focusLang :: Language -> Neovim LanguageEnv a -> Neovim LspEnv (Maybe a)
+focusLang lang m = usesTV (field @"languageMap") (M.lookup lang) >>= \case
+    Nothing -> return Nothing
+    Just x -> Just <$> retypeEnvNeovim (const x) m
+
 -- | Enviroment of each plugin.
 data WorkerEnv = WorkerEnv
    { inChan  :: TChan InMessage
@@ -78,6 +129,13 @@ data WorkerEnv = WorkerEnv
    , context :: TVar Context
    , logFunc :: LogFunc
    } deriving (Generic)
+
+type WorkerAction = Neovim WorkerEnv
+
+data Worker = Worker
+  { pluginName   :: String
+  , pluginAction :: WorkerAction ()
+  }
 
 -- | Context shared with main thread and all plugins.
 data Context = Context
@@ -120,15 +178,16 @@ newtype OtherHandles = OtherHandles
   -- 'String' refers to the name of Handle
 
 data LspConfig = LspConfig
-  { _autoLoadQuickfix :: Bool
-  , _settingsPath     :: Maybe FilePath
-  , _lspCommands      :: Map Language [String]
-  }
+  { autoLoadQuickfix :: Bool
+  , settingsPath     :: Maybe FilePath
+  , lspCommands      :: Map Language [String]
+  } deriving (Generic)
+
 defaultLspConfig :: LspConfig
 defaultLspConfig =  LspConfig
-  { _autoLoadQuickfix = False
-  , _settingsPath = Nothing
-  , _lspCommands = M.empty
+  { autoLoadQuickfix = False
+  , settingsPath     = Nothing
+  , lspCommands      = M.empty
   }
 
 type Language = Text
@@ -136,13 +195,6 @@ type Language = Text
 -------------------------------------------------------------------------------
 -- Worker
 -------------------------------------------------------------------------------
-
-type WorkerAction = Neovim WorkerEnv
-
-data Worker = Worker
-  { pluginName   :: String
-  , pluginAction :: WorkerAction ()
-  }
 
 data InMessage where
   SomeNoti :: ImplNotification m => ServerNotification m -> InMessage
@@ -188,25 +240,9 @@ parseMessage map' v@(J.Object o) = mmethod >>= \case
           = Left "そんなバナナ1"
 parseMessage _ _ = Left "そんなバナナ2"
 
-fromJSONEither :: J.FromJSON a => J.Value -> Either String a
-fromJSONEither = resultEither . J.fromJSON
-
-fromJSONMay :: J.FromJSON a => J.Value -> Maybe a
-fromJSONMay = resultMaybe . J.fromJSON
-
-resultMaybe :: J.Result a -> Maybe a
-resultMaybe (J.Success x) = Just x
-resultMaybe _             = Nothing
-
-resultEither :: J.Result a -> Either String a
-resultEither (J.Success x) = Right x
-resultEither (J.Error e)   = Left e
-
 -------------------------------------------------------------------------------
 -- Lens
 -------------------------------------------------------------------------------
-
-makeLenses ''LspConfig
 
 instance {-# OVERLAPPABLE #-} HasField' "logFunc" env LogFunc
     => HasLogFunc env
@@ -234,29 +270,6 @@ instance {-# OVERLAPPABLE #-} HasField' "outChan" env (TChan ByteString)
   where
     outChanL = field' @"outChan"
 
-useTV :: (MonadReader r m, MonadIO m) => Lens' r (TVar a) -> m a
-useTV l = readTVarIO =<< view l
-
-usesTV :: (MonadReader r m, MonadIO m) => Lens' r (TVar a) -> (a -> b) -> m b
-usesTV l f = f <$> useTV l
-
-assignTV :: (MonadReader r m, MonadIO m) => Lens' r (TVar a) -> a -> m ()
-assignTV l x = do
-  v <- view l
-  atomically $ writeTVar v x
-
-modifyOverTV :: (MonadReader r m, MonadIO m) => Lens' r (TVar a) -> (a -> a) -> m ()
-modifyOverTV l f = do
-  v <- view l
-  atomically $ modifyTVar' v f
-
-(.==) :: (MonadReader r m, MonadIO m) => Lens' r (TVar a) -> a -> m ()
-(.==) = assignTV
-infix 4 .==
-
-(%==) :: (MonadReader r m, MonadIO m) => Lens' r (TVar a) -> (a -> a) -> m ()
-(%==) = modifyOverTV
-infix 4 %==
 
 -------------------------------------------------------------------------------
 -- Access Context
@@ -266,7 +279,7 @@ pull :: (HasInChan env, MonadReader env m, MonadIO m)
      => m InMessage
 pull = liftIO . atomically . readTChan =<< view inChanL
 
-push :: (HasOutChan env, J.ToJSON a, Show a, MonadReader env m, MonadIO m) 
+push :: (HasOutChan env, J.ToJSON a, Show a, MonadReader env m, MonadIO m)
      => a -> m ()
 push x = do
     outCh <- view outChanL
@@ -315,20 +328,72 @@ registerCallback :: (MonadReader env m, MonadIO m, HasContext env)
                  => ID -> Callback -> m ()
 registerCallback id' callback = modifyContext (field @"callbacks" %~ M.insert id' callback)
 
-getCallback :: (MonadReader env m, MonadIO m, HasContext env)
+getCallbackById :: (MonadReader env m, MonadIO m, HasContext env)
             => ID -> m (Maybe Callback)
-getCallback id' = readContext $ views (field @"callbacks") (M.lookup id')
+getCallbackById id' = readContext $ views (field @"callbacks") (M.lookup id')
 
 removeCallback :: (MonadReader env m, MonadIO m, HasContext env)
                => ID -> m ()
 removeCallback id' = modifyContext $ field @"callbacks" %~ M.delete id'
 
+-- TODO 次の3つはUtil辺りに移動
+waitCallback :: MonadIO m => m (TMVar a) -> m a
+waitCallback m = atomically . takeTMVar =<< m
+
+nopCallback :: ImplResponse m => CallbackOf m ()
+nopCallback (Response resp) = void $ withResponse resp (const (return ()))
+
+withResponse :: (HasLogFunc env, Show e)
+             => ResponseMessage a e
+             -> (a -> Neovim env ret)
+             -> Neovim env (Maybe ret)
+withResponse resp k =
+  case resp^. #error of
+    Some e -> vim_report_error' msg >> return Nothing
+      where msg = "nvim-hs-lsp: error from server:"  <> T.unpack (prettyResponceError e)
+    None -> case resp^. #result of
+      None   -> logError "withCallbackResult: wrong input" >> return Nothing
+      Some x -> Just <$> k x
+
+-- | Because @m@ is not uniquely determined by type @RequestParam 'Client m@,
+--   type annotation is always required when you use this function.
+--   The GHC extension @-XTypeApplication@ is useful to do this.
+--
+-- > pushRequest @'InitializeK (initializeParam Nothing Nothing)
+--
+-- >>> :set -XTypeApplications -XDataKinds
+-- >>> let wellTyped _ = "OK"
+-- >>> wellTyped $ pushRequest @'InitializeK @LanguageEnv (initializeParam Nothing Nothing)
+-- "OK"
+--
+pushRequest :: forall (m :: ClientRequestMethodK) env a
+            .  (ImplRequest m, HasOutChan env, HasContext env)
+            => RequestParam m
+            -> CallbackOf m a
+            -> Neovim env (TMVar a)
+pushRequest param callback = do
+    let method = fromSing (sing :: Sing m)
+    id' <- genUniqueID
+    addIdMethodMap id' method
+    push $ request @m id' param
+    var <- newEmptyTMVarIO
+    registerCallback id' $ Callback var callback
+    return var
+
+pushRequest' :: forall (m :: ClientRequestMethodK) env
+             .  (ImplRequest m, ImplResponse m, HasOutChan env, HasContext env)
+             => RequestParam m
+             -> Neovim env ()
+pushRequest' param = void $ pushRequest @m param nopCallback
+
+pushNotification :: forall (m :: ClientNotificationMethodK) env
+                 .  (ImplNotification m, HasOutChan env)
+                 => NotificationParam m -> Neovim env ()
+pushNotification param = push $ notification @m param
+
 -------------------------------------------------------------------------------
 -- Dispatcher
 -------------------------------------------------------------------------------
-
-asyncNeovim :: NFData a => iEnv -> Neovim iEnv a -> Neovim env (Async a)
-asyncNeovim r a = async $ retypeEnvNeovim (const r) a
 
 dispatch :: [Worker] -> Neovim LanguageEnv ()
 dispatch hs = do
@@ -368,31 +433,11 @@ registerAsyncHandle name a =
     field @"otherHandles" %== (\(OtherHandles hs) -> OtherHandles ((name,a):hs))
 
 -------------------------------------------------------------------------------
--- Util
+-- Util for this module
 -------------------------------------------------------------------------------
 
-loggingErrorImmortal
-  :: (HasCallStack, MonadReader r m, MonadUnliftIO m, HasLogFunc r)
-  => m () -> m ()
-loggingErrorImmortal = handleAnyDeep $ \e -> logError (displayShow e)
-  where ?callstack = popCallStack callStack
-
-loggingError
-  :: (HasCallStack, MonadReader r m, MonadUnliftIO m, HasLogFunc r)
-  => m a -> m a
-loggingError = handleAny $ \e -> logError (displayShow e) >> throwIO e
-  where ?callstack = popCallStack callStack
-
-loggingErrorDeep
-  :: (HasCallStack, MonadReader r m, MonadUnliftIO m, HasLogFunc r, NFData a)
-  => m a -> m a
-loggingErrorDeep = handleAnyDeep $ \e -> logError (displayShow e) >> throwIO e
-  where ?callstack = popCallStack callStack
-
-catchAndDisplay
-  :: HasLogFunc env
-  => Neovim env () -> Neovim env ()
-catchAndDisplay = handleAnyDeep $ \e -> logError (displayShow e) >> vim_report_error' (show e)
+asyncNeovim :: NFData a => iEnv -> Neovim iEnv a -> Neovim env (Async a)
+asyncNeovim r a = async $ retypeEnvNeovim (const r) a
 
 retypeEnvNeovim :: (env -> env') -> Neovim env' a -> Neovim env a
 retypeEnvNeovim f (Internal.Neovim m) =
@@ -401,8 +446,17 @@ retypeEnvNeovim f (Internal.Neovim m) =
       (withReaderT $ \cfg -> Internal.retypeConfig (f (Internal.customConfig cfg)) cfg)
       m
 
-focusLang :: Language -> Neovim LanguageEnv a -> Neovim LspEnv (Maybe a)
-focusLang lang m = usesTV (field @"languageMap") (M.lookup lang) >>= \case
-    Nothing -> return Nothing
-    Just x -> Just <$> retypeEnvNeovim (const x) m
+fromJSONEither :: J.FromJSON a => J.Value -> Either String a
+fromJSONEither = resultEither . J.fromJSON
+
+fromJSONMay :: J.FromJSON a => J.Value -> Maybe a
+fromJSONMay = resultMaybe . J.fromJSON
+
+resultMaybe :: J.Result a -> Maybe a
+resultMaybe (J.Success x) = Just x
+resultMaybe _             = Nothing
+
+resultEither :: J.Result a -> Either String a
+resultEither (J.Success x) = Right x
+resultEither (J.Error e)   = Left e
 

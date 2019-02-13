@@ -7,6 +7,7 @@ import           RIO
 
 import           Data.Typeable            (cast, typeOf)
 
+import           Util
 import           Neovim                   (vim_report_error')
 import           Neovim.LSP.Base
 import           Neovim.LSP.Protocol.Type
@@ -19,7 +20,7 @@ callbackWorkerAction = forever $ loggingErrorImmortal $
   pull >>= \case
     SomeResp resp@(Response inner) ->
       case inner^. #id of
-        Just id' -> getCallback id' >>= \case
+        Just id' -> getCallbackById id' >>= \case
           Just (Callback var callback) -> do
             removeCallback id'
             case cast resp of

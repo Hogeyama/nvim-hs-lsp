@@ -8,7 +8,7 @@ import           RIO
 import qualified RIO.Map                      as M
 import           RIO.Partial                  (fromJust)
 
-import           Data.Extensible              (nil, (<!), (@=))
+import           Data.Extensible.Rexport
 import           Data.Generics.Product        (field)
 
 import           Neovim
@@ -20,11 +20,6 @@ import           Neovim.LSP.Util
 -------------------------------------------------------------------------------
 -- アレ
 -------------------------------------------------------------------------------
-
-pushNotification :: forall (m :: ClientNotificationMethodK) env
-                 .  (ImplNotification m, HasOutChan env)
-                 => NotificationParam m -> Neovim env ()
-pushNotification param = push $ notification @m param
 
 -- didOpen: newly opened text document
 -- didChange: change text document

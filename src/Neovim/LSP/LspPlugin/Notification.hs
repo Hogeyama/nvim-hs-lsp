@@ -13,6 +13,7 @@ import           Control.Lens             ((%~))
 import           Data.Extensible.Rexport
 import           Data.Generics.Product    (field)
 
+import           Util
 import           Neovim                   hiding (Plugin, whenM)
 import           Neovim.LSP.Base
 import           Neovim.LSP.Protocol.Type
@@ -47,7 +48,9 @@ showDiagnotics (Notification noti) = do
     -- 今開いてるBufferは優先的に表示する
     -- curiとuriは必ずしも一致しないことに注意
     --    e.g. hieではapp/Main.hsを編集するとsrc/Lib.hsのdiagも送られてくることがある
-    whenM (readContext . view $ (field @"lspConfig").autoLoadQuickfix) $ do
+    whenM (readContext . view $
+            field @"lspConfig".
+            field @"autoLoadQuickfix") $ do
       allDiagnostics <- readContext . view $ field @"diagnosticsMap"
       curi <- getBufUri =<< nvim_get_current_buf'
       replaceQfList $ diagnosticsToQfItems curi allDiagnostics

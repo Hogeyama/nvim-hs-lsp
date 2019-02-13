@@ -4,18 +4,36 @@
 module Neovim.LSP.Util where
 
 import           RIO                          hiding ((^.))
+import           RIO.Partial                  (read)
+import qualified RIO.ByteString               as B
 import qualified RIO.List                     as L
 import qualified RIO.List.Partial             as L
 import qualified RIO.Text                     as T
 import qualified RIO.Map                      as M
 
-import           Control.Lens                 ((^.))
+import           Control.Lens                 ((^.), (.~))
 import           Data.Extensible.Rexport
+import           Data.Generics.Product        (field)
+import           System.Exit                  (exitSuccess)
+import           System.IO                    (hGetLine)
+import           System.IO.Error              (isEOFError)
+import qualified Data.Aeson                   as J
+import           Control.Monad.Extra          (whenJustM)
+import           System.Process               (CreateProcess (..),
+                                               StdStream (..),
+                                               createProcess, proc,
+                                               terminateProcess,
+                                               waitForProcess)
 
+
+import           Util
 import           Neovim
---import           Neovim.LSP.Base
+import           Neovim.LSP.Base
 import           Neovim.LSP.Protocol.Type
+import           Neovim.LSP.Protocol.Messages
 
+-------------------------------------------------------------------------------
+-- Neovim
 -------------------------------------------------------------------------------
 
 vimCallFunction :: String -> [Object] -> Neovim env (Either NeovimException Object)
@@ -52,7 +70,7 @@ nvimEchow s =
       , "echohl None"
       ]
 
--------------------------------------------------------------------------------
+---
 
 getBufLanguage :: (HasLogFunc env)
                => Buffer -> Neovim env (Maybe String)
@@ -96,6 +114,189 @@ nvimPosToPosition (line,char) = Record $
 
 positionToNvimPos :: Position -> NvimPos
 positionToNvimPos pos = (1 + pos^. #line, 1 + pos^. #character)
+
+-------------------------------------------------------------------------------
+-- Start Server
+-------------------------------------------------------------------------------
+
+startServer
+    :: Language       -- ^ Language
+    -> FilePath       -- ^ CWD
+    -> String         -- ^ LSP server
+    -> [String]       -- ^ Command
+    -> [Worker]       -- ^ Worker
+    -> NeovimLsp ()
+startServer lang cwd cmd args workers = do
+    -- spawn
+    --------
+    (Just hin, Just hout, Just herr, ph) <-
+       liftIO $ createProcess $ (proc cmd args)
+         { cwd = Just cwd
+         , std_in = CreatePipe
+         , std_out = CreatePipe
+         , std_err = CreatePipe
+         }
+    liftIO $ do
+      hSetBuffering hin  NoBuffering
+      hSetBuffering hout NoBuffering
+      hSetBuffering herr NoBuffering
+
+    ---- create language env
+    ------------------------
+    logFunc <- view (field @"logFunc")
+    let serverHandles = ServerHandles
+          { serverIn = hin
+          , serverOut = hout
+          , serverErr = herr
+          , serverProcHandle = ph
+          }
+    emptyOtherHandles <- newTVarIO (OtherHandles [])
+    inCh <- newTChanIO
+    outCh <- newTChanIO
+    lspConfig <- loadLspConfig
+    newContext <- newTVarIO initialContext
+    atomically $ modifyTVar newContext (field @"lspConfig" .~ lspConfig)
+
+    ---- register
+    -------------
+    let languageEnv = LanguageEnv
+                    { logFunc = logFunc
+                    , language = lang
+                    , serverHandles = serverHandles
+                    , otherHandles = emptyOtherHandles
+                    , inChan = inCh
+                    , outChan = outCh
+                    , context = newContext
+                    }
+    field @"languageMap" %== M.insert lang languageEnv
+
+    -- setup
+    --------
+    logInfo $ fromString $ unlines
+       [ ""
+       , "＿人人人人人人＿"
+       , "＞　__init__　＜"
+       , "￣Y^Y^Y^Y^Y^Y^Y￣"
+       ]
+
+    void $ focusLang lang $ do
+      registerAsyncHandle "sender" =<< async (sender hin outCh)
+      registerAsyncHandle "receiver" =<< async (receiver hout inCh)
+      registerAsyncHandle "herr-watcher" =<< async (watcher herr)
+      dispatch workers
+
+      ---- communication
+      ------------------
+      waitCallback $ pushRequest @'InitializeK
+         (initializeParam Nothing (Just (filePathToUri cwd)))
+         nopCallback
+      pushNotification @'InitializedK (Record nil)
+      whenJustM (getWorkspaceSettings lspConfig) $ \v -> do
+        let param = Record (#settings @= v <! nil)
+        pushNotification @'WorkspaceDidChangeConfigurationK param
+  where
+    loadLspConfig :: Neovim env LspConfig
+    loadLspConfig = updateLspConfig defaultLspConfig
+      where
+        updateLspConfig =
+            update' "NvimHsLsp_autoLoadQuickfix" (field @"autoLoadQuickfix") >=>
+            update' "NvimHsLsp_settingsPath" (field @"settingsPath") >=>
+            update' "NvimHsLsp_serverCommands" (field @"lspCommands") >=>
+            return
+          where
+            update' var field' before = vim_get_var var >>= \case
+              Right o -> case fromObject o of
+                Right new -> return $ before & field' .~ new
+                Left{} -> do
+                  nvimEchoe $ "invalid config: " <> var
+                  return before
+              _ -> return before
+
+    getWorkspaceSettings :: LspConfig -> Neovim env (Maybe J.Value)
+    getWorkspaceSettings lspConfig = case lspConfig^.field @"settingsPath" of
+        Just file -> liftIO $ J.decodeFileStrict' file
+        Nothing -> return Nothing
+
+    watcher :: (MonadUnliftIO m, MonadReader env m, HasLogFunc env)
+            => Handle -> m ()
+    watcher herr =
+        do s <- B.hGetLine herr
+           showAndLog $ "STDERR: " <> displayBytesUtf8 s
+      `catchIO` \e ->
+        if isEOFError e
+        then throwIO e
+        else showAndLog $ "STDERR: Exception: " <> displayShow e
+      where
+        showAndLog msg = do
+            logError msg
+            --vim_report_error' $ T.unpack $ utf8BuilderToText msg
+            -- なんでRIOには'Utf8Builder -> String'の関数がないんだ
+            -- rlsがうるさいのでreportやめます
+
+    sender :: (MonadUnliftIO m, MonadReader env m, HasLogFunc env)
+           => Handle -> TChan ByteString -> m ()
+    sender serverIn chan = forever $ loggingErrorDeep $ do
+        bs <- atomically $ readTChan chan
+        hPutBuilder serverIn $ getUtf8Builder $ mconcat
+            [ "Content-Length: "
+            , displayShow $ B.length bs
+            , "\r\n\r\n"
+            , displayBytesUtf8 bs
+            ]
+        logDebug $ "=> " <> displayBytesUtf8 bs
+
+
+    receiver :: (MonadUnliftIO m, MonadReader env m, HasLogFunc env)
+             => Handle -> TChan ByteString -> m ()
+    receiver serverOut chan = forever $ loggingErrorDeep $ do
+        v <- receive serverOut
+        atomically $ writeTChan chan v
+      where
+        receive h = do
+            len <- liftIO $ contentLength <$> readHeader h
+            content <- B.hGet h len
+            logDebug $ "<= " <> displayBytesUtf8 content
+            return content
+
+        readHeader h = go Header { contentLength = error "broken header"
+                                 , contentType   = Nothing }
+          where
+            go header = do
+              x <- hGetLine h
+              if | "Content-Length: " `L.isPrefixOf` x ->
+                      go $ header { contentLength = read (drop 16 x) }
+                 | "Content-Type: " `L.isPrefixOf` x ->
+                      go $ header { contentType = Just (drop 14 x) }
+                 | "\r" == x          -> return header
+                 | "ExitSuccess" == x -> exitSuccess -- TODO hieだけだよね，これ
+                 | otherwise          -> error $ "unknown input: " ++ show x
+
+data Header = Header
+  { contentLength :: ~Int -- lazy initialization
+  , contentType   :: Maybe String
+  } deriving (Eq, Show)
+
+-------------------------------------------------------------------------------
+-- Stop Server
+-------------------------------------------------------------------------------
+
+stopServer :: Language -> NeovimLsp ()
+stopServer lang = do
+    void $ focusLang lang $ do
+      push $ notification @'ExitK exitParam
+      sh <- view (field @"serverHandles")
+      isStillAlive <- fmap isNothing $ timeout (1 * 1000 * 1000) $
+        liftIO $ waitForProcess (serverProcHandle sh)
+      when isStillAlive $
+        liftIO $ terminateProcess (serverProcHandle sh)
+      mapM_ (cancel.snd) =<< usesTV (field @"otherHandles") unOtherHandles
+    field @"languageMap" %== M.delete lang
+
+finalizeLSP :: NeovimLsp ()
+finalizeLSP = do
+    mapM_ stopServer =<< usesTV (field @"languageMap") M.keys
+    liftIO =<< view (field @"logFuncFinalizer")
+    hClose =<< view (field @"logFileHandle")
 
 -------------------------------------------------------------------------------
 -- Completion
