@@ -40,7 +40,7 @@ main = do
   testWithEmbeddedNeovim Nothing (Seconds 10000) initialEnv $ do
     vim_command' "source ./test-file/init.vim"
     vim_command' "edit ./test-file/hoge.hs"
-    cwd <- errOnInvalidResult (vimCallFunction "getcwd" [])
+    cwd <- getCwd
     startServer "haskell" cwd "hie-wrapper" ["--lsp", "-d", "-l", "/tmp/hie.log"]
       [ notificationHandler, requestHandler, callbackHandler ]
     void $ focusLang "haskell" handler2

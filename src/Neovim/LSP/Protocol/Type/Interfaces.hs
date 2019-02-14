@@ -63,11 +63,6 @@ module Neovim.LSP.Protocol.Type.Interfaces
   , ServerResponse
   , ServerRequest
   , ServerNotification
-  --
-  --, Sing(..)
-  --, isServerRequest
-  --, isServerNotification
-  --, isServerResponse
 
   -- 他のdata型
   , Hover
@@ -82,8 +77,10 @@ module Neovim.LSP.Protocol.Type.Interfaces
   , DocumentSymbol(..)
 
   -- function
-  , filePathToUri
+  , pathToUri
   , uriToFilePath
+  , uriToAbsFilePath
+  , uriToAbsDirPath
   , textDocumentIdentifier
   , versionedTextDocmentIdentifier
 
@@ -105,6 +102,9 @@ import           Data.Extensible                 as E hiding (Nullable, Record,
                                                        record)
 import           Data.Singletons                 (SingI, SingKind (..))
 import           GHC.TypeLits
+import           Path                            (Path, Abs, File, Dir,
+                                                  parseAbsFile, parseAbsDir,
+                                                  toFilePath)
 
 import           Data.Kind                       (Constraint)
 import           Neovim.LSP.Protocol.Type.Method
@@ -214,14 +214,21 @@ uriToFilePath (Uri uri)
         platformAdjust path@('/':_drive:':':_rest) = tail path
         platformAdjust path                        = path
 
--- TODO test
-filePathToUri :: FilePath -> Uri
-filePathToUri (drive:':':rest) = Uri $
+uriToAbsFilePath :: Uri -> Path Abs File
+uriToAbsFilePath uri =
+    fromMaybe (error "impossible") (parseAbsFile (uriToFilePath uri))
+
+uriToAbsDirPath :: Uri -> Path Abs Dir
+uriToAbsDirPath uri =
+    fromMaybe (error "impossible") (parseAbsDir (uriToFilePath uri))
+
+pathToUri :: Path Abs b -> Uri
+pathToUri (toFilePath -> (drive:':':rest)) = Uri $
     T.pack $ concat ["file:///", [toLower drive], "%3A", fmap convertDelim rest]
   where
     convertDelim '\\' = '/'
     convertDelim c    = c
-filePathToUri file = Uri $ T.pack $ "file://" ++ file
+pathToUri file = Uri $ T.pack $ "file://" ++ toFilePath file
 
 -- Position
 ----------------------------------------

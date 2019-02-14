@@ -1,4 +1,5 @@
 
+{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -17,6 +18,7 @@ import           Test.Hspec
 import           Data.Extensible
 import           Neovim.Test.Wrapper
 import           Neovim.Context.Internal
+import           Path
 
 import           Neovim
 
@@ -38,7 +40,7 @@ testSpec = hspec spec
 
 spec :: Spec
 spec = do
-  baseDirectory <- runIO getCurrentDirectory
+  Just baseDirectory <- parseAbsDir <$> runIO getCurrentDirectory
   let removeStackWorkDir =
         runIO $ void $ tryIO $ removeDirectoryRecursive "./test-file/.stack-work"
 
@@ -66,7 +68,7 @@ spec = do
   describe "definition" $ do
     removeStackWorkDir
     specify "simple" $ do
-      let src = "./test-file/Definition.hs"
+      let src = $(mkRelFile "./test-file/Definition.hs")
           definition1 = testWithHie (Seconds 10) src $ do
               threadDelaySec 1 -- wait for loading
               b <- vim_get_current_buffer'
@@ -76,7 +78,7 @@ spec = do
               <: #id @= Just (IDNum 2.0)
               <: #result @= Some (Just
                     [ Record $
-                       #uri @= filePathToUri (baseDirectory ++ tail src)
+                       #uri @= pathToUri (baseDirectory </> src)
                     <: #range @= Record { fields =
                                   #start @= Record (#line @= 11 <: #character @= 0 <: nil)
                                <: #end   @= Record (#line @= 11 <: #character @= 4 <: nil)
@@ -87,8 +89,8 @@ spec = do
 
     removeStackWorkDir
     specify "other file" $ do
-      let src = "./test-file/Definition.hs"
-          tgt = "./test-file/Definition2.hs"
+      let src = $(mkRelFile "test-file/Definition.hs")
+          tgt = $(mkRelFile "test-file/Definition2.hs")
           definition2 = testWithHie (Seconds 10) src $ do
               threadDelaySec 1 -- wait for loading
               b <- vim_get_current_buffer'
@@ -98,7 +100,7 @@ spec = do
               <: #id @= Just (IDNum 2.0)
               <: #result @= Some (Just
                     [  Record $
-                       #uri @= filePathToUri (baseDirectory ++ tail tgt)
+                       #uri @= pathToUri (baseDirectory </> tgt)
                     <: #range @= Record { fields =
                                   #start @= Record (#line @= 4 <: #character @= 0 <: nil)
                                <: #end   @= Record (#line @= 4 <: #character @= 12 <: nil)
@@ -118,7 +120,7 @@ spec = do
 testWithHie
   :: Show a
   => Seconds
-  -> FilePath -- relative
+  -> Path Rel File 
   -> Neovim LanguageEnv a
   -> IO a
 testWithHie time file action = do
@@ -126,12 +128,12 @@ testWithHie time file action = do
   testNeovim time initialEnv $ do
     finally `flip` finalizeLSP $ do
       vim_command' "source ./test-file/init.vim"
-      startServer "haskell" "./" "hie-wrapper" ["--lsp", "-d", "-l", "/tmp/hie.log"]
+      cwd <- getCwd
+      startServer "haskell" cwd "hie-wrapper" ["--lsp", "-d", "-l", "/tmp/hie.log"]
         [ callbackHandler ]
-      cwd <- errOnInvalidResult (vimCallFunction "getcwd" [])
       void $ focusLang "haskell" $
-        pushRequest' @'InitializeK (initializeParam Nothing (Just (filePathToUri cwd)))
-      vim_command' $ "edit " ++ cwd ++ "/" ++ file
+        pushRequest' @'InitializeK (initializeParam Nothing (Just (pathToUri cwd)))
+      vim_command' $ "edit " ++ toFilePath (cwd </> file)
       nvimHsLspOpenBuffer def
       x <- fromJust <$> focusLang "haskell" action
       -- TODO テストだとなぜかtimeoutが効かないみたい？
@@ -140,7 +142,7 @@ testWithHie time file action = do
       return x
 
 example1 :: IO ()
-example1 = testWithHie (Seconds 10) "./test-file/hoge.hs" $ do
+example1 = testWithHie (Seconds 10) $(mkRelFile "./test-file/hoge.hs") $ do
   b <- vim_get_current_buffer'
 
   -- didOpen

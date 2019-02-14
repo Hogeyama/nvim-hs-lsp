@@ -24,6 +24,9 @@ import           System.Process               (CreateProcess (..),
                                                createProcess, proc,
                                                terminateProcess,
                                                waitForProcess)
+import           Path                         (Path, Abs, Dir,
+                                               toFilePath, parseAbsFile,
+                                               parseAbsDir)
 
 
 import           Util
@@ -72,6 +75,13 @@ nvimEchow s =
 
 ---
 
+getCwd :: Neovim env (Path Abs Dir)
+getCwd = do
+  cwd <- errOnInvalidResult (vimCallFunction "getcwd" [])
+  case parseAbsDir cwd of
+    Nothing -> error "impossible"
+    Just cwd' -> return cwd'
+
 getBufLanguage :: (HasLogFunc env)
                => Buffer -> Neovim env (Maybe String)
 getBufLanguage b = nvim_buf_get_var b "current_syntax" >>= \case
@@ -79,7 +89,9 @@ getBufLanguage b = nvim_buf_get_var b "current_syntax" >>= \case
     _ -> return Nothing
 
 getBufUri :: Buffer -> Neovim env Uri
-getBufUri b = filePathToUri <$> nvim_buf_get_name' b
+getBufUri b = parseAbsFile <$> nvim_buf_get_name' b >>= \case
+    Nothing -> error "impossible"
+    Just file -> return $ pathToUri file
 
 getNvimPos :: (HasLogFunc env) => Neovim env NvimPos
 getNvimPos = vimCallFunction "getpos" [ObjectString "."] >>= \case
@@ -121,7 +133,7 @@ positionToNvimPos pos = (1 + pos^. #line, 1 + pos^. #character)
 
 startServer
     :: Language       -- ^ Language
-    -> FilePath       -- ^ CWD
+    -> Path Abs Dir   -- ^ CWD
     -> String         -- ^ LSP server
     -> [String]       -- ^ Command
     -> [Worker]       -- ^ Worker
@@ -131,7 +143,7 @@ startServer lang cwd cmd args workers = do
     --------
     (Just hin, Just hout, Just herr, ph) <-
        liftIO $ createProcess $ (proc cmd args)
-         { cwd = Just cwd
+         { cwd = Just (toFilePath cwd)
          , std_in = CreatePipe
          , std_out = CreatePipe
          , std_err = CreatePipe
@@ -188,7 +200,7 @@ startServer lang cwd cmd args workers = do
       ---- communication
       ------------------
       waitCallback $ pushRequest @'InitializeK
-         (initializeParam Nothing (Just (filePathToUri cwd)))
+         (initializeParam Nothing (Just (pathToUri cwd)))
          nopCallback
       pushNotification @'InitializedK (Record nil)
       whenJustM (getWorkspaceSettings lspConfig) $ \v -> do
@@ -285,7 +297,8 @@ stopServer lang = do
     void $ focusLang lang $ do
       push $ notification @'ExitK exitParam
       sh <- view (field @"serverHandles")
-      isStillAlive <- fmap isNothing $ timeout (1 * 1000 * 1000) $
+      isStillAlive <- fmap isNothing $ timeout (1 * 1000 * 1000) $ do
+        logDebug "waiting!"
         liftIO $ waitForProcess (serverProcHandle sh)
       when isStillAlive $
         liftIO $ terminateProcess (serverProcHandle sh)
@@ -294,7 +307,12 @@ stopServer lang = do
 
 finalizeLSP :: NeovimLsp ()
 finalizeLSP = do
-    mapM_ stopServer =<< usesTV (field @"languageMap") M.keys
+    -- mapM_ stopServer =<< usesTV (field @"languageMap") M.keys
+    ls <- usesTV (field @"languageMap") M.keys
+    forM_ ls $ \lang -> do
+      logDebug $ "finalizeLSP: stopServer: " <> displayShow lang
+      stopServer lang
+
     liftIO =<< view (field @"logFuncFinalizer")
     hClose =<< view (field @"logFileHandle")
 
@@ -356,7 +374,7 @@ diagnosticToQfItems uri d
           && "Parse error:" `T.isPrefixOf` (d^. #message)
       ]
     header = Record
-           $ #filename @= Some (uriToFilePath uri)
+           $ #filename @= Some (toFilePath (uriToAbsFilePath uri))
           <! #lnum     @= Some lnum
           <! #col      @= Some col
           <! #type     @= Some errorType

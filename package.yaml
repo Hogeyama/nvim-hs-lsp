@@ -71,6 +71,7 @@ library:
   - constraints
   - extensible >= 0.5
   - lens
+  - path
   - text
   - process
   - safe
@@ -103,6 +104,7 @@ tests:
     - nvim-hs
     - nvim-hs-lsp
     - stm
+    - path
     - lens
     - process
     - unliftio
@@ -114,6 +116,7 @@ tests:
     - nvim-hs-lsp
     - hspec
     - unliftio
+    - path
     - process
     - directory
     - resourcet

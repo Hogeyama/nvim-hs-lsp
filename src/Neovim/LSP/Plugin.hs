@@ -82,7 +82,7 @@ nvimHsLspInitialize _ = loggingError $ do
           map' <- errOnInvalidResult $ vim_get_var "NvimHsLsp_serverCommands"
           case M.lookup lang map' of
             Just (cmd:args) -> do
-              cwd <- errOnInvalidResult (vimCallFunction "getcwd" [])
+              cwd <- getCwd
               startServer (fromString lang) cwd cmd args
                 [ notificationHandler, requestHandler, callbackHandler ]
               let pat = def { acmdPattern = "*" }
