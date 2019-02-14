@@ -5,10 +5,13 @@
 {-# LANGUAGE TypeApplications    #-}
 {-# LANGUAGE OverloadedLabels    #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
+{-# OPTIONS_GHC -Wno-unused-imports #-}
 
 module Neovim.LSP.PluginSpec where
 
+import           Prelude
 import           RIO
+import           RIO.Partial                       (fromJust)
 import           RIO.List.Partial                  (tail)
 import           Test.Hspec
 import           Data.Extensible
@@ -19,9 +22,9 @@ import           Neovim
 
 import           Neovim.LSP.Action.Notification
 import           Neovim.LSP.Action.Request
+import           Neovim.LSP.LspPlugin.Callback
 import           Neovim.LSP.Base
 import           Neovim.LSP.Plugin
-import           Neovim.LSP.LspPlugin.Callback     (callbackHandler)
 import           Neovim.LSP.Protocol.Messages
 import           Neovim.LSP.Protocol.Type
 import           Neovim.LSP.Util
@@ -64,13 +67,13 @@ spec = do
     removeStackWorkDir
     specify "simple" $ do
       let src = "./test-file/Definition.hs"
-          definition1 = testNeovimLsp (Seconds 10) src $ do
+          definition1 = testWithHie (Seconds 10) src $ do
               threadDelaySec 1 -- wait for loading
               b <- vim_get_current_buffer'
               waitCallback $ definitionRequest b (8,11) return
           expected = Response . Record
               $  #jsonrpc @= "2.0"
-              <: #id @= Just (IDNum 1.0)
+              <: #id @= Just (IDNum 2.0)
               <: #result @= Some (Just
                     [ Record $
                        #uri @= filePathToUri (baseDirectory ++ tail src)
@@ -86,13 +89,13 @@ spec = do
     specify "other file" $ do
       let src = "./test-file/Definition.hs"
           tgt = "./test-file/Definition2.hs"
-          definition2 = testNeovimLsp (Seconds 10) src $ do
+          definition2 = testWithHie (Seconds 10) src $ do
               threadDelaySec 1 -- wait for loading
               b <- vim_get_current_buffer'
               waitCallback $ definitionRequest b (9,3) return
           expected = Response . Record
               $  #jsonrpc @= "2.0"
-              <: #id @= Just (IDNum 1.0)
+              <: #id @= Just (IDNum 2.0)
               <: #result @= Some (Just
                     [  Record $
                        #uri @= filePathToUri (baseDirectory ++ tail tgt)
@@ -112,30 +115,32 @@ spec = do
 -------------------------------------------------------------------------------
 
 
-testNeovimLsp :: Seconds
-              -> FilePath
-              -> NeovimLsp a
-              -> IO a
-testNeovimLsp time file action = do
+testWithHie
+  :: Show a
+  => Seconds
+  -> FilePath -- relative
+  -> Neovim LanguageEnv a
+  -> IO a
+testWithHie time file action = do
   initialEnv <- initialEnvM
-  testNeovim time initialEnv $
+  testNeovim time initialEnv $ do
     finally `flip` finalizeLSP $ do
       vim_command' "source ./test-file/init.vim"
-
-      initializeLsp "./" "hie" ["--lsp", "-d", "-l", "/tmp/hie.log"]
-      #fileType .== Just "haskell"
-      cwd <- filePathToUri <$> errOnInvalidResult (vimCallFunction "getcwd" [])
-      pushRequest' @'InitializeK (initializeParam Nothing (Just cwd))
-
-      dispatch [ callbackHandler ]
-
-      vim_command' $ "edit " ++  file
+      startServer "haskell" "./" "hie-wrapper" ["--lsp", "-d", "-l", "/tmp/hie.log"]
+        [ callbackHandler ]
+      cwd <- errOnInvalidResult (vimCallFunction "getcwd" [])
+      void $ focusLang "haskell" $
+        pushRequest' @'InitializeK (initializeParam Nothing (Just (filePathToUri cwd)))
+      vim_command' $ "edit " ++ cwd ++ "/" ++ file
       nvimHsLspOpenBuffer def
-
-      action
+      x <- fromJust <$> focusLang "haskell" action
+      -- TODO テストだとなぜかtimeoutが効かないみたい？
+      -- stopServer内のtimeoutの時間を短くすると再現
+      stopServer "haskell"
+      return x
 
 example1 :: IO ()
-example1 = testNeovimLsp (Seconds 10) "./test-file/hoge.hs" $ do
+example1 = testWithHie (Seconds 10) "./test-file/hoge.hs" $ do
   b <- vim_get_current_buffer'
 
   -- didOpen

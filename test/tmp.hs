@@ -1,11 +1,11 @@
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TypeApplications    #-}
 {-# OPTIONS_GHC -Wall -Wno-unused-imports #-}
 
 module Main where
 
+import           Prelude
 import           RIO
 import           Control.Concurrent.STM
 import           Control.Lens                      (use)
@@ -23,6 +23,7 @@ import           Neovim.Test
 import           Neovim.LSP.Action.Notification    --(didChangeBuffer, didOpenBuffer)
 import           Neovim.LSP.Action.Request         --(hoverRequest)
 import           Neovim.LSP.Base
+import           Neovim.LSP.Plugin
 import           Neovim.LSP.LspPlugin.Notification
 import           Neovim.LSP.LspPlugin.Request
 import           Neovim.LSP.LspPlugin.Callback
@@ -33,26 +34,22 @@ import           System.Exit (exitSuccess)
 
 main :: IO ()
 main = do
+  putStrLn ""
   initialEnv <- initialEnvM
   mapM_ unsetEnv [ "GHC_PACKAGE_PATH" ]
-  let f = "test-file/hoge.hs"
-  testWithEmbeddedNeovim (Just f) (Seconds 10000) initialEnv $ do
+  testWithEmbeddedNeovim Nothing (Seconds 10000) initialEnv $ do
     vim_command' "source ./test-file/init.vim"
-    initializeLsp "./" "hie" ["--lsp", "-d", "-l", "/tmp/LanguageServer.log"]
-    dispatch [ notificationHandler , requestHandler, callbackHandler ]
-    wait =<< async handler2
+    vim_command' "edit ./test-file/hoge.hs"
+    cwd <- errOnInvalidResult (vimCallFunction "getcwd" [])
+    startServer "haskell" cwd "hie-wrapper" ["--lsp", "-d", "-l", "/tmp/hie.log"]
+      [ notificationHandler, requestHandler, callbackHandler ]
+    void $ focusLang "haskell" handler2
     finalizeLSP
     liftIO exitSuccess
 
-handler2 :: NeovimLsp ()
+handler2 :: Neovim LanguageEnv ()
 handler2 = do
   b <- vim_get_current_buffer'
-
-  -- Initialize
-  -------------
-  let cwd = filePathToUri "/home/hogeyama/.config/nvim/nvim-hs-libs/nvim-hs-lsp/test-file" -- TODO
-      params' = initializeParam Nothing (Just cwd)
-  pushRequest' @'InitializeK params'
 
   -- didOpen
   ----------
@@ -66,25 +63,18 @@ handler2 = do
   -- startは含まない, endは含む 上のは6行目を置換している
   -- start=end=6とすると6,7行目の間に挿入される
   --void $ vim_command "update" -- とかしない限り実ファイルに影響はない
-  --print' =<< getBufContents b -- 確認用
   didChangeBuffer b
   -- Redundant doのみ帰ってくるはず
 
   -- Hover
   --------
   threadDelaySec 3
-  waitCallback $ hoverRequest b (6,3) (const (return ()))
+  waitCallback $ hoverRequest b (6,3) nopCallback
   -- line,charは0-indexedでvimのと1ずれる(?)
   -- 次のreturnは range (5,2)~(5,8)
   --   6|  return ()
   --   7|123456789
   -- "return :: () -> IO ()"
-
-  -- Exit
-  -------
-  print' ()
-  threadDelaySec 3
-  pushNotification @'ExitK exitParam
 
 -------------------------------------------------------------------------------
 

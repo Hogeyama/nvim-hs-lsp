@@ -6,7 +6,6 @@ module Neovim.LSP.Action.Notification where
 
 import           RIO
 import qualified RIO.Map                      as M
-import           RIO.Partial                  (fromJust)
 
 import           Data.Extensible.Rexport
 import           Data.Generics.Product        (field)
@@ -35,17 +34,20 @@ didOpenBuffer :: (HasOutChan env, HasContext env, HasLogFunc env)
 didOpenBuffer b = do
     uri      <- getBufUri b
     version  <- genUniqueVersion
-    language <- fromJust <$> getBufLanguage b
-    contents <- getBufContents b
-    let textDocumentItem :: TextDocumentItem
-                         = Record
-                         $ #uri        @= uri
-                        <! #languageId @= language
-                        <! #version    @= version
-                        <! #text       @= contents
-                        <! nil
-    push $ notification @'TextDocumentDidOpenK
-         $ didOpenTextDocumentParam textDocumentItem
+    getBufLanguage b >>= \case
+      Just language -> do
+        contents <- getBufContents b
+        let textDocumentItem = Record
+                             $ #uri        @= uri
+                            <! #languageId @= language
+                            <! #version    @= version
+                            <! #text       @= contents
+                            <! nil
+        push $ notification @'TextDocumentDidOpenK
+             $ didOpenTextDocumentParam textDocumentItem
+      Nothing -> do
+        logError $ "didOpenBuffer: No language detected for "
+                    <> fromString (uriToFilePath uri)
 
 -- TextDocumentDidClose Notification
 ---------------------------------------
