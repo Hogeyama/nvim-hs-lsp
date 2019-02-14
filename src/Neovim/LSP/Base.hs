@@ -32,12 +32,12 @@ module Neovim.LSP.Base
   , genUniqueVersion
   , addIdMethodMap
   , HasInChan(..)
-  , pull
+  , receiveMessage
   , HasOutChan(..)
-  , push
-  , pushRequest
-  , pushRequest'
-  , pushNotification
+  , sendRequest
+  , sendRequest'
+  , sendNotification
+  , sendResponse
 
   , Callback(..)
   , CallbackOf
@@ -275,13 +275,12 @@ instance {-# OVERLAPPABLE #-} HasField' "outChan" env (TChan ByteString)
 -- Access Context
 -------------------------------------------------------------------------------
 
-pull :: (HasInChan env, MonadReader env m, MonadIO m)
-     => m InMessage
-pull = liftIO . atomically . readTChan =<< view inChanL
+receiveMessage :: (HasInChan env, MonadReader env m, MonadIO m) => m InMessage
+receiveMessage = liftIO . atomically . readTChan =<< view inChanL
 
-push :: (HasOutChan env, J.ToJSON a, Show a, MonadReader env m, MonadIO m)
-     => a -> m ()
-push x = do
+sendMessage :: (HasOutChan env, J.ToJSON a, Show a, MonadReader env m, MonadIO m)
+            => a -> m ()
+sendMessage x = do
     outCh <- view outChanL
     liftIO $ atomically $ writeTChan outCh $ toStrictBytes (J.encode x)
 
@@ -363,33 +362,42 @@ withResponse resp k =
 --
 -- >>> :set -XTypeApplications -XDataKinds
 -- >>> let wellTyped _ = "OK"
--- >>> wellTyped $ pushRequest @'InitializeK @LanguageEnv (initializeParam Nothing Nothing)
+-- >>> wellTyped $ sendRequest @'InitializeK @LanguageEnv (initializeParam Nothing Nothing)
 -- "OK"
 --
-pushRequest :: forall (m :: ClientRequestMethodK) env a
+sendRequest :: forall (m :: ClientRequestMethodK) env a
             .  (ImplRequest m, HasOutChan env, HasContext env)
             => RequestParam m
             -> CallbackOf m a
             -> Neovim env (TMVar a)
-pushRequest param callback = do
+sendRequest param callback = do
     let method = fromSing (sing :: Sing m)
     id' <- genUniqueID
     addIdMethodMap id' method
-    push $ request @m id' param
+    sendMessage $ request @m id' param
     var <- newEmptyTMVarIO
     registerCallback id' $ Callback var callback
     return var
 
-pushRequest' :: forall (m :: ClientRequestMethodK) env
+sendRequest' :: forall (m :: ClientRequestMethodK) env
              .  (ImplRequest m, ImplResponse m, HasOutChan env, HasContext env)
              => RequestParam m
              -> Neovim env ()
-pushRequest' param = void $ pushRequest @m param nopCallback
+sendRequest' param = void $ sendRequest @m param nopCallback
 
-pushNotification :: forall (m :: ClientNotificationMethodK) env
+sendNotification :: forall (m :: ClientNotificationMethodK) env
                  .  (ImplNotification m, HasOutChan env)
                  => NotificationParam m -> Neovim env ()
-pushNotification param = push $ notification @m param
+sendNotification param = sendMessage $ notification @m param
+
+sendResponse
+  :: forall (m :: ServerRequestMethodK) env
+  .  (ImplResponse m, HasOutChan env, HasContext env)
+  => Nullable ID
+  -> Option (ResResult m)
+  -> Option (ResponseError (ResError m))
+  -> Neovim env ()
+sendResponse id' resp err' = sendMessage $ response @m id' resp err'
 
 -------------------------------------------------------------------------------
 -- Dispatcher

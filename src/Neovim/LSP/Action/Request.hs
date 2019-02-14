@@ -38,7 +38,7 @@ hoverRequest :: (HasOutChan env, HasContext env)
              -> Neovim env (TMVar a)
 hoverRequest b p callback = do
   param <- getTextDocumentPositionParams b p
-  pushRequest param callback
+  sendRequest param callback
 
 callbackHoverPreview :: CallbackOf 'TextDocumentHoverK ()
 callbackHoverPreview (Response resp) = do
@@ -99,7 +99,7 @@ signatureHelpRequest :: (HasOutChan env, HasContext env)
                      -> Neovim env (TMVar a)
 signatureHelpRequest b p callback = do
   param <- getTextDocumentPositionParams b p
-  pushRequest param callback
+  sendRequest param callback
 
 -- TODO callback
 
@@ -116,7 +116,7 @@ definitionRequest :: (HasOutChan env, HasContext env)
                   -> Neovim env (TMVar a)
 definitionRequest b p callback = do
   param <- getTextDocumentPositionParams b p
-  pushRequest param callback
+  sendRequest param callback
 
 callbackDefinition :: CallbackOf 'TextDocumentDefinitionK ()
 callbackDefinition (Response resp) = do
@@ -159,8 +159,8 @@ executeCommandRequest cmd margs mcallback = do
            <! #arguments @= margs
            <! nil
   case mcallback of
-    Just callback -> Just <$> pushRequest param callback
-    Nothing -> do pushRequest' @'WorkspaceExecuteCommandK param
+    Just callback -> Just <$> sendRequest param callback
+    Nothing -> do sendRequest' @'WorkspaceExecuteCommandK param
                   return Nothing
 
 --}}}
@@ -174,7 +174,7 @@ workspaceSymbol
   -> CallbackOf 'WorkspaceSymbolK a
   -> Neovim env (TMVar a)
 workspaceSymbol sym callback =
-    pushRequest (Record (#query @= sym <! nil)) callback
+    sendRequest (Record (#query @= sym <! nil)) callback
 
 callbackWorkspaceSymbol :: CallbackOf 'WorkspaceSymbolK ()
 callbackWorkspaceSymbol (Response resp) = void $ withResponse resp $ \case
@@ -213,7 +213,7 @@ completionRequest b p callback = do
             <! #position     @= nvimPosToPosition p
             <! #context      @= None
             <! nil
-  pushRequest params callback
+  sendRequest params callback
 
 -- TODO error processing
 callbackComplete :: CallbackOf 'TextDocumentCompletionK [VimCompleteItem]
@@ -310,7 +310,7 @@ codeAction b (start,end) callback = do
             line   = fst
         in line start' <= line start && line start <= line end'
 
-  pushRequest params callback
+  sendRequest params callback
 
 callbackCodeAction :: CallbackOf 'TextDocumentCodeActionK ()
 callbackCodeAction (Response resp) = void $ withResponse resp $ \case
@@ -358,7 +358,7 @@ textDocumentFormatting b fopts = do
               $ #textDocument @= Record (#uri @= uri <! nil)
              <! #options @= fopts
              <! nil
-    pushRequest param (callbackTextDocumentFormatting uri)
+    sendRequest param (callbackTextDocumentFormatting uri)
 
 textDocumentRangeFormatting
   :: (HasOutChan env, HasContext env, HasLogFunc env)
@@ -377,7 +377,7 @@ textDocumentRangeFormatting b (start,end) fopts = do
               $ #start @= nvimPosToPosition start
              <! #end @= nvimPosToPosition end
              <! nil
-    pushRequest param (callbackTextDocumentRangeFormatting uri)
+    sendRequest param (callbackTextDocumentRangeFormatting uri)
 
 callbackTextDocumentFormatting :: Uri -> CallbackOf 'TextDocumentFormattingK ()
 callbackTextDocumentFormatting uri (Response resp) = callbackTextEdits uri resp
@@ -415,7 +415,7 @@ textDocumentReferences b p callback = do
         context = Record
                 $ #includeDeclaration @= True
                <! nil
-    pushRequest param callback
+    sendRequest param callback
 
 callbackTextDocumentReferences :: CallbackOf 'TextDocumentReferencesK ()
 callbackTextDocumentReferences (Response resp) = void $ withResponse resp $ \case
@@ -450,7 +450,7 @@ textDocumentDocumentSymbol b = do
     let params = Record
                $ #textDocument @= textDocumentIdentifier uri
               <! nil
-    pushRequest params  (callbackTextDocumentDocumentSymbol uri)
+    sendRequest params  (callbackTextDocumentDocumentSymbol uri)
 
 callbackTextDocumentDocumentSymbol :: Uri -> CallbackOf 'TextDocumentDocumentSymbolK ()
 callbackTextDocumentDocumentSymbol uri (Response resp) = void $ withResponse resp $ \case

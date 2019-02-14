@@ -43,7 +43,7 @@ didOpenBuffer b = do
                             <! #version    @= version
                             <! #text       @= contents
                             <! nil
-        push $ notification @'TextDocumentDidOpenK
+        sendNotification @'TextDocumentDidOpenK
              $ didOpenTextDocumentParam textDocumentItem
       Nothing -> do
         logError $ "didOpenBuffer: No language detected for "
@@ -57,7 +57,7 @@ didCloseBuffer b = do
     let param = Record
               $ #textDocument @= textDocumentIdentifier uri
              <! nil
-    push $ notification @'TextDocumentDidCloseK param
+    sendNotification @'TextDocumentDidCloseK param
     resetDiagnostics uri
 
 -- TextDocumentDidSave Notification
@@ -69,7 +69,7 @@ didSaveBuffer b = do
               $ #textDocument @= textDocumentIdentifier uri
              <! #text         @= None --Some contents
              <! nil
-    push $ notification @'TextDocumentDidSaveK param
+    sendNotification @'TextDocumentDidSaveK param
     resetDiagnostics uri
 
 -- TextDocumentDidChange Notification
@@ -88,7 +88,7 @@ didChangeBuffer b = do
               $ #textDocument   @= versionedTextDocmentIdentifier uri version
              <! #contentChanges @= [change]
              <! nil
-    push $ notification @'TextDocumentDidChangeK param
+    sendNotification @'TextDocumentDidChangeK param
     resetDiagnostics uri
 
 resetDiagnostics :: HasContext env => Uri -> Neovim env ()

@@ -24,8 +24,7 @@ notificationHandler = Worker "noti" notificationWorkerAction
 
 notificationWorkerAction :: WorkerAction ()
 notificationWorkerAction = forever $ loggingErrorImmortal $ do
-    msg <- pull
-    case msg of
+    receiveMessage >>= \case
       SomeNoti noti -> case singByProxy noti of
         STextDocumentPublishDiagnostics -> showDiagnotics noti
         SWindowLogMessage -> windowLogMessage noti

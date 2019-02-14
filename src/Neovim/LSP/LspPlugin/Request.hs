@@ -15,7 +15,6 @@ import           Data.Extensible
 import           Util
 import           Neovim.User.Choice
 import           Neovim.LSP.Base
-import           Neovim.LSP.Protocol.Messages
 import           Neovim.LSP.Protocol.Type
 import           Neovim.LSP.Util              as U
 
@@ -24,14 +23,14 @@ requestHandler = Worker "req" requestWorkerAction
 
 requestWorkerAction :: WorkerAction ()
 requestWorkerAction = forever $ loggingErrorImmortal $ do
-  pull >>= \case
-    SomeReq (req@(Request inner) :: ServerRequest m) -> case singByProxy req of
-      SWindowShowMessageRequest -> windowShowMessageRequest req
-      SClientRegisterCapability -> push $ response @m (Just (inner^. #id)) None None
-      SClientUnregisterCapability -> push $ response @m (Just (inner^. #id)) None None
-      SWorkspaceApplyEdit -> respondWorkspaceAplyEdit req
-      SServerRequestMisc _ -> logError "requestHandler: Misc: not implemented"
-    _ -> return ()
+    receiveMessage >>= \case
+      SomeReq (req@(Request inner) :: ServerRequest m) -> case singByProxy req of
+        SWindowShowMessageRequest -> windowShowMessageRequest req
+        SClientRegisterCapability -> sendResponse @m (Just (inner^. #id)) None None
+        SClientUnregisterCapability -> sendResponse  @m (Just (inner^. #id)) None None
+        SWorkspaceApplyEdit -> respondWorkspaceAplyEdit req
+        SServerRequestMisc _ -> logError "requestHandler: Misc: not implemented"
+      _ -> return ()
 
 -------------------------------------------------------------------------------
 -- WindowShowMessage
@@ -53,8 +52,7 @@ windowShowMessageRequest (Request req) = do
       None -> return Nothing
       Some actions' -> oneOf $ map (view #title) actions'
     let result = fmap (\action -> Record (#title @= action <: nil)) mAction
-    push $
-      response @'WindowShowMessageRequestK
+    sendResponse @'WindowShowMessageRequestK
         (Just (req^. #id))
         (Some result)
         None
@@ -73,7 +71,7 @@ respondWorkspaceAplyEdit (Request req) = do
       Some cs -> applyDocumentChanges cs >>= ret
     Some cs -> applyChanges cs >>= ret
   where
-    ret x = push $ response @'WorkspaceApplyEditK
+    ret x = sendResponse @'WorkspaceApplyEditK
               (Just (req^. #id))
               (Some (Record (#applied @= x <! nil)))
               None

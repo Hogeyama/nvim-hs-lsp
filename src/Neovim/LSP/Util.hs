@@ -199,13 +199,13 @@ startServer lang cwd cmd args workers = do
 
       ---- communication
       ------------------
-      waitCallback $ pushRequest @'InitializeK
+      waitCallback $ sendRequest @'InitializeK
          (initializeParam Nothing (Just (pathToUri cwd)))
          nopCallback
-      pushNotification @'InitializedK (Record nil)
+      sendNotification @'InitializedK (Record nil)
       whenJustM (getWorkspaceSettings lspConfig) $ \v -> do
         let param = Record (#settings @= v <! nil)
-        pushNotification @'WorkspaceDidChangeConfigurationK param
+        sendNotification @'WorkspaceDidChangeConfigurationK param
   where
     loadLspConfig :: Neovim env LspConfig
     loadLspConfig = updateLspConfig defaultLspConfig
@@ -295,7 +295,7 @@ data Header = Header
 stopServer :: Language -> NeovimLsp ()
 stopServer lang = do
     void $ focusLang lang $ do
-      push $ notification @'ExitK exitParam
+      sendNotification @'ExitK exitParam
       sh <- view (field @"serverHandles")
       isStillAlive <- fmap isNothing $ timeout (1 * 1000 * 1000) $ do
         logDebug "waiting!"

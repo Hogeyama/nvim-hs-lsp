@@ -132,7 +132,7 @@ testWithHie time file action = do
       startServer "haskell" cwd "hie-wrapper" ["--lsp", "-d", "-l", "/tmp/hie.log"]
         [ callbackHandler ]
       void $ focusLang "haskell" $
-        pushRequest' @'InitializeK (initializeParam Nothing (Just (pathToUri cwd)))
+        sendRequest' @'InitializeK (initializeParam Nothing (Just (pathToUri cwd)))
       vim_command' $ "edit " ++ toFilePath (cwd </> file)
       nvimHsLspOpenBuffer def
       x <- fromJust <$> focusLang "haskell" action
@@ -174,7 +174,7 @@ example1 = testWithHie (Seconds 10) $(mkRelFile "./test-file/hoge.hs") $ do
 
   -- Exit
   -------
-  pushNotification @'ExitK exitParam
+  sendNotification @'ExitK exitParam
 
 -------------------------------------------------------------------------------
 
