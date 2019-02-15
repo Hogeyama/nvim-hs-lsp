@@ -8,7 +8,7 @@
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 {-# OPTIONS_GHC -Wno-unused-imports #-}
 
-module Neovim.LSP.PluginSpec where
+module Neovim.LSP.PluginSpec (spec) where
 
 import           Prelude
 import           RIO
