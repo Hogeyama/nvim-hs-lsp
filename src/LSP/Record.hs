@@ -49,7 +49,7 @@ import           GHC.OverloadedLabels
 import           GHC.TypeLits            (KnownSymbol, Symbol, symbolVal)
 import           Unsafe.Coerce           (unsafeCoerce)
 
-import           Neovim                  (NvimObject (..))
+import           Neovim                  (NvimObject (..), Doc, AnsiStyle)
 import qualified Neovim                  as N (Object (..))
 
 -------------------------------------------------------------------------------
@@ -215,27 +215,43 @@ instance Forall (KeyValue KnownSymbol FieldToJSON) xs => ToJSON (Record xs) wher
 -- NvimObject
 -------------------------------------------------------------------------------
 
--- TODO implement fromObject
 class FieldNvimObject a where
   toObject' :: a -> Maybe N.Object
+  lookupObject' :: String -> Map N.Object N.Object -> Either (Doc AnsiStyle) a
 instance {-# OVERLAPPING #-} NvimObject o => FieldNvimObject (Option o) where
   toObject' None     = Nothing
   toObject' (Some x) = Just $ toObject x
+  lookupObject' key m = case M.lookup (N.ObjectString (fromString key)) m of
+    Nothing -> Right None
+    Just obj -> Some <$> fromObject obj
 instance NvimObject o => FieldNvimObject o where
   toObject' = Just . toObject
+  lookupObject' key m = case M.lookup (N.ObjectString (fromString key)) m of
+    Nothing -> Left (fromString $ "key " <> key <> " not found")
+    Just obj -> fromObject obj
 
-instance (NFData (Record xs), Forall (KeyValue KnownSymbol FieldNvimObject) xs)
-          => NvimObject (Record xs) where
-  toObject (Record xs) = N.ObjectMap $ hfoldlWithIndexFor
-    (Proxy @(KeyValue KnownSymbol FieldNvimObject))
-    (\_ m kv ->
-      let key  = N.ObjectString $ fromString $ symbolVal $ proxyAssocKey kv
-          mval = toObject' $ runIdentity $ getField kv
-      in case mval of
-        Nothing  -> m
-        Just val -> M.insert key val m)
-    M.empty
-    xs
+instance
+    ( NFData (Record xs)
+    , Forall (KeyValue KnownSymbol FieldNvimObject) xs
+    ) => NvimObject (Record xs)
+  where
+    toObject (Record xs) = N.ObjectMap $ hfoldlWithIndexFor
+      (Proxy @(KeyValue KnownSymbol FieldNvimObject))
+      (\_ map' kv ->
+        let key  = N.ObjectString $ fromString $ symbolVal $ proxyAssocKey kv
+            mval = toObject' $ runIdentity $ getField kv
+        in case mval of
+          Nothing  -> map'
+          Just val -> M.insert key val map')
+      M.empty
+      xs
+
+    fromObject (N.ObjectMap map') = fmap Record $
+      hgenerateFor (Proxy @(KeyValue KnownSymbol FieldNvimObject)) $ \m ->
+        let k = symbolVal (proxyAssocKey m)
+            z = lookupObject' k map'
+        in  Field . Identity <$> z
+    fromObject o = Left . fromString $ "ObjectMap is expected, but got " <> show o
 
 -------------------------------------------------------------------------------
 -- Enum
