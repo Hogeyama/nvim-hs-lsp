@@ -11,6 +11,7 @@ module LSP.Types
   ( Message
   -- Request
   , Request(..)
+  , request
   , RequestMessage
   , RequestParam
   , ImplRequest
@@ -18,6 +19,7 @@ module LSP.Types
   , ServerRequest
   -- Response
   , Response(..)
+  , response
   , ResponseMessage
   , ResponseError
   , ResponseResultParam
@@ -27,6 +29,7 @@ module LSP.Types
   , ServerResponse
   -- Notification
   , Notification(..)
+  , notification
   , ClientNotification
   , ServerNotification
   , ImplNotification
@@ -48,7 +51,6 @@ module LSP.Types
   , TextDocumentSync
   , TextDocumentSyncKind
   , TextDocumentSyncOptions
-
   , Position
   , Range
   , Location
@@ -82,6 +84,12 @@ module LSP.Types
   , DocumentSymbol(..)
   , CodeAction
   , CodeActionKind
+
+  -- param
+  -- TODO: 拡充
+  , initializeParam
+  , exitParam
+  , didOpenTextDocumentParam
   )
   where
 
@@ -95,7 +103,7 @@ import qualified RIO.Text                        as T
 import           Data.Aeson                      hiding (Error)
 import           Data.Extensible                 as E hiding (Nullable, Record,
                                                        record)
-import           Data.Singletons                 (SingI, SingKind (..))
+import           Data.Singletons                 (SingI, SingKind(..), sing)
 import           GHC.TypeLits
 import           Path                            (Path, Abs, File, Dir,
                                                   parseAbsFile, parseAbsDir,
@@ -119,28 +127,71 @@ type MessageF = '[ "jsonrpc" >: String ]
 
 -- RequestMessage
 -----------------
+newtype Request (m :: k) =
+  Request (RequestMessage (Demote k) (RequestParam m))
+  deriving Generic
+type family RequestParam (m :: k)
+
+request :: forall (m :: ClientRequestMethodK). ImplRequest m
+        => ID
+        -> RequestParam m
+        -> ClientRequest m
+request id' a = Request $ Record
+                        $ #jsonrpc @= "2.0"
+                       <! #id      @= id'
+                       <! #method  @= fromSing (sing :: Sing m)
+                       <! #params  @= a
+                       <! nil
+
 type RequestMessage  m a = Record (RequestMessageF m a)
-type RequestMessageF m a =
-  MessageF ++
+type RequestMessageF m a = MessageF ++
   '[ "id"      >: ID
    , "method"  >: m
-   , "params"  >: a -- NOTE 本来はOption a
-                    -- ただmethodによってはomitされると困るので
-                    -- それを表現するためにはRequestParamでOptionを付ける方が良い
-                    -- と思ったのでそうする
-                    -- 日本語
+   , "params"  >: a
    ]
 
--- ResponseMessage
------------------
+type ImplRequest (m :: k) =
+  ( SingI m
+  , Typeable m
+  , IsMethodKind k
+  , Eq        (RequestParam m)
+  , Show      (RequestParam m)
+  , FieldJSON (RequestParam m)
+  )
+deriving instance ImplRequest m => Eq       (Request m)
+deriving instance ImplRequest m => Show     (Request m)
+deriving instance ImplRequest m => ToJSON   (Request m)
+deriving instance ImplRequest m => FromJSON (Request m)
+
+type ClientRequest (m :: ClientRequestMethodK) = Request m
+type ServerRequest (m :: ServerRequestMethodK) = Request m
+
+-- Response Message
+------------------
+newtype Response (m :: k) =
+  Response (ResponseMessage (ResponseResultParam m) (ResponseErrorParam m))
+  deriving Generic
+type family ResponseResultParam (m :: k)
+type family ResponseErrorParam  (m :: k)
+
+response :: forall (m :: ServerRequestMethodK). SingI m
+         => Nullable ID
+         -> Option (ResponseResultParam m)
+         -> Option (ResponseError (ResponseErrorParam m))
+         -> ClientResponse m
+response id' resp err = Response $ Record
+                                 $ #jsonrpc @= "2.0"
+                                <! #id      @= id'
+                                <! #result  @= resp
+                                <! #error   @= err
+                                <! nil
+
 type ResponseMessage  a e = Record (ResponseMessageF a e)
-type ResponseMessageF a e =
-  MessageF ++
+type ResponseMessageF a e = MessageF ++
   '[ "id"      >: Nullable ID
    , "result"  >: Option a
    , "error"   >: Option (ResponseError e)
    ]
-
 type ResponseError  e = Record (ResponseErrorF e)
 type ResponseErrorF e =
   '[ "code"    >: ErrorCode
@@ -155,88 +206,63 @@ prettyResponceError err =
       None   -> mempty
       Some d -> ": " <> tshow d
 
+type ImplResponse (m :: k) =
+  ( SingI m
+  , Typeable m
+  , IsMethodKind k
+  , Eq        (ResponseResultParam m)
+  , Show      (ResponseResultParam m)
+  , ToJSON    (ResponseResultParam m) -- TODO: ResultはOptionで包むのでFieldJSONではダメ
+  , FromJSON  (ResponseResultParam m) --       綺麗に書けないかなあ
+  , Eq        (ResponseErrorParam  m)
+  , Show      (ResponseErrorParam  m)
+  , ToJSON    (ResponseErrorParam  m)
+  , FromJSON  (ResponseErrorParam  m)
+  )
+deriving instance ImplResponse m => Eq       (Response m)
+deriving instance ImplResponse m => Show     (Response m)
+deriving instance ImplResponse m => ToJSON   (Response m)
+deriving instance ImplResponse m => FromJSON (Response m)
+
+type ClientResponse (m :: ServerRequestMethodK) = Response m
+type ServerResponse (m :: ClientRequestMethodK) = Response m
+
 -- Notification Message
 -----------------------
-type NotificationMessage  m a = Record (NotificationMessageF m a)
-type NotificationMessageF m a =
-  MessageF ++
-  '[ "method"  >: m
-   , "params"  >: a  -- NOTE 本来はOption a
-   ]
-
--------------------------------------------------------------------------------
---- Param
--------------------------------------------------------------------------------
-
-type family RequestParam        (m :: k)
-type family NotificationParam   (m :: k)
-type family ResponseResultParam (m :: k)
-type family ResponseErrorParam  (m :: k)
-
-newtype Request (m :: k) =
-  Request (RequestMessage (Demote k) (RequestParam m))
-  deriving Generic
 newtype Notification (m :: k) =
   Notification (NotificationMessage (Demote k) (NotificationParam m))
   deriving Generic
-newtype Response (m :: k) =
-  Response (ResponseMessage (ResponseResultParam m) (ResponseErrorParam m))
-  deriving Generic
+type family NotificationParam (m :: k)
 
-type ClientResponse     (m :: ServerRequestMethodK)      = Response     m
-type ClientRequest      (m :: ClientRequestMethodK)      = Request      m
-type ClientNotification (m :: ClientNotificationMethodK) = Notification m
-type ServerResponse     (m :: ClientRequestMethodK)      = Response     m
-type ServerRequest      (m :: ServerRequestMethodK)      = Request      m
-type ServerNotification (m :: ServerNotificationMethodK) = Notification m
+notification :: forall (m :: ClientNotificationMethodK). ImplNotification m
+             => NotificationParam m -> Notification m
+notification a = Notification $ Record
+                              $ #jsonrpc @= "2.0"
+                             <! #method  @= fromSing (sing :: Sing m)
+                             <! #params  @= a
+                             <! nil
 
-type ImplRequest (m :: k) =
-  (SingI m
-  ,Typeable m
-  ,IsMethodKind k
-  ,Eq        (RequestParam m)
-  ,Show      (RequestParam m)
-  ,FieldJSON (RequestParam m)
-  )
-type ImplResponse (m :: k) =
-  (SingI m
-  ,Typeable m
-  ,IsMethodKind k
-  ,Eq        (ResponseResultParam m)
-  ,Show      (ResponseResultParam m)
-  ,ToJSON    (ResponseResultParam m) -- TODO: ResultはOptionで包むのでFieldJSONではダメ
-  ,FromJSON  (ResponseResultParam m) --       綺麗に書けないかなあ
-  ,Eq        (ResponseErrorParam  m)
-  ,Show      (ResponseErrorParam  m)
-  ,ToJSON    (ResponseErrorParam  m)
-  ,FromJSON  (ResponseErrorParam  m)
-  )
+type NotificationMessage  m a = Record (NotificationMessageF m a)
+type NotificationMessageF m a = MessageF ++
+  '[ "method"  >: m
+   , "params"  >: a -- NOTE 本来はOption a
+   ]
+
 type ImplNotification (m :: k) =
-  (SingI m
-  ,Typeable m
-  ,IsMethodKind k
-  ,Eq        (NotificationParam m)
-  ,Show      (NotificationParam m)
-  ,FieldJSON (NotificationParam m)
+  ( SingI m
+  , Typeable m
+  , IsMethodKind k
+  , Eq        (NotificationParam m)
+  , Show      (NotificationParam m)
+  , FieldJSON (NotificationParam m)
   )
-
--- instances
--------------
-
-deriving instance ImplRequest m => Eq       (Request m)
-deriving instance ImplRequest m => Show     (Request m)
-deriving instance ImplRequest m => ToJSON   (Request m)
-deriving instance ImplRequest m => FromJSON (Request m)
-
 deriving instance ImplNotification m => Eq       (Notification m)
 deriving instance ImplNotification m => Show     (Notification m)
 deriving instance ImplNotification m => ToJSON   (Notification m)
 deriving instance ImplNotification m => FromJSON (Notification m)
 
-deriving instance ImplResponse m => Eq       (Response m)
-deriving instance ImplResponse m => Show     (Response m)
-deriving instance ImplResponse m => ToJSON   (Response m)
-deriving instance ImplResponse m => FromJSON (Response m)
+type ClientNotification (m :: ClientNotificationMethodK) = Notification m
+type ServerNotification (m :: ServerNotificationMethodK) = Notification m
 
 -------------------------------------------------------------------------------
 -- Common Data
@@ -501,6 +527,95 @@ type instance ResponseResultParam 'InitializeK = Record
 type instance ResponseErrorParam 'InitializeK = Record
   '[ "retry" >: Bool
    ]
+
+initializeParam :: Nullable Number -> Nullable Uri -> RequestParam 'InitializeK
+initializeParam processId rootUri
+     = Record
+     $ #processId             @= processId
+    <! #rootPath              @= None
+    <! #rootUri               @= rootUri
+    <! #initializationOptions @= None
+    <! #capabilities          @=  Record {
+                                    fields =
+                                       #workspace    @= Some workspaceOption
+                                    <! #textDocument @= Some textDocumentOption
+                                    <! #experimental @= None
+                                    <! nil }
+    <! #trace                 @= Some #off
+    <! nil
+  where
+    workspaceOption :: WorkspaceClientCapabilities
+    workspaceOption -- {{{
+      =  Record
+      $  #applyEdit @= Some True
+      <! #workspaceEdit @= Some Record {
+              fields = #documentChanges @= Some False <! nil
+            }
+      <! #didChangeConfiguration @= Some Record {
+              fields = #dynamicRegistration @= Some False <! nil
+            }
+      <! #didChangeWatchedFiles @= Some Record {
+              fields = #dynamicRegistration @= Some False <! nil
+            }
+      <! #symbol @= Some Record {
+              fields = #dynamicRegistration @= Some False
+                    <! #symbolKind @= None -- TODO
+                    <! nil
+            }
+      <! #executeCommand @= noDyn
+      <! #workspaceFolders @= Some False
+      <! #configuration @= Some False
+      <! nil @(Field Identity)
+    -- }}}
+    textDocumentOption :: TextDocumentClientCapabilities
+    textDocumentOption -- {{{
+      = Record
+      $ #synchronization @= Some Record { fields =
+               #dynamicRegistration @= Some False
+            <! #willSave @= Some False
+            <! #willSaveUntil @= Some False
+            <! #didSave @= Some True
+            <! nil }
+      <! #completion @= Some Record { fields =
+               #dynamicRegistration @= Some False
+            <! #completionItem @= Some Record { fields =
+                     #snippetSupport @= Some True -- use neosnippet
+                  <! #commitCharactersSupport @= Some True
+                  <! #documentationFormat @= Some [ #plaintext ]
+                  <! nil }
+            <! #completionItemKind @= Some Record { fields =
+                     #valueSet @= None <! nil }
+            <! #contextSupport @= Some True -- TODO
+            <! nil }
+      <! #hover @= Some Record { fields =
+               #dynamicRegistration @= Some False
+            <! #contentFormat @= Some [ #plaintext ]
+            <! nil }
+      <! #signatureHelp @= Some Record { fields =
+               #dynamicRegistration @= Some False
+            <! #signatureInformation @= Some Record { fields =
+                     #documentationFormat @= Some [ #plaintext ] <! nil }
+            <! nil }
+      <! #references @= noDyn
+      <! #documentHightlight @= noDyn
+      <! #documentSymbol @= Some Record { fields =
+               #dynamicRegistration @= Some False
+            <! #symbolKind @= None
+            <! nil }
+      <! #formatting         @= noDyn
+      <! #rangeFormatting    @= noDyn
+      <! #onTypeFormatting   @= noDyn
+      <! #definition         @= noDyn
+      <! #typeDefinition     @= noDyn
+      <! #implementation     @= noDyn
+      <! #codeAction         @= noDyn
+      <! #codeLens           @= noDyn
+      <! #documentLink       @= noDyn
+      <! #colorProvider      @= noDyn
+      <! #rename             @= noDyn
+      <! nil
+    -- }}}
+    noDyn = Some Record { fields = #dynamicRegistration @= Some False <! nil }
 
 -- Other Data
 --------------
@@ -1075,6 +1190,10 @@ type instance NotificationParam 'InitializedK = Record '[]
 -- Exit{{{
 ----------------------------------------
 type instance NotificationParam 'ExitK = Option Void
+
+exitParam :: NotificationParam 'ExitK
+exitParam = None
+
 -- }}}
 
 -- ClientCancel {{{
@@ -1110,6 +1229,10 @@ instance EnumAsDef "FileChangeType" FileChangeTypeF where
 type instance NotificationParam 'TextDocumentDidOpenK = Record
   '[ "textDocument" >: TextDocumentItem
    ]
+didOpenTextDocumentParam :: TextDocumentItem
+                         -> NotificationParam 'TextDocumentDidOpenK
+didOpenTextDocumentParam textDocument = Record $ #textDocument @= textDocument <! nil
+
 -- }}}
 
 -- TextDocumentDidChange {{{

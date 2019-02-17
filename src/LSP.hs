@@ -4,4 +4,3 @@ import LSP.Record         as X
 import LSP.Method         as X
 import LSP.Types          as X
 import LSP.Proof          as X
-import LSP.MessageBuilder as X

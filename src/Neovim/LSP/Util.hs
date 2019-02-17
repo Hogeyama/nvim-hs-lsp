@@ -38,15 +38,15 @@ import           Neovim.LSP.Base
 
 vimCallFunction :: String -> [Object] -> Neovim env (Either NeovimException Object)
 vimCallFunction func args = do
-  func' <- evaluate (force func)
-  args' <- evaluate (force args)
-  vim_call_function func' args'
+  evaluate (rnf func)
+  evaluate (rnf args)
+  vim_call_function func args
 
 vimCallFunction' :: String -> [Object] -> Neovim env Object
 vimCallFunction' func args = do
-  func' <- evaluate (force func)
-  args' <- evaluate (force args)
-  vim_call_function' func' args'
+  evaluate (rnf func)
+  evaluate (rnf args)
+  vim_call_function' func args
 
 nvimEcho :: String -> Neovim env ()
 nvimEcho s = vim_command' $ "echo " ++ show s
