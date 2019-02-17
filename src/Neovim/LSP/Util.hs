@@ -12,7 +12,6 @@ import qualified RIO.Text                     as T
 import qualified RIO.Map                      as M
 
 import           Control.Lens                 ((^.), (.~))
-import           Data.Extensible.Rexport
 import           Data.Generics.Product        (field)
 import           System.Exit                  (exitSuccess)
 import           System.IO                    (hGetLine)
@@ -28,12 +27,10 @@ import           Path                         (Path, Abs, Dir,
                                                toFilePath, parseAbsFile,
                                                parseAbsDir)
 
-
+import           LSP
 import           Util
 import           Neovim
 import           Neovim.LSP.Base
-import           Neovim.LSP.Protocol.Type
-import           Neovim.LSP.Protocol.Messages
 
 -------------------------------------------------------------------------------
 -- Neovim
@@ -280,7 +277,7 @@ startServer lang cwd cmd args workers = do
                  | "Content-Type: " `L.isPrefixOf` x ->
                       go $ header { contentType = Just (drop 14 x) }
                  | "\r" == x          -> return header
-                 | "ExitSuccess" == x -> exitSuccess -- TODO hieだけだよね，これ
+                 | "ExitSuccess" == x -> exitSuccess -- hie only
                  | otherwise          -> error $ "unknown input: " ++ show x
 
 data Header = Header

@@ -7,23 +7,47 @@
 {-# OPTIONS_GHC -Wall                   #-}
 {-# OPTIONS_GHC -Wno-orphans            #-}
 
-module Neovim.LSP.Protocol.Type.Interfaces
-  ( ID(..)
+module LSP.Types
+  ( Message
+  -- Request
+  , Request(..)
+  , RequestMessage
+  , RequestParam
+  , ImplRequest
+  , ClientRequest
+  , ServerRequest
+  -- Response
+  , Response(..)
+  , ResponseMessage
+  , ResponseError
+  , ResponseResultParam
+  , ResponseErrorParam
+  , ImplResponse
+  , ClientResponse
+  , ServerResponse
+  -- Notification
+  , Notification(..)
+  , ClientNotification
+  , ServerNotification
+  , ImplNotification
+  , NotificationMessage
+  , NotificationParam
+
+  -- Other types
+  , ID(..)
   , Number
   , Version
   , Uri(..)
+  , pathToUri
+  , uriToFilePath
+  , uriToAbsFilePath
+  , uriToAbsDirPath
   , ErrorCode--(..)
   , prettyResponceError
   , DiagnosticSeverity(..)
-  , TextDocumentSync(..)
-  , TextDocumentSyncKind--(..)
+  , TextDocumentSync
+  , TextDocumentSyncKind
   , TextDocumentSyncOptions
-
-  , Message
-  , RequestMessage
-  , ResponseMessage
-  , ResponseError
-  , NotificationMessage
 
   , Position
   , Range
@@ -34,7 +58,9 @@ module Neovim.LSP.Protocol.Type.Interfaces
   , TextDocumentEdit
   , WorkspaceEdit
   , TextDocumentIdentifier
+  , textDocumentIdentifier
   , VersionedTextDocmentIdentifier
+  , versionedTextDocmentIdentifier
   , TextDocumentItem
   , TextDocumentPositionParams
   , CompletionItem
@@ -44,27 +70,6 @@ module Neovim.LSP.Protocol.Type.Interfaces
   , Trace
   , MessageType--(..)
   , MessageActionItem
-
-  , RequestParam
-  , NotificationParam
-  , ResResult
-  , ResError
-  --
-  , Response     (..)
-  , Request      (..)
-  , Notification (..)
-  , ImplNotification
-  , ImplRequest
-  , ImplResponse
-  --
-  , ClientResponse
-  , ClientRequest
-  , ClientNotification
-  , ServerResponse
-  , ServerRequest
-  , ServerNotification
-
-  -- 他のdata型
   , Hover
   , MarkedString
   , MarkupKind
@@ -75,16 +80,6 @@ module Neovim.LSP.Protocol.Type.Interfaces
   , FormattingOptions(..)
   , SymbolInformation
   , DocumentSymbol(..)
-
-  -- function
-  , pathToUri
-  , uriToFilePath
-  , uriToAbsFilePath
-  , uriToAbsDirPath
-  , textDocumentIdentifier
-  , versionedTextDocmentIdentifier
-
-  -- TODO
   , CodeAction
   , CodeActionKind
   )
@@ -107,12 +102,11 @@ import           Path                            (Path, Abs, File, Dir,
                                                   toFilePath)
 
 import           Data.Kind                       (Constraint)
-import           Neovim.LSP.Protocol.Type.Method
-import           Neovim.LSP.Protocol.Type.Record
-
+import           LSP.Method
+import           LSP.Record
 
 -- Interfaces defined in
--- https://github.com/Microsoft/language-server-protocol/blob/master/protocol.md
+-- https://microsoft.github.io/language-server-protocol/specification
 
 -------------------------------------------------------------------------------
 -- Base Protocol
@@ -171,6 +165,80 @@ type NotificationMessageF m a =
    ]
 
 -------------------------------------------------------------------------------
+--- Param
+-------------------------------------------------------------------------------
+
+type family RequestParam        (m :: k)
+type family NotificationParam   (m :: k)
+type family ResponseResultParam (m :: k)
+type family ResponseErrorParam  (m :: k)
+
+newtype Request (m :: k) =
+  Request (RequestMessage (Demote k) (RequestParam m))
+  deriving Generic
+newtype Notification (m :: k) =
+  Notification (NotificationMessage (Demote k) (NotificationParam m))
+  deriving Generic
+newtype Response (m :: k) =
+  Response (ResponseMessage (ResponseResultParam m) (ResponseErrorParam m))
+  deriving Generic
+
+type ClientResponse     (m :: ServerRequestMethodK)      = Response     m
+type ClientRequest      (m :: ClientRequestMethodK)      = Request      m
+type ClientNotification (m :: ClientNotificationMethodK) = Notification m
+type ServerResponse     (m :: ClientRequestMethodK)      = Response     m
+type ServerRequest      (m :: ServerRequestMethodK)      = Request      m
+type ServerNotification (m :: ServerNotificationMethodK) = Notification m
+
+type ImplRequest (m :: k) =
+  (SingI m
+  ,Typeable m
+  ,IsMethodKind k
+  ,Eq        (RequestParam m)
+  ,Show      (RequestParam m)
+  ,FieldJSON (RequestParam m)
+  )
+type ImplResponse (m :: k) =
+  (SingI m
+  ,Typeable m
+  ,IsMethodKind k
+  ,Eq        (ResponseResultParam m)
+  ,Show      (ResponseResultParam m)
+  ,ToJSON    (ResponseResultParam m) -- TODO: ResultはOptionで包むのでFieldJSONではダメ
+  ,FromJSON  (ResponseResultParam m) --       綺麗に書けないかなあ
+  ,Eq        (ResponseErrorParam  m)
+  ,Show      (ResponseErrorParam  m)
+  ,ToJSON    (ResponseErrorParam  m)
+  ,FromJSON  (ResponseErrorParam  m)
+  )
+type ImplNotification (m :: k) =
+  (SingI m
+  ,Typeable m
+  ,IsMethodKind k
+  ,Eq        (NotificationParam m)
+  ,Show      (NotificationParam m)
+  ,FieldJSON (NotificationParam m)
+  )
+
+-- instances
+-------------
+
+deriving instance ImplRequest m => Eq       (Request m)
+deriving instance ImplRequest m => Show     (Request m)
+deriving instance ImplRequest m => ToJSON   (Request m)
+deriving instance ImplRequest m => FromJSON (Request m)
+
+deriving instance ImplNotification m => Eq       (Notification m)
+deriving instance ImplNotification m => Show     (Notification m)
+deriving instance ImplNotification m => ToJSON   (Notification m)
+deriving instance ImplNotification m => FromJSON (Notification m)
+
+deriving instance ImplResponse m => Eq       (Response m)
+deriving instance ImplResponse m => Show     (Response m)
+deriving instance ImplResponse m => ToJSON   (Response m)
+deriving instance ImplResponse m => FromJSON (Response m)
+
+-------------------------------------------------------------------------------
 -- Common Data
 -------------------------------------------------------------------------------
 
@@ -198,7 +266,6 @@ instance Hashable ID
 newtype Uri = Uri { getUri :: Text }
   deriving (Eq, Ord, Read, Show, Generic, Hashable, ToJSON, FromJSON, ToJSONKey, FromJSONKey)
 
--- TODO test
 uriToFilePath :: Uri -> FilePath
 uriToFilePath (Uri uri)
   | "file://" `T.isPrefixOf` uri = platformAdjust . uriDecode . T.unpack $ T.drop n uri
@@ -372,7 +439,7 @@ data DiagnosticSeverity
   deriving (Show, Eq)
 
 -- |
--- >>> :m Data.List Neovim.LSP.Protocol.Type.Interfaces
+-- >>> :m + Data.List
 -- >>> sort [Error, Warning, Hint]
 -- [Error,Warning,Hint]
 instance Ord DiagnosticSeverity where
@@ -384,7 +451,6 @@ instance Ord DiagnosticSeverity where
         Information     -> 3
         Hint            -> 4
         OtherSeverity m -> m
-
 
 instance FromJSON DiagnosticSeverity where
   parseJSON (Number n) = return $ case round n of
@@ -410,77 +476,6 @@ instance EnumAsDef "SyncKind" TextDocumentSyncKindF where
               <! nil
 
 -------------------------------------------------------------------------------
---- Param
--------------------------------------------------------------------------------
-
-type family RequestParam      (m :: k)
-type family NotificationParam (m :: k)
-type family ResResult         (m :: k)
-type family ResError          (m :: k)
-
-type RequestSyn      (m :: k) = RequestMessage      (Demote k) (RequestParam m)
-type NotificationSyn (m :: k) = NotificationMessage (Demote k) (NotificationParam m)
-type ResponseSyn     (m :: k) = ResponseMessage     (ResResult m) (ResError m)
-newtype Request      (m :: k) = Request      (RequestSyn m)      deriving Generic
-newtype Notification (m :: k) = Notification (NotificationSyn m) deriving Generic
-newtype Response     (m :: k) = Response     (ResponseSyn m)     deriving Generic
-
-type ClientResponse     (m :: ServerRequestMethodK)      = Response     m
-type ClientRequest      (m :: ClientRequestMethodK)      = Request      m
-type ClientNotification (m :: ClientNotificationMethodK) = Notification m
-type ServerResponse     (m :: ClientRequestMethodK)      = Response     m
-type ServerRequest      (m :: ServerRequestMethodK)      = Request      m
-type ServerNotification (m :: ServerNotificationMethodK) = Notification m
-
-type ImplRequest (m :: k) =
-  (SingI m
-  ,Typeable m
-  ,IsMethodKind k
-  ,Eq        (RequestParam m)
-  ,Show      (RequestParam m)
-  ,FieldJSON (RequestParam m)
-  )
-type ImplResponse (m :: k) =
-  (SingI m
-  ,Typeable m
-  ,IsMethodKind k
-  ,Eq        (ResResult m)
-  ,Show      (ResResult m)
-  ,ToJSON    (ResResult m) -- TODO: ResultはOptionで包むのでFieldJSONではダメ
-  ,FromJSON  (ResResult m) --       綺麗に書けないかなあ
-  ,Eq        (ResError m)
-  ,Show      (ResError m)
-  ,ToJSON    (ResError m)
-  ,FromJSON  (ResError m)
-  )
-type ImplNotification (m :: k) =
-  (SingI m
-  ,Typeable m
-  ,IsMethodKind k
-  ,Eq        (NotificationParam m)
-  ,Show      (NotificationParam m)
-  ,FieldJSON (NotificationParam m)
-  )
-
--- instances
--------------
-
-deriving instance ImplRequest m => Eq       (Request m)
-deriving instance ImplRequest m => Show     (Request m)
-deriving instance ImplRequest m => ToJSON   (Request m)
-deriving instance ImplRequest m => FromJSON (Request m)
-
-deriving instance ImplNotification m => Eq       (Notification m)
-deriving instance ImplNotification m => Show     (Notification m)
-deriving instance ImplNotification m => ToJSON   (Notification m)
-deriving instance ImplNotification m => FromJSON (Notification m)
-
-deriving instance ImplResponse m => Eq       (Response m)
-deriving instance ImplResponse m => Show     (Response m)
-deriving instance ImplResponse m => ToJSON   (Response m)
-deriving instance ImplResponse m => FromJSON (Response m)
-
--------------------------------------------------------------------------------
 -- Client Request --{{{
 -------------------------------------------------------------------------------
 
@@ -498,12 +493,12 @@ type instance RequestParam 'InitializeK = Record
    ]
 
 -- | Initialize Response > Result
-type instance ResResult 'InitializeK = Record
+type instance ResponseResultParam 'InitializeK = Record
   '[ "capabilities" >: ServerCapabilities
    ]
 
 -- | Initialize Response > Error
-type instance ResError 'InitializeK = Record
+type instance ResponseErrorParam 'InitializeK = Record
   '[ "retry" >: Bool
    ]
 
@@ -518,28 +513,27 @@ type ClientCapabilities = Record
    , "experimental" >: Option Value
    ]
 
--- TODO move
-type OptionRecord xs = Option (Record xs)
+type OptionalRecord xs = Option (Record xs)
 
 type WorkspaceClientCapabilities = Record
   -- {{{
   '[ "applyEdit" >: Option Bool
-   , "workspaceEdit" >: OptionRecord
+   , "workspaceEdit" >: OptionalRecord
         '[ "documentChanges" >: Option Bool
          ]
-   , "didChangeConfiguration" >: OptionRecord
+   , "didChangeConfiguration" >: OptionalRecord
         '[ "dynamicRegistration" >: Option Bool
          ]
-   , "didChangeWatchedFiles" >: OptionRecord
+   , "didChangeWatchedFiles" >: OptionalRecord
         '[ "dynamicRegistration" >: Option Bool
          ]
-   , "symbol" >: OptionRecord
+   , "symbol" >: OptionalRecord
         '[ "dynamicRegistration" >: Option Bool
-         , "symbolKind" >: OptionRecord
+         , "symbolKind" >: OptionalRecord
               '[ "valueSet" >: Option [SymbolKind]
                ]
          ]
-   , "executeCommand" >: OptionRecord
+   , "executeCommand" >: OptionalRecord
         '[ "dynamicRegistration" >: Option Bool
          ]
    , "workspaceFolders" >: Option Bool
@@ -549,77 +543,77 @@ type WorkspaceClientCapabilities = Record
 
 type TextDocumentClientCapabilities = Record
   -- {{{
-  '[ "synchronization"    >: OptionRecord
+  '[ "synchronization"    >: OptionalRecord
         '[ "dynamicRegistration"  >: Option Bool
          , "willSave"             >: Option Bool
          , "willSaveUntil"        >: Option Bool
          , "didSave"              >: Option Bool
          ]
-   , "completion"         >: OptionRecord
+   , "completion"         >: OptionalRecord
         '[ "dynamicRegistration"  >: Option Bool
-         , "completionItem"       >: OptionRecord
+         , "completionItem"       >: OptionalRecord
               '[ "snippetSupport"          >: Option Bool
                , "commitCharactersSupport" >: Option Bool
                , "documentationFormat"     >: Option [MarkupKind]
                ]
-         , "completionItemKind"   >: OptionRecord
+         , "completionItemKind"   >: OptionalRecord
               '[ "valueSet" >: Option [CompletionItemKind]
                ]
          , "contextSupport"       >: Option Bool
          ]
-   , "hover"              >: OptionRecord
+   , "hover"              >: OptionalRecord
         '[ "dynamicRegistration"  >: Option Bool
          , "contentFormat"        >: Option [MarkupKind]
          ]
-   , "signatureHelp"      >: OptionRecord
+   , "signatureHelp"      >: OptionalRecord
         '[ "dynamicRegistration"  >: Option Bool
-         , "signatureInformation" >: OptionRecord
+         , "signatureInformation" >: OptionalRecord
               '[ "documentationFormat" >: Option [MarkupKind]
                ]
          ]
-   , "references"         >: OptionRecord
+   , "references"         >: OptionalRecord
         '[ "dynamicRegistration" >: Option Bool
          ]
-   , "documentHightlight" >: OptionRecord
+   , "documentHightlight" >: OptionalRecord
         '[ "dynamicRegistration" >: Option Bool
          ]
-   , "documentSymbol"     >: OptionRecord
+   , "documentSymbol"     >: OptionalRecord
         '[ "dynamicRegistration" >: Option Bool
-         , "symbolKind"          >: OptionRecord
+         , "symbolKind"          >: OptionalRecord
               '[ "valueSet" >: Option [SymbolKind]
                ]
          ]
-   , "formatting"         >: OptionRecord
+   , "formatting"         >: OptionalRecord
         '[ "dynamicRegistration" >: Option Bool
          ]
-   , "rangeFormatting"    >: OptionRecord
+   , "rangeFormatting"    >: OptionalRecord
         '[ "dynamicRegistration" >: Option Bool
          ]
-   , "onTypeFormatting"   >: OptionRecord
+   , "onTypeFormatting"   >: OptionalRecord
         '[ "dynamicRegistration" >: Option Bool
          ]
-   , "definition"         >: OptionRecord
+   , "definition"         >: OptionalRecord
         '[ "dynamicRegistration" >: Option Bool
          ]
-   , "typeDefinition"     >: OptionRecord
+   , "typeDefinition"     >: OptionalRecord
         '[ "dynamicRegistration" >: Option Bool
          ]
-   , "implementation"     >: OptionRecord
+   , "implementation"     >: OptionalRecord
         '[ "dynamicRegistration" >: Option Bool
          ]
-   , "codeAction"         >: OptionRecord
+   , "codeAction"         >: OptionalRecord
         '[ "dynamicRegistration" >: Option Bool
          ]
-   , "codeLens"           >: OptionRecord
+   , "codeLens"           >: OptionalRecord
         '[ "dynamicRegistration" >: Option Bool
          ]
-   , "documentLink"       >: OptionRecord
+   , "documentLink"       >: OptionalRecord
         '[ "dynamicRegistration" >: Option Bool
          ]
-   , "colorProvider"      >: OptionRecord
+   , "colorProvider"      >: OptionalRecord
         '[ "dynamicRegistration" >: Option Bool
          ]
-   , "rename"             >: OptionRecord
+   , "rename"             >: OptionalRecord
         '[ "dynamicRegistration" >: Option Bool
          ]
    ]
@@ -660,9 +654,7 @@ type ServerCapabilities = Record
    , "experimental"                     >: Option Value
    ]
 
-data TextDocumentSync = SyncOption TextDocumentSyncOptions
-                      | SyncKind   TextDocumentSyncKind
-                      deriving (Eq,Ord,Show)
+type TextDocumentSync = TextDocumentSyncOptions :|: TextDocumentSyncKind
 
 type TextDocumentSyncOptions = Record
   '[ "openClose"         >: Option Bool
@@ -696,37 +688,27 @@ type ExecuteCommandOptions = Record
   '[ "commands" >: [String]
    ]
 
---(To|From)JSON TextDocumentSync {{{
-instance FromJSON TextDocumentSync where
-  parseJSON x@Number{} = SyncKind   <$> parseJSON x
-  parseJSON x          = SyncOption <$> parseJSON x
-instance ToJSON TextDocumentSync where
-  toJSON (SyncOption opt) = toJSON opt
-  toJSON (SyncKind kind)  = toJSON kind
--- }}}
--- }}}
-
 -- Shutdown {{{
 ----------------------------------------
 type instance RequestParam 'ShutdownK = Option Void
-type instance ResResult    'ShutdownK = Record '[]
-type instance ResError     'ShutdownK = Value
+type instance ResponseResultParam 'ShutdownK = Record '[]
+type instance ResponseErrorParam  'ShutdownK = Value
 -- }}}
 
 -- WorkspaceSymbol {{{
 ----------------------------------------
 type instance RequestParam 'WorkspaceSymbolK = Record
   '[ "query" >: String ]
-type instance ResResult    'WorkspaceSymbolK = Nullable [SymbolInformation]
-type instance ResError     'WorkspaceSymbolK = Value
+type instance ResponseResultParam 'WorkspaceSymbolK = Nullable [SymbolInformation]
+type instance ResponseErrorParam  'WorkspaceSymbolK = Value
 
 -- }}}
 
 -- WorkspaceExecuteCommand {{{
 ----------------------------------------
 type instance RequestParam 'WorkspaceExecuteCommandK = ExecuteCommandParams
-type instance ResResult    'WorkspaceExecuteCommandK = Nullable Value
-type instance ResError     'WorkspaceExecuteCommandK = String
+type instance ResponseResultParam 'WorkspaceExecuteCommandK = Nullable Value
+type instance ResponseErrorParam  'WorkspaceExecuteCommandK = String
 
 type ExecuteCommandParams = Record
   '[ "command"   >: String
@@ -738,8 +720,8 @@ type ExecuteCommandParams = Record
 -- TextDocumentWillSaveWaitUntil {{{
 ----------------------------------------
 type instance RequestParam 'TextDocumentWillSaveWaitUntilK = WillSaveTextDocumentParams
-type instance ResResult    'TextDocumentWillSaveWaitUntilK = Void
-type instance ResError     'TextDocumentWillSaveWaitUntilK = Value
+type instance ResponseResultParam 'TextDocumentWillSaveWaitUntilK = Void
+type instance ResponseErrorParam  'TextDocumentWillSaveWaitUntilK = Value
 type WillSaveTextDocumentParams = Record
   '[ "textDocument" >: TextDocumentIdentifier
    , "reason"       >: TextDocumentSaveReason
@@ -757,8 +739,8 @@ instance EnumAsDef "TextDocumentSaveReason" TextDocumentSaveReasonF where
 -- TextDocumentCompletion {{{
 ----------------------------------------
 type instance RequestParam 'TextDocumentCompletionK = CompletionParams
-type instance ResResult    'TextDocumentCompletionK = Nullable ([CompletionItem] :|: CompletionList)
-type instance ResError     'TextDocumentCompletionK = String
+type instance ResponseResultParam 'TextDocumentCompletionK = Nullable ([CompletionItem] :|: CompletionList)
+type instance ResponseErrorParam  'TextDocumentCompletionK = String
 
 type CompletionList = Record
   '[ "isIncomplete" >: Bool
@@ -794,16 +776,16 @@ type CompletionContext = Value
 -- CompletionItemResolve {{{
 ----------------------------------------
 type instance RequestParam 'CompletionItemResolveK = CompletionItem
-type instance ResResult    'CompletionItemResolveK = CompletionItem
-type instance ResError     'CompletionItemResolveK = Value
+type instance ResponseResultParam 'CompletionItemResolveK = CompletionItem
+type instance ResponseErrorParam  'CompletionItemResolveK = Value
 
 -- }}}
 
 -- TextDocumentHover {{{
 ----------------------------------------
 type instance RequestParam 'TextDocumentHoverK = TextDocumentPositionParams
-type instance ResResult    'TextDocumentHoverK = Nullable Hover
-type instance ResError     'TextDocumentHoverK = Value
+type instance ResponseResultParam 'TextDocumentHoverK = Nullable Hover
+type instance ResponseErrorParam  'TextDocumentHoverK = Value
   --  "error: code and message set in case an exception happens during the hover request."
 
 type Hover = Record
@@ -816,8 +798,8 @@ type Hover = Record
 -- TextDocumentSignatureHelp {{{
 ----------------------------------------
 type instance RequestParam 'TextDocumentSignatureHelpK = TextDocumentPositionParams
-type instance ResResult    'TextDocumentSignatureHelpK = SignatureHelp
-type instance ResError     'TextDocumentSignatureHelpK = Value
+type instance ResponseResultParam 'TextDocumentSignatureHelpK = SignatureHelp
+type instance ResponseErrorParam  'TextDocumentSignatureHelpK = Value
 
 type SignatureHelp = Value
   -- HIEが対応していないので後回しで良い
@@ -827,16 +809,16 @@ type SignatureHelp = Value
 -- TextDocumentDefinition {{{
 ----------------------------------------
 type instance RequestParam 'TextDocumentDefinitionK = TextDocumentPositionParams
-type instance ResResult    'TextDocumentDefinitionK = Nullable [Location]
-type instance ResError     'TextDocumentDefinitionK = String
+type instance ResponseResultParam 'TextDocumentDefinitionK = Nullable [Location]
+type instance ResponseErrorParam  'TextDocumentDefinitionK = String
 
 -- }}}
 
 -- TextDocumentReferences {{{
 ----------------------------------------
 type instance RequestParam 'TextDocumentReferencesK = ReferenceParams
-type instance ResResult    'TextDocumentReferencesK = Nullable [Location]
-type instance ResError     'TextDocumentReferencesK = String
+type instance ResponseResultParam 'TextDocumentReferencesK = Nullable [Location]
+type instance ResponseErrorParam  'TextDocumentReferencesK = String
 
 type ReferenceParams  = Record ReferenceParamsF
 type ReferenceParamsF =
@@ -852,8 +834,8 @@ type ReferenceContext = Record
 -- TextDocumentDocumentHighlight {{{
 ----------------------------------------
 type instance RequestParam 'TextDocumentDocumentHighlightK = TextDocumentPositionParams
-type instance ResResult    'TextDocumentDocumentHighlightK = Nullable [DocumentHighlight]
-type instance ResError     'TextDocumentDocumentHighlightK = Value
+type instance ResponseResultParam 'TextDocumentDocumentHighlightK = Nullable [DocumentHighlight]
+type instance ResponseErrorParam  'TextDocumentDocumentHighlightK = Value
 type DocumentHighlight = Record
   '[ "range" >: Range
    , "kind"  >: Option DocumentHighlightKind
@@ -872,8 +854,8 @@ instance EnumAsDef "DocumentHighlightKind" DocumentHighlightKindF where
 ----------------------------------------
 type instance RequestParam 'TextDocumentDocumentSymbolK = Record
   '[ "textDocument" >: TextDocumentIdentifier ]
-type instance ResResult 'TextDocumentDocumentSymbolK = Nullable ([DocumentSymbol] :|: [SymbolInformation])
-type instance ResError  'TextDocumentDocumentSymbolK = Value
+type instance ResponseResultParam 'TextDocumentDocumentSymbolK = Nullable ([DocumentSymbol] :|: [SymbolInformation])
+type instance ResponseErrorParam  'TextDocumentDocumentSymbolK = Value
 
 newtype DocumentSymbol = DocumentSymbol (Record
   '[ "name" >: String
@@ -901,12 +883,12 @@ type instance RequestParam 'TextDocumentFormattingK = Record
   '[ "textDocument" >: TextDocumentIdentifier
    , "options" >: FormattingOptions
    ]
-type instance ResResult    'TextDocumentFormattingK = Nullable [TextEdit]
-type instance ResError     'TextDocumentFormattingK = String
+type instance ResponseResultParam 'TextDocumentFormattingK = Nullable [TextEdit]
+type instance ResponseErrorParam  'TextDocumentFormattingK = String
 
 -- FormattingOptions {{{
 -- |
--- Original difinition is:
+-- Original definition is:
 --
 -- @
 -- interface FormattingOptions {
@@ -962,8 +944,8 @@ type instance RequestParam 'TextDocumentRangeFormattingK = Record
    , "range"        >: Range
    , "options"      >: FormattingOptions
    ]
-type instance ResResult    'TextDocumentRangeFormattingK = Nullable [TextEdit]
-type instance ResError     'TextDocumentRangeFormattingK = String
+type instance ResponseResultParam 'TextDocumentRangeFormattingK = Nullable [TextEdit]
+type instance ResponseErrorParam  'TextDocumentRangeFormattingK = String
 
 --}}}
 
@@ -975,8 +957,8 @@ type instance RequestParam 'TextDocumentOnTypeFormattingK = Record
    , "ch"           >: String
    , "options"      >: FormattingOptions
    ]
-type instance ResResult    'TextDocumentOnTypeFormattingK = Nullable [TextEdit]
-type instance ResError     'TextDocumentOnTypeFormattingK = Value
+type instance ResponseResultParam 'TextDocumentOnTypeFormattingK = Nullable [TextEdit]
+type instance ResponseErrorParam  'TextDocumentOnTypeFormattingK = Value
 
 --}}}
 
@@ -984,8 +966,8 @@ type instance ResError     'TextDocumentOnTypeFormattingK = Value
 ----------------------------------------
 
 type instance RequestParam 'TextDocumentCodeActionK = CodeActionParams
-type instance ResResult 'TextDocumentCodeActionK = Nullable [Command :|: CodeAction]
-type instance ResError  'TextDocumentCodeActionK = Value
+type instance ResponseResultParam 'TextDocumentCodeActionK = Nullable [Command :|: CodeAction]
+type instance ResponseErrorParam  'TextDocumentCodeActionK = Value
 
 type CodeActionParams = Record
   '[ "textDocument" >: TextDocumentIdentifier
@@ -1022,8 +1004,8 @@ type CodeAction = Record
 type instance RequestParam 'TextDocumentCodeLensK = Record
   '[ "textDocument" >: TextDocumentIdentifier
    ]
-type instance ResResult    'TextDocumentCodeLensK = Nullable [CodeLens]
-type instance ResError     'TextDocumentCodeLensK = Value
+type instance ResponseResultParam 'TextDocumentCodeLensK = Nullable [CodeLens]
+type instance ResponseErrorParam  'TextDocumentCodeLensK = Value
 
 type CodeLens = Record
   '[ "range"   >: Range
@@ -1036,8 +1018,8 @@ type CodeLens = Record
 -- CodeLensResolve {{{
 ----------------------------------------
 type instance RequestParam 'CodeLensResolveK = CodeLens
-type instance ResResult    'CodeLensResolveK = CodeLens
-type instance ResError     'CodeLensResolveK = Value
+type instance ResponseResultParam 'CodeLensResolveK = CodeLens
+type instance ResponseErrorParam  'CodeLensResolveK = Value
 
 -- }}}
 
@@ -1045,8 +1027,8 @@ type instance ResError     'CodeLensResolveK = Value
 type instance RequestParam 'TextDocumentDocumentLinkK = Record
   '[ "textDocument" >: TextDocumentIdentifier
    ]
-type instance ResResult    'TextDocumentDocumentLinkK = Nullable DocumentLink
-type instance ResError     'TextDocumentDocumentLinkK = Value
+type instance ResponseResultParam 'TextDocumentDocumentLinkK = Nullable DocumentLink
+type instance ResponseErrorParam  'TextDocumentDocumentLinkK = Value
 
 type DocumentLink = Record
   '[ "range"  >: Range
@@ -1057,8 +1039,8 @@ type DocumentLink = Record
 
 -- DocumentLinkResolve {{{
 type instance RequestParam 'DocumentLinkResolveK = DocumentLink
-type instance ResResult    'DocumentLinkResolveK = DocumentLink
-type instance ResError     'DocumentLinkResolveK = Value
+type instance ResponseResultParam 'DocumentLinkResolveK = DocumentLink
+type instance ResponseErrorParam  'DocumentLinkResolveK = Value
 -- }}}
 
 -- TextDocumentRename {{{
@@ -1067,17 +1049,16 @@ type instance RequestParam 'TextDocumentRenameK = Record
    , "position"     >: Position
    , "newName"      >: String
    ]
-type instance ResResult    'TextDocumentRenameK = Nullable WorkspaceEdit
-type instance ResError     'TextDocumentRenameK = Value
+type instance ResponseResultParam 'TextDocumentRenameK = Nullable WorkspaceEdit
+type instance ResponseErrorParam  'TextDocumentRenameK = Value
 
 -- }}}
 
 -- Misc {{{
 ----------------------------------------
-
 type instance RequestParam ('ClientRequestMiscK s) = Value
-type instance ResResult    ('ClientRequestMiscK s) = Value
-type instance ResError     ('ClientRequestMiscK s) = Value
+type instance ResponseResultParam ('ClientRequestMiscK s) = Value
+type instance ResponseErrorParam  ('ClientRequestMiscK s) = Value
 
 -- }}}
 
@@ -1142,7 +1123,6 @@ type TextDocumentContentChangeEvent = Record
    , "rangeLength" >: Option Number
    , "text"        >: Text
    ]
-  -- None,None,FullTextにすればよい
 -- }}}
 
 -- TextDocumentWillSave {{{
@@ -1194,8 +1174,8 @@ type MessageActionItem = Record
 type instance RequestParam 'ClientRegisterCapabilityK = Record
   '[ "registrations" >: [Registration]
    ]
-type instance ResResult 'ClientRegisterCapabilityK = Void
-type instance ResError  'ClientRegisterCapabilityK = Value
+type instance ResponseResultParam 'ClientRegisterCapabilityK = Void
+type instance ResponseErrorParam  'ClientRegisterCapabilityK = Value
 
 type Registration = Record
   '[ "id" >: String
@@ -1207,8 +1187,8 @@ type Registration = Record
 -- WorkspaceApplyEdit {{{
 ----------------------------------------
 type instance RequestParam 'WorkspaceApplyEditK = ApplyWorkspaceEditParams
-type instance ResResult    'WorkspaceApplyEditK = ApplyWorkspaceEditResponse
-type instance ResError     'WorkspaceApplyEditK = String
+type instance ResponseResultParam 'WorkspaceApplyEditK = ApplyWorkspaceEditResponse
+type instance ResponseErrorParam  'WorkspaceApplyEditK = String
 
 type ApplyWorkspaceEditParams = Record
   '[ "label" >: Option String
@@ -1226,8 +1206,8 @@ type instance RequestParam 'WindowShowMessageRequestK = Record
    , "message" >: Text
    , "actions" >: Option [MessageActionItem]
    ]
-type instance ResResult 'WindowShowMessageRequestK = Nullable MessageActionItem
-type instance ResError  'WindowShowMessageRequestK = Value
+type instance ResponseResultParam 'WindowShowMessageRequestK = Nullable MessageActionItem
+type instance ResponseErrorParam  'WindowShowMessageRequestK = Value
 --}}}
 
 -- ClientUnregisterCapability {{{
@@ -1235,8 +1215,8 @@ type instance ResError  'WindowShowMessageRequestK = Value
 type instance RequestParam 'ClientUnregisterCapabilityK = Record
   '[ "registrationParams" >: [Unregistration]
    ]
-type instance ResResult 'ClientUnregisterCapabilityK = Void
-type instance ResError  'ClientUnregisterCapabilityK = Value
+type instance ResponseResultParam 'ClientUnregisterCapabilityK = Void
+type instance ResponseErrorParam  'ClientUnregisterCapabilityK = Value
 
 type Unregistration = Record
   '[ "id" >: String
@@ -1247,8 +1227,8 @@ type Unregistration = Record
 -- Misc {{{
 ----------------------------------------
 type instance RequestParam ('ServerRequestMiscK s) = Value
-type instance ResResult    ('ServerRequestMiscK s) = Value
-type instance ResError     ('ServerRequestMiscK s) = Value
+type instance ResponseResultParam ('ServerRequestMiscK s) = Value
+type instance ResponseErrorParam  ('ServerRequestMiscK s) = Value
 --}}}
 
 --}}}
@@ -1280,26 +1260,6 @@ instance EnumAsDef "MessageType" MessageTypeF where
               <! Const @_ @"info"    (Number 3)
               <! Const @_ @"log"     (Number 3)
               <! nil
---data MessageType
---  = MessageError
---  | MessageWarning
---  | MessageInfo
---  | MessageLog
---  deriving (Show,Eq,Ord)
---instance ToJSON MessageType where-- {{{
---  toJSON MessageError   = Number 1
---  toJSON MessageWarning = Number 2
---  toJSON MessageInfo    = Number 3
---  toJSON MessageLog     = Number 4
---instance FromJSON MessageType where
---  parseJSON (Number n) = case round @_ @Int n of
---    1 -> pure MessageError
---    2 -> pure MessageWarning
---    3 -> pure MessageInfo
---    4 -> pure MessageLog
---    _ -> mzero
---  parseJSON _ = mzero
--- }}}
 --}}}
 
 -- WindowLogMessage {{{

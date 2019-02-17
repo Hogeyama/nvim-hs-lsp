@@ -1,5 +1,5 @@
 
-module Neovim.LSP.Protocol.Type.Proof
+module LSP.Proof
   ( prfClientReq
   , prfClientNoti
   , prfClientResp
@@ -12,8 +12,8 @@ import           RIO
 
 import           Data.Constraint
 import           Data.Singletons.TypeLits
-import           Neovim.LSP.Protocol.Type.Interfaces
-import           Neovim.LSP.Protocol.Type.Method
+import           LSP.Types
+import           LSP.Method
 
 prfClientReq :: forall (m :: ClientRequestMethodK). Sing m -> Dict (ImplRequest m)
 prfClientReq = \case -- {{{
@@ -113,5 +113,5 @@ prfClientResp = \case -- {{{
 -- }}}
 
 notImplemented :: HasCallStack => a
-notImplemented = error "Neovim.LSP.Protocol.Type.Proof: not implemented"
+notImplemented = error "LSP.Proof: not implemented"
 

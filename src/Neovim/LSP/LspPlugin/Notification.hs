@@ -10,13 +10,12 @@ import qualified RIO.Map                  as M
 import qualified RIO.Text                 as T
 
 import           Control.Lens             ((%~))
-import           Data.Extensible.Rexport
 import           Data.Generics.Product    (field)
 
+import           LSP
 import           Util
 import           Neovim                   hiding (Plugin, whenM)
 import           Neovim.LSP.Base
-import           Neovim.LSP.Protocol.Type
 import           Neovim.LSP.Util
 
 notificationHandler :: Worker

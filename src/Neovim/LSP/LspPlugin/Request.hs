@@ -10,12 +10,10 @@ import           RIO
 import qualified RIO.Map                      as M
 import qualified RIO.Text                     as T
 
-import           Data.Extensible
-
+import           LSP
 import           Util
 import           Neovim.User.Choice
 import           Neovim.LSP.Base
-import           Neovim.LSP.Protocol.Type
 import           Neovim.LSP.Util              as U
 
 requestHandler :: Worker
@@ -60,7 +58,6 @@ windowShowMessageRequest (Request req) = do
 -- WorkspaceApplyEdit
 ---------------------------------------
 
--- TODO ask whether to apply or not
 respondWorkspaceAplyEdit :: Request 'WorkspaceApplyEditK -> WorkerAction ()
 respondWorkspaceAplyEdit (Request req) = do
   let edit = req^. #params.__#edit

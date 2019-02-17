@@ -7,13 +7,11 @@ module Neovim.LSP.Action.Notification where
 import           RIO
 import qualified RIO.Map                      as M
 
-import           Data.Extensible.Rexport
 import           Data.Generics.Product        (field)
 
+import           LSP
 import           Neovim
 import           Neovim.LSP.Base
-import           Neovim.LSP.Protocol.Messages
-import           Neovim.LSP.Protocol.Type
 import           Neovim.LSP.Util
 
 -------------------------------------------------------------------------------

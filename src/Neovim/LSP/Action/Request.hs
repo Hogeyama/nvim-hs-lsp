@@ -13,13 +13,12 @@ import qualified RIO.Map                  as M
 import           Control.Lens             (views)
 import           Data.Aeson
 import           Data.Coerce              (coerce)
-import           Data.Extensible.Rexport
 import           Data.Generics.Product    (field)
 import           Data.Either.Combinators  (whenLeft)
 
+import           LSP
 import           Neovim                   hiding (Plugin, range, (<>))
 import           Neovim.LSP.Base
-import           Neovim.LSP.Protocol.Type
 import           Neovim.LSP.Util
 import qualified Neovim.User.Choice       as Choice
 

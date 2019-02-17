@@ -10,13 +10,14 @@
 {-# OPTIONS_GHC -Wall                   #-}
 {-# OPTIONS_GHC -Wno-orphans            #-}
 
-module Neovim.LSP.Protocol.Type.Record
-  ( Option(..)
+module LSP.Record
+  (
+    Record(..)
+  , Option(..)
+  , Nullable
   , Void
   , (:|:)(..), pattern L, pattern R
-  , Nullable
   , FieldJSON
-  , Record(..)
   , __
 
   , Enum'(..)
@@ -31,6 +32,8 @@ module Neovim.LSP.Protocol.Type.Record
   , caseOfEnum
   , matchEnumAs
   , caseOfEnumAs
+
+  , module Export
   ) where
 
 import           RIO                     hiding (Void)
@@ -39,7 +42,7 @@ import qualified RIO.Map                 as M
 
 import           Data.Aeson              hiding (KeyValue, Object)
 import qualified Data.Aeson.Types        as J
-import           Data.Extensible.Rexport
+import           Data.Extensible         as Export hiding (Nullable, Record, record)
 import qualified Data.Extensible         as E
 import           GHC.Generics            (Generic, Generic1)
 import           GHC.OverloadedLabels
@@ -95,7 +98,7 @@ type Nullable = Maybe
 -- >>> :set -XDataKinds -XTypeOperators -XOverloadedStrings -XOverloadedLabels
 -- >>> import RIO
 -- >>> import qualified Data.ByteString.Lazy.Char8 as BL
--- >>> let recordMay = Record $ Nothing =<: nil :: Record '["id" >: Maybe  Char]
+-- >>> let recordMay = Record $ Nothing =<: nil :: Record '["id" >: Nullable Char]
 -- >>> let recordOpt = Record $ None    =<: nil :: Record '["id" >: Option Char]
 -- >>> BL.putStrLn $ encode $ toJSON recordMay
 -- {"id":null}
@@ -104,21 +107,21 @@ type Nullable = Maybe
 --
 -- Inversely,
 --
--- >>> decode "{\"id\":null}" :: Maybe (Record '["id" >: Maybe  Int])
+-- >>> decode @(Record '["id" >: Nullable Int]) "{\"id\":null}"
 -- Just (Record {fields = id @= Nothing <: nil})
--- >>> decode "{}" :: Maybe (Record '["id" >: Maybe  Int])
+-- >>> decode "{}" :: Maybe (Record '["id" >: Nullable  Int])
 -- Nothing
--- >>> decode "{\"id\":null}" :: Maybe (Record '["id" >: Option Int])
+-- >>> decode @(Record '["id" >: Option Int]) "{\"id\":null}"
 -- Just (Record {fields = id @= None <: nil})
--- >>> decode "{}" :: Maybe (Record '["id" >: Option Int])
+-- >>> decode @(Record '["id" >: Option Int]) "{}"
 -- Just (Record {fields = id @= None <: nil})
 --
 -- If you want a both nullable and ommitable field, use '(Option (Maybe a))':
 --
 -- >>> type Rec = Record '["id" >: Option (Maybe Int)]
--- >>> decode "{\"id\":null}" :: Maybe Rec
+-- >>> decode @Rec "{\"id\":null}"
 -- Just (Record {fields = id @= Some Nothing <: nil})
--- >>> decode "{}" :: Maybe Rec
+-- >>> decode @Rec "{}"
 -- Just (Record {fields = id @= None <: nil})
 --
 data Option a = Some a | None

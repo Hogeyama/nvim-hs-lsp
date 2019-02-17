@@ -1,27 +1,17 @@
 
 {-# OPTIONS_GHC -Wall #-}
 
--- BuildMessageとかのほうがいいかしら
-module Neovim.LSP.Protocol.Messages where
+module LSP.MessageBuilder where
 
 import           RIO
-
-import           Data.Extensible.Rexport
 import           Data.Singletons
-
-import           Neovim.LSP.Protocol.Type
+import           LSP.Record
+import           LSP.Method
+import           LSP.Types
 
 -------------------------------------------------------------------------------
 -- General
 -------------------------------------------------------------------------------
-
-notification :: forall (m :: ClientNotificationMethodK). ImplNotification m
-             => NotificationParam m -> Notification m
-notification a = Notification $ Record
-                              $ #jsonrpc @= "2.0"
-                             <! #method  @= fromSing (sing :: Sing m)
-                             <! #params  @= a
-                             <! nil
 
 -- | Build 'ClientRequest'
 request :: forall (m :: ClientRequestMethodK). ImplRequest m
@@ -38,8 +28,8 @@ request id' a = Request $ Record
 -- | Build 'ClientResponse'
 response :: forall (m :: ServerRequestMethodK). SingI m
          => Nullable ID
-         -> Option (ResResult m)
-         -> Option (ResponseError (ResError m))
+         -> Option (ResponseResultParam m)
+         -> Option (ResponseError (ResponseErrorParam m))
          -> ClientResponse m
 response id' resp err = Response $ Record
                                  $ #jsonrpc @= "2.0"
@@ -47,6 +37,14 @@ response id' resp err = Response $ Record
                                 <! #result  @= resp
                                 <! #error   @= err
                                 <! nil
+
+notification :: forall (m :: ClientNotificationMethodK). ImplNotification m
+             => NotificationParam m -> Notification m
+notification a = Notification $ Record
+                              $ #jsonrpc @= "2.0"
+                             <! #method  @= fromSing (sing :: Sing m)
+                             <! #params  @= a
+                             <! nil
 
 -------------------------------------------------------------------------------
 -- Initialize

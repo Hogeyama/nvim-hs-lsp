@@ -1,10 +1,7 @@
 
 {-# OPTIONS_GHC -Wall #-}
 
--- TODO
--- FromJSONでmiscを扱うとき，Requestとして処理するかNotificationとして処理するかはどう決める？
-
-module Neovim.LSP.Protocol.Type.Method
+module LSP.Method
   ( ClientRequestMethod (..), ClientNotificationMethod (..)
   , ClientRequestMethodK(..), ClientNotificationMethodK(..)
   , ServerRequestMethod (..), ServerNotificationMethod (..)
@@ -20,7 +17,7 @@ import qualified RIO.Text                          as T
 import           Data.Aeson
 import           Data.Singletons.TH
 import           Data.Singletons.TypeLits
-import           Neovim.LSP.Protocol.Type.Record
+import           LSP.Record
 
 -------------------------------------------------------------------------------
 -- Method
@@ -240,17 +237,17 @@ data ClientNotificationMethodK --{{{
 -- }}}
 
 data ServerRequestMethodK -- {{{
-  = WindowShowMessageRequestK       -- Req
-  | ClientRegisterCapabilityK       -- Req
-  | ClientUnregisterCapabilityK     -- Req
-  | WorkspaceApplyEditK             -- Req
+  = WindowShowMessageRequestK
+  | ClientRegisterCapabilityK
+  | ClientUnregisterCapabilityK
+  | WorkspaceApplyEditK
   | ServerRequestMiscK Symbol
 -- }}}
 data ServerNotificationMethodK -- {{{
-  = WindowShowMessageK              -- Noti
-  | WindowLogMessageK               -- Noti
-  | TelemetryEventK                 -- Noti
-  | TextDocumentPublishDiagnosticsK -- Noti
+  = WindowShowMessageK
+  | WindowLogMessageK
+  | TelemetryEventK
+  | TextDocumentPublishDiagnosticsK
   | ServerCancelK
   | ServerNotificationMiscK Symbol
 -- }}}

@@ -15,28 +15,20 @@ import           RIO
 import           RIO.Partial                       (fromJust)
 import           RIO.List.Partial                  (tail)
 import           Test.Hspec
-import           Data.Extensible
 import           Neovim.Test.Wrapper
 import           Neovim.Context.Internal
 import           Path
 
 import           Neovim
 
+import           LSP
 import           Neovim.LSP.Action.Notification
 import           Neovim.LSP.Action.Request
 import           Neovim.LSP.LspPlugin.Callback
 import           Neovim.LSP.Base
 import           Neovim.LSP.Plugin
-import           Neovim.LSP.Protocol.Messages
-import           Neovim.LSP.Protocol.Type
 import           Neovim.LSP.Util
 import           System.Directory                  (getCurrentDirectory, removeDirectoryRecursive)
-
-neovimEnv :: IO (Config LspEnv)
-neovimEnv = newConfig (return Nothing) initialEnvM
-
-testSpec :: IO ()
-testSpec = hspec spec
 
 spec :: Spec
 spec = do
@@ -180,7 +172,4 @@ example1 = testWithHie (Seconds 10) $(mkRelFile "./test-file/hoge.hs") $ do
 
 threadDelaySec :: MonadIO m => Int -> m ()
 threadDelaySec n = liftIO $ threadDelay (n * 1000 * 1000)
-
-print' :: Show a => a -> Neovim env ()
-print' x = liftIO $ hPutBuilder stdout (getUtf8Builder (displayShow x))
 

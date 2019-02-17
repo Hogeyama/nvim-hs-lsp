@@ -73,11 +73,10 @@ import           Data.Singletons              (Sing, SomeSing (..), fromSing,
 import           System.IO                    (openFile)
 import           System.Process               (ProcessHandle)
 
+import           LSP
 import           Util
 import           Neovim                       hiding (Plugin, (<>))
 import qualified Neovim.Context.Internal      as Internal
-import           Neovim.LSP.Protocol.Messages
-import           Neovim.LSP.Protocol.Type
 
 -------------------------------------------------------------------------------
 -- Env
@@ -394,8 +393,8 @@ sendResponse
   :: forall (m :: ServerRequestMethodK) env
   .  (ImplResponse m, HasOutChan env, HasContext env)
   => Nullable ID
-  -> Option (ResResult m)
-  -> Option (ResponseError (ResError m))
+  -> Option (ResponseResultParam m)
+  -> Option (ResponseError (ResponseErrorParam m))
   -> Neovim env ()
 sendResponse id' resp err' = sendMessage $ response @m id' resp err'
 

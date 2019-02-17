@@ -13,9 +13,9 @@ import           Control.Lens.Operators
 import           Control.Monad.Extra               (ifM, whenJust)
 import           Data.Aeson                        hiding (Object)
 import qualified Data.ByteString.Char8             as BC
-import           Data.Extensible
 import           Data.Generics.Product             (field)
 
+import           LSP
 import           Util
 import           Neovim                            hiding (unlessM, whenM, (<>))
 import           Neovim.LSP.Action.Notification
@@ -24,7 +24,6 @@ import           Neovim.LSP.Base
 import           Neovim.LSP.LspPlugin.Callback
 import           Neovim.LSP.LspPlugin.Notification (notificationHandler)
 import           Neovim.LSP.LspPlugin.Request      (requestHandler)
-import           Neovim.LSP.Protocol.Type
 import           Neovim.LSP.Util
 
 -------------------------------------------------------------------------------

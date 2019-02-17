@@ -7,10 +7,10 @@ import           RIO
 
 import           Data.Typeable            (cast, typeOf)
 
+import           LSP
 import           Util
 import           Neovim                   (vim_report_error')
 import           Neovim.LSP.Base
-import           Neovim.LSP.Protocol.Type
 
 callbackHandler :: Worker
 callbackHandler = Worker "callback" callbackWorkerAction
