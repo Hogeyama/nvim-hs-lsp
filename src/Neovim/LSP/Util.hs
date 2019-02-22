@@ -98,15 +98,11 @@ getNvimPos = vimCallFunction "getpos" [ObjectString "."] >>= \case
 getBufContents :: Buffer -> Neovim env Text
 getBufContents b = T.pack.unlines <$> nvim_buf_get_lines' b 0 maxBound False
 
-getTextDocumentPositionParams :: Buffer -> NvimPos
-                              -> Neovim env TextDocumentPositionParams
-getTextDocumentPositionParams b p = do
-  uri <- getBufUri b
-  let pos = Record
-          $ #textDocument @= textDocumentIdentifier uri
-         <! #position     @= nvimPosToPosition p
-         <! nil
-  return pos
+textDocumentPositionParams :: Uri -> Position -> TextDocumentPositionParams
+textDocumentPositionParams uri pos = Record
+      $ #textDocument @= textDocumentIdentifier uri
+     <! #position     @= pos
+     <! nil
 
 -------------------------------------------------------------------------------
 -- Pos
@@ -115,14 +111,14 @@ getTextDocumentPositionParams b p = do
 -- TODO ちゃんとdata型にする
 type NvimPos = (Int,Int)
 
-nvimPosToPosition :: NvimPos -> Position
-nvimPosToPosition (line,char) = Record $
+fromNvimPos :: NvimPos -> Position
+fromNvimPos (line,char) = Record $
     #line      @= line - 1
  <! #character @= char - 1
  <! nil
 
-positionToNvimPos :: Position -> NvimPos
-positionToNvimPos pos = (1 + pos^. #line, 1 + pos^. #character)
+toNvimPos :: Position -> NvimPos
+toNvimPos pos = (1 + pos^. #line, 1 + pos^. #character)
 
 -------------------------------------------------------------------------------
 -- Start Server

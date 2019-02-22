@@ -31,12 +31,12 @@ import qualified Neovim.User.Choice       as Choice
 -------------------------------------------------------------------------------
 
 hoverRequest :: (HasOutChan env, HasContext env)
-             => Buffer
-             -> NvimPos
+             => Uri
+             -> Position
              -> CallbackOf 'TextDocumentHoverK a
              -> Neovim env (TMVar a)
-hoverRequest b p callback = do
-  param <- getTextDocumentPositionParams b p
+hoverRequest uri pos callback = do
+  let param = textDocumentPositionParams uri pos
   sendRequest param callback
 
 callbackHoverPreview :: CallbackOf 'TextDocumentHoverK ()
@@ -92,12 +92,12 @@ textDocumentHoverNoInfo = "textDocument/hover: no info"
 -------------------------------------------------------------------------------
 
 signatureHelpRequest :: (HasOutChan env, HasContext env)
-                     => Buffer
-                     -> NvimPos
+                     => Uri
+                     -> Position
                      -> CallbackOf 'TextDocumentSignatureHelpK a
                      -> Neovim env (TMVar a)
-signatureHelpRequest b p callback = do
-  param <- getTextDocumentPositionParams b p
+signatureHelpRequest uri pos callback = do
+  let param = textDocumentPositionParams uri pos
   sendRequest param callback
 
 -- TODO callback
@@ -109,12 +109,12 @@ signatureHelpRequest b p callback = do
 -------------------------------------------------------------------------------
 
 definitionRequest :: (HasOutChan env, HasContext env)
-                  => Buffer
-                  -> NvimPos
+                  => Uri
+                  -> Position
                   -> CallbackOf 'TextDocumentDefinitionK a
                   -> Neovim env (TMVar a)
-definitionRequest b p callback = do
-  param <- getTextDocumentPositionParams b p
+definitionRequest uri pos callback = do
+  let param = textDocumentPositionParams uri pos
   sendRequest param callback
 
 callbackDefinition :: CallbackOf 'TextDocumentDefinitionK ()
@@ -130,7 +130,7 @@ jumpToLocation loc = do
   let uri        = loc^. #uri
       range      = loc^. #range
       start      = range^. #start
-      (lnum,col) = positionToNvimPos start
+      (lnum,col) = toNvimPos start
   vim_command' "normal! m`"
   m <- vim_command $ unwords
               [ "edit"
@@ -201,15 +201,14 @@ callbackWorkspaceSymbol (Response resp) = void $ withResponse resp $ \case
 -- TextDocumentCompletion {{{
 -------------------------------------------------------------------------------
 completionRequest :: (HasOutChan env, HasContext env)
-                  => Buffer
-                  -> NvimPos
+                  => Uri
+                  -> Position
                   -> CallbackOf 'TextDocumentCompletionK a
                   -> Neovim env (TMVar a)
-completionRequest b p callback = do
-  uri <- getBufUri b
+completionRequest uri pos callback = do
   let params = Record
              $ #textDocument @= textDocumentIdentifier uri
-            <! #position     @= nvimPosToPosition p
+            <! #position     @= pos
             <! #context      @= None
             <! nil
   sendRequest params callback
@@ -283,31 +282,26 @@ removeNewline = concatMap (\c -> if c == '\n' then " ⏐ " else [c])
 -------------------------------------------------------------------------------
 
 codeAction :: (HasOutChan env, HasContext env)
-           => Buffer
-           -> (NvimPos, NvimPos)
+           => Uri
+           -> Range
            -> CallbackOf 'TextDocumentCodeActionK a
            -> Neovim env (TMVar a)
-codeAction b (start,end) callback = do
-  uri <- getBufUri b
+codeAction uri range callback = do
   allDiagnostics <- readContext $
     views (field @"diagnosticsMap") (fromMaybe [] . M.lookup uri)
   let params = Record
              $ #textDocument @= textDocumentIdentifier uri
-            <! #range        @= Record { fields =
-                                  #start @= nvimPosToPosition start
-                               <! #end   @= nvimPosToPosition end
-                               <! nil }
+            <! #range        @= range
             <! #context      @= Record context
             <! nil
       context = #diagnostics @= diags
              <! #only @= None
              <! nil
       diags = filter `flip` allDiagnostics $ \diag ->
-        let range  = diag^. #range
-            start' = positionToNvimPos $ range^. #start
-            end'   = positionToNvimPos $ range^. #end
-            line   = fst
-        in line start' <= line start && line start <= line end'
+        let drange = diag^. #range
+        in drange^. #start.__#line <=  range^. #start.__#line &&
+            range^. #start.__#line <= drange^. #end  .__#line
+
 
   sendRequest params callback
 
@@ -348,11 +342,10 @@ executeCommand cmd = void $ executeCommandRequest (cmd^. #command) (cmd^. #argum
 
 textDocumentFormatting
   :: (HasOutChan env, HasContext env, HasLogFunc env)
-  => Buffer
+  => Uri
   -> FormattingOptions
   -> Neovim env (TMVar ())
-textDocumentFormatting b fopts = do
-    uri <- getBufUri b
+textDocumentFormatting uri fopts = do
     let param = Record
               $ #textDocument @= Record (#uri @= uri <! nil)
              <! #options @= fopts
@@ -361,20 +354,15 @@ textDocumentFormatting b fopts = do
 
 textDocumentRangeFormatting
   :: (HasOutChan env, HasContext env, HasLogFunc env)
-  => Buffer
-  -> (NvimPos, NvimPos)
+  => Uri
+  -> Range
   -> FormattingOptions
   -> Neovim env (TMVar ())
-textDocumentRangeFormatting b (start,end) fopts = do
-    uri <- getBufUri b
+textDocumentRangeFormatting uri range fopts = do
     let param = Record
               $ #textDocument @= Record (#uri @= uri <! nil)
              <! #range @= range
              <! #options @= fopts
-             <! nil
-        range = Record
-              $ #start @= nvimPosToPosition start
-             <! #end @= nvimPosToPosition end
              <! nil
     sendRequest param (callbackTextDocumentRangeFormatting uri)
 
@@ -402,15 +390,15 @@ callbackTextEdits uri resp =
 
 textDocumentReferences
   :: (HasOutChan env, HasContext env)
-  => Buffer
-  -> NvimPos
+  => Uri
+  -> Position
   -> CallbackOf 'TextDocumentReferencesK a
   -> Neovim env (TMVar a)
-textDocumentReferences b p callback = do
-    pos <- getTextDocumentPositionParams b p
-    let param = Record
-              $ fields pos `happend`
-                (#context @= context <! nil)
+textDocumentReferences uri p callback = do
+    let pos     = textDocumentPositionParams uri p
+        param   = Record
+                $ fields pos `happend`
+                  (#context @= context <! nil)
         context = Record
                 $ #includeDeclaration @= True
                <! nil
@@ -442,14 +430,13 @@ callbackTextDocumentReferences (Response resp) = void $ withResponse resp $ \cas
 
 textDocumentDocumentSymbol
   :: (HasOutChan env, HasContext env)
-  => Buffer
+  => Uri
   -> Neovim env (TMVar ())
-textDocumentDocumentSymbol b = do
-    uri <- getBufUri b
+textDocumentDocumentSymbol uri = do
     let params = Record
                $ #textDocument @= textDocumentIdentifier uri
               <! nil
-    sendRequest params  (callbackTextDocumentDocumentSymbol uri)
+    sendRequest params (callbackTextDocumentDocumentSymbol uri)
 
 callbackTextDocumentDocumentSymbol :: Uri -> CallbackOf 'TextDocumentDocumentSymbolK ()
 callbackTextDocumentDocumentSymbol uri (Response resp) = void $ withResponse resp $ \case

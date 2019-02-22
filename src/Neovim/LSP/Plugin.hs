@@ -170,23 +170,23 @@ nvimHsLspFinalize _ = do
 --------
 nvimHsLspInfo :: CommandArguments -> NeovimLsp ()
 nvimHsLspInfo _ = whenInitialized $ focusLang' False $ whenAlreadyOpened . loggingError $ do
-  b <- vim_get_current_buffer'
-  pos <- getNvimPos
-  void $ hoverRequest b pos callbackHoverOneLine
+  uri <- getBufUri =<< vim_get_current_buffer'
+  pos <- fromNvimPos <$> getNvimPos
+  void $ hoverRequest uri pos callbackHoverOneLine
 
 nvimHsLspHover :: CommandArguments -> NeovimLsp ()
 nvimHsLspHover _ = whenInitialized $ focusLang' False $ whenAlreadyOpened $ do
-  b <- vim_get_current_buffer'
-  pos <- getNvimPos
-  void $ hoverRequest b pos callbackHoverPreview
+  uri <- getBufUri =<< vim_get_current_buffer'
+  pos <- fromNvimPos <$> getNvimPos
+  void $ hoverRequest uri pos callbackHoverPreview
 
 -- Definition
 -------------
 nvimHsLspDefinition :: CommandArguments -> NeovimLsp ()
 nvimHsLspDefinition _ = whenInitialized $ focusLang' False $ whenAlreadyOpened $ do
-  b <- vim_get_current_buffer'
-  pos <- getNvimPos
-  void $ definitionRequest b pos callbackDefinition
+  uri <- getBufUri =<< vim_get_current_buffer'
+  pos <- fromNvimPos <$> getNvimPos
+  void $ definitionRequest uri pos callbackDefinition
 
 -- Completion
 -------------
@@ -210,9 +210,9 @@ nvimHsLspComplete findstart base =
           return $ Left $ completionFindStart s col
         else do
           curPos <- getNvimPos
-          let compPos = completionPos base curPos
-          b <- vim_get_current_buffer'
-          xs <- waitCallback $ completionRequest b compPos callbackComplete
+          let compPos = fromNvimPos $ completionPos base curPos
+          uri <- getBufUri =<< vim_get_current_buffer'
+          xs <- waitCallback $ completionRequest uri compPos callbackComplete
           let sorted = uncurry (++) $ partition (isPrefixOf base . view #word . fields)  xs
           return (Right sorted)
 
@@ -228,14 +228,15 @@ completionPos base (line, col) = (line, col+length base)
 
 -- Async
 nvimHsLspAsyncComplete :: Int -> Int -> NeovimLsp ()
-nvimHsLspAsyncComplete lnum col = 
+nvimHsLspAsyncComplete lnum col =
   vim_get_current_buffer' >>= getBufLanguage >>= \case
     Just (fromString -> lang) -> check $ focusLang lang $ do
-      b <- vim_get_current_buffer'
-      s <- nvim_get_current_line'
-      logDebug $ "COMPLETION: async: col = " <> displayShow col
-      logDebug $ "COMPLETION: async: s   = " <> displayShow (take col s)
-      xs <- waitCallback $ completionRequest b (lnum,col) callbackComplete
+      let pos = fromNvimPos (lnum,col)
+      uri <- getBufUri =<< vim_get_current_buffer'
+      -- s <- nvim_get_current_line'
+      -- logDebug $ "COMPLETION: async: col = " <> displayShow col
+      -- logDebug $ "COMPLETION: async: s   = " <> displayShow (take col s)
+      xs <- waitCallback $ completionRequest uri pos callbackComplete
       nvim_set_var' nvimHsCompleteResultVar (toObject xs)
     Nothing ->
       recover
@@ -243,7 +244,7 @@ nvimHsLspAsyncComplete lnum col =
     check m = m >>= \case
       Nothing -> recover
       Just () -> return ()
-    recover = nvim_set_var' nvimHsCompleteResultVar (toObject ([]::[VimCompleteItem]))
+    recover = nvim_set_var' nvimHsCompleteResultVar ObjectNil
 
 nvimHsCompleteResultVar :: String
 nvimHsCompleteResultVar = "NvimHsLspCompleteResult"
@@ -275,9 +276,10 @@ nvimHsLspLoadQuickfix arg = focusLang' False $ do
 
 nvimHsLspCodeAction :: CommandArguments -> NeovimLsp ()
 nvimHsLspCodeAction _ = whenInitialized $ focusLang' False $ whenAlreadyOpened $ do
-    b <- vim_get_current_buffer'
-    pos <- getNvimPos
-    waitCallback $ codeAction b (pos,pos) callbackCodeAction
+    uri <- getBufUri =<< vim_get_current_buffer'
+    pos <- fromNvimPos <$> getNvimPos
+    let range = Record $ #start @= pos <! #end @= pos <! nil
+    waitCallback $ codeAction uri range callbackCodeAction
 
 -- HIE specific
 ---------------
@@ -288,9 +290,9 @@ nvimHsLspHieCaseSplit _ = hiePointCommand "ghcmod:casesplit"
 hiePointCommand :: String -> NeovimLsp ()
 hiePointCommand cmd =  whenInitialized $ focusLang' False $ whenAlreadyOpened $ do
     uri <- getBufUri =<< vim_get_current_buffer'
-    pos <- getNvimPos
+    pos <- fromNvimPos <$> getNvimPos
     let arg = toJSON $ #file @= uri
-                    <! #pos  @= nvimPosToPosition pos
+                    <! #pos  @= pos
                     <! nil @(Field Identity)
     void $ executeCommandRequest cmd (Some [arg]) Nothing
 
@@ -310,18 +312,22 @@ nvimHsLspHieHsImport _ moduleToImport = focusLang' False $ do
 
 nvimHsLspFormatting :: CommandArguments -> NeovimLsp ()
 nvimHsLspFormatting CommandArguments{range,bang} = whenInitialized $ focusLang' False $ whenAlreadyOpened $ do
-    b <- vim_get_current_buffer'
+    uri <- getBufUri =<< vim_get_current_buffer'
     let fopts = FormattingOptions . Record
               $ #tabSize @= 2 -- TODO configured by vim variable
              <! #insertSpaces @= False
              <! nil
     case (bang, range) of
       (Just True, _) ->
-        waitCallback $ textDocumentFormatting b fopts
+        waitCallback $ textDocumentFormatting uri fopts
       (_, Nothing) ->
-        waitCallback $ textDocumentFormatting b fopts
-      (_, Just (l1,l2)) ->
-        waitCallback $ textDocumentRangeFormatting b ((l1,1),(l2,1)) fopts
+        waitCallback $ textDocumentFormatting uri fopts
+      (_, Just (l1,l2)) -> do
+        let range' = Record
+                   $ #start @= fromNvimPos (l1,1)
+                  <! #end   @= fromNvimPos (l2,1)
+                  <! nil
+        waitCallback $ textDocumentRangeFormatting uri range' fopts
 
 -------------------------------------------------------------------------------
 -- References
@@ -329,9 +335,9 @@ nvimHsLspFormatting CommandArguments{range,bang} = whenInitialized $ focusLang' 
 
 nvimHsLspReferences :: CommandArguments -> NeovimLsp ()
 nvimHsLspReferences _ = whenInitialized $ focusLang' False $ whenAlreadyOpened $ do
-    b <- vim_get_current_buffer'
-    p <- getNvimPos
-    waitCallback $ textDocumentReferences b p callbackTextDocumentReferences
+    uri <- getBufUri =<< vim_get_current_buffer'
+    pos <- fromNvimPos <$> getNvimPos
+    waitCallback $ textDocumentReferences uri pos callbackTextDocumentReferences
 
 -------------------------------------------------------------------------------
 -- DocumentSymbol
@@ -339,8 +345,8 @@ nvimHsLspReferences _ = whenInitialized $ focusLang' False $ whenAlreadyOpened $
 
 nvimHsLspDocumentSymbol :: CommandArguments -> NeovimLsp ()
 nvimHsLspDocumentSymbol _ = whenInitialized $ focusLang' False $ whenAlreadyOpened $ do
-    b <- vim_get_current_buffer'
-    waitCallback $ textDocumentDocumentSymbol b
+    uri <- getBufUri =<< vim_get_current_buffer'
+    waitCallback $ textDocumentDocumentSymbol uri
 
 -------------------------------------------------------------------------------
 -- WorkspaceSymbol
