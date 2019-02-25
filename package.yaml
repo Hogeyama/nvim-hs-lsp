@@ -44,6 +44,9 @@ custom-setup:
 dependencies:
 - base >= 4.7 && < 5
 - rio >= 0.1.5.0
+- nvim-hs >= 1.0.0.0
+- generic-lens >= 1.1.0.0
+- lens
 
 executables:
   nvim-hs-lsp:
@@ -65,7 +68,6 @@ library:
   - -fobject-code
     #- -fprint-explicit-kinds
   dependencies:
-  - nvim-hs >= 1.0.0.0
   - nvim-hs-contrib
   - aeson
   - constraints
@@ -84,7 +86,6 @@ library:
   - unliftio
   - either
   - resourcet
-  - generic-lens >= 1.1.0.0
 
 tests:
   doctests:
@@ -99,7 +100,6 @@ tests:
     main:        tmp.hs
     other-modules: []
     dependencies:
-    - nvim-hs
     - nvim-hs-lsp
     - stm
     - lens
@@ -109,10 +109,9 @@ tests:
     source-dirs:   test
     main:          Spec.hs
     dependencies:
-    - nvim-hs
     - nvim-hs-lsp
+    - aeson
     - hspec
-    - unliftio
     - path
     - directory
     - extensible

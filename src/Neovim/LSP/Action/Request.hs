@@ -7,7 +7,7 @@ module Neovim.LSP.Action.Request where
 
 import           RIO
 import           RIO.List
-import           RIO.List.Partial         (head)
+import           RIO.List.Partial         (head, (!!))
 import qualified RIO.Map                  as M
 
 import           Control.Lens             (views)
@@ -40,14 +40,11 @@ hoverRequest uri pos callback = do
   sendRequest param callback
 
 callbackHoverPreview :: CallbackOf 'TextDocumentHoverK ()
-callbackHoverPreview (Response resp) = do
-  logDebug $ "responseHover: " <> displayShow resp
-  void $ withResponse resp $ \case
-    Nothing -> nvimEcho textDocumentHoverNoInfo
-    Just r -> do
-      let content = stringOfHoverContents (r^. #contents)
-      writeFileUtf8Builder "/tmp/nvim-hs-lsp.preview" (fromString content)
-      vim_command' "pedit /tmp/nvim-hs-lsp.preview"
+callbackHoverPreview resp = void $ callbackHoverAux `flip` resp $ \case
+  Left e -> nvimEcho e
+  Right msg -> do
+     writeFileUtf8Builder "/tmp/nvim-hs-lsp.preview" (fromString msg)
+     vim_command' "pedit /tmp/nvim-hs-lsp.preview"
 
 callbackHover :: CallbackOf 'TextDocumentHoverK ()
 callbackHover = callbackHoverWith removeLastNewlines
@@ -56,14 +53,23 @@ callbackHoverOneLine :: CallbackOf 'TextDocumentHoverK ()
 callbackHoverOneLine = callbackHoverWith $
   head . dropWhile ("```" `isPrefixOf`) . lines
 
---
+callbackHoverAux
+    :: (Either String String -> WorkerAction a)
+    -> CallbackOf 'TextDocumentHoverK (Maybe a)
+callbackHoverAux processer (Response resp) = do
+    logDebug $ "responseHover: " <> displayShow resp
+    withResponse resp $ \case
+      Nothing -> processer $ Left textDocumentHoverNoInfo
+      Just r -> do
+        let content = stringOfHoverContents (r^. #contents)
+        processer $ Right content
 
 callbackHoverWith :: (String -> String) -> CallbackOf 'TextDocumentHoverK ()
-callbackHoverWith process (Response resp) = do
-  logDebug $ "responseHover: " <> displayShow resp
-  void $ withResponse resp $ \case
-    Nothing -> nvimEcho textDocumentHoverNoInfo
-    Just r -> nvimEcho $ process $ stringOfHoverContents (r^. #contents)
+callbackHoverWith process resp = void $ callbackHoverAux `flip` resp $ \case
+  Left e -> nvimEcho e
+  Right msg -> nvimEcho $ process msg
+
+--
 
 stringOfHoverContents :: MarkedString :|: [MarkedString] :|: MarkupContent -> String
 stringOfHoverContents (L ms)     = pprMarkedString ms
@@ -185,15 +191,6 @@ callbackWorkspaceSymbol (Response resp) = void $ withResponse resp $ \case
   where
     symbolInfomartionToQfItem symInfo =
         locationToQfItem (symInfo^. #location) (symInfo^. #name)
-          -- TODO 他の情報
-
---type SymbolInformation = Record
---  '[ "name" >: String
---   , "kind" >: Number
---   , "deprecated" >: Option Bool
---   , "location" >: Location
---   , "containerName" >: Option String
---   ]
 
 --}}}
 
@@ -287,23 +284,21 @@ codeAction :: (HasOutChan env, HasContext env)
            -> CallbackOf 'TextDocumentCodeActionK a
            -> Neovim env (TMVar a)
 codeAction uri range callback = do
-  allDiagnostics <- readContext $
-    views (field @"diagnosticsMap") (fromMaybe [] . M.lookup uri)
-  let params = Record
-             $ #textDocument @= textDocumentIdentifier uri
-            <! #range        @= range
-            <! #context      @= Record context
-            <! nil
-      context = #diagnostics @= diags
-             <! #only @= None
-             <! nil
-      diags = filter `flip` allDiagnostics $ \diag ->
-        let drange = diag^. #range
-        in drange^. #start.__#line <=  range^. #start.__#line &&
-            range^. #start.__#line <= drange^. #end  .__#line
-
-
-  sendRequest params callback
+    allDiagnostics <- readContext $
+      views (field @"diagnosticsMap") (fromMaybe [] . M.lookup uri)
+    let params = Record
+               $ #textDocument @= textDocumentIdentifier uri
+              <! #range        @= range
+              <! #context      @= Record context
+              <! nil
+        context = #diagnostics @= diags
+               <! #only @= None
+               <! nil
+        diags = filter `flip` allDiagnostics $ \diag ->
+          let drange = diag^. #range
+          in drange^. #start.__#line <=  range^. #start.__#line &&
+              range^. #start.__#line <= drange^. #end  .__#line
+    sendRequest params callback
 
 callbackCodeAction :: CallbackOf 'TextDocumentCodeActionK ()
 callbackCodeAction (Response resp) = void $ withResponse resp $ \case
@@ -315,16 +310,33 @@ callbackCodeAction (Response resp) = void $ withResponse resp $ \case
       case cmds of
         [] -> nvimEchom "no code action"
         [cmd] -> executeCommandOrNot cmd
-        _ -> chooseCommandAndExecute cmds
+        _  -> chooseCommandViaTlib cmds
+        -- _ -> chooseCommand cmds
 
-chooseCommandAndExecute :: (HasOutChan env, HasContext env) => [Command] -> Neovim env ()
-chooseCommandAndExecute cmds = do
+chooseCommand :: (HasOutChan env, HasContext env) => [Command] -> Neovim env ()
+chooseCommand cmds = do
     let titles = map (view #title . fields) cmds
     Choice.oneOf titles >>= \case
       Nothing -> return ()
       Just x -> case find (\cmd -> cmd^. #title == x) cmds of
         Nothing -> error "impossible"
         Just cmd -> executeCommand cmd
+
+chooseCommandViaTlib
+    :: (HasOutChan env, HasContext env, HasLogFunc env)
+    => [Command]
+    -> Neovim env ()
+chooseCommandViaTlib cmds = do
+    let titles = map (view #title . fields) cmds
+    x <- vimCallFunction "tlib#input#List"
+            [ ObjectString "si"
+            , ObjectString "choose a codeAction"
+            , toObject titles
+            ]
+    logInfo $ displayShow x
+    case x of
+      Right (fromObject -> Right i) -> executeCommand $ cmds !! (i-1)
+      _ -> error "どうして"
 
 executeCommandOrNot :: (HasOutChan env, HasContext env) => Command -> Neovim env ()
 executeCommandOrNot cmd = do

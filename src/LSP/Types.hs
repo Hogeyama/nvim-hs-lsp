@@ -973,20 +973,20 @@ type instance ResponseResultParam 'TextDocumentDocumentSymbolK = Nullable ([Docu
 type instance ResponseErrorParam  'TextDocumentDocumentSymbolK = Value
 
 newtype DocumentSymbol = DocumentSymbol (Record
-  '[ "name" >: String
-   , "detail" >: Option String
-   , "kind" >: SymbolKind
+  '[ "name"       >: String
+   , "detail"     >: Option String
+   , "kind"       >: SymbolKind
    , "deprecated" >: Option Bool
-   , "range" >: Range
-   , "children" >: Option [DocumentSymbol]
+   , "range"      >: Range
+   , "children"   >: Option [DocumentSymbol]
    ])
   deriving (Show,Eq,ToJSON,FromJSON)
 
 type SymbolInformation = Record
-  '[ "name" >: String
-   , "kind" >: SymbolKind -- specificationだとnumberってなってるけどたぶんこれで合ってる
-   , "deprecated" >: Option Bool
-   , "location" >: Location
+  '[ "name"          >: String
+   , "kind"          >: SymbolKind
+   , "deprecated"    >: Option Bool
+   , "location"      >: Location
    , "containerName" >: Option String
    ]
 
@@ -996,7 +996,7 @@ type SymbolInformation = Record
 ----------------------------------------
 type instance RequestParam 'TextDocumentFormattingK = Record
   '[ "textDocument" >: TextDocumentIdentifier
-   , "options" >: FormattingOptions
+   , "options"      >: FormattingOptions
    ]
 type instance ResponseResultParam 'TextDocumentFormattingK = Nullable [TextEdit]
 type instance ResponseErrorParam  'TextDocumentFormattingK = String
@@ -1283,7 +1283,7 @@ type instance NotificationParam ('ClientNotificationMiscK s) = Value
 
 -- WindowShowMessageRequest {{{
 type instance NotificationParam 'WindowShowMessageRequestK = Record
-  '[ "type" >: MessageType
+  '[ "type"    >: MessageType
    , "message" >: Text
    , "actions" >: Option [MessageActionItem]
    ]
@@ -1301,8 +1301,8 @@ type instance ResponseResultParam 'ClientRegisterCapabilityK = Void
 type instance ResponseErrorParam  'ClientRegisterCapabilityK = Value
 
 type Registration = Record
-  '[ "id" >: String
-   , "method" >: String
+  '[ "id"              >: String
+   , "method"          >: String
    , "registerOptions" >: Option Value
    ]
 -- }}}
@@ -1342,7 +1342,7 @@ type instance ResponseResultParam 'ClientUnregisterCapabilityK = Void
 type instance ResponseErrorParam  'ClientUnregisterCapabilityK = Value
 
 type Unregistration = Record
-  '[ "id" >: String
+  '[ "id"     >: String
    , "method" >: String
    ]
 --}}}
