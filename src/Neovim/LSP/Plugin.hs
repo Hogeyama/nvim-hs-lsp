@@ -315,7 +315,7 @@ nvimHsLspFormatting CommandArguments{range,bang} = whenInitialized $ focusLang' 
     uri <- getBufUri =<< vim_get_current_buffer'
     let fopts = FormattingOptions . Record
               $ #tabSize @= 2 -- TODO configured by vim variable
-             <! #insertSpaces @= False
+             <! #insertSpaces @= True
              <! nil
     case (bang, range) of
       (Just True, _) ->
