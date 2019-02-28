@@ -40,7 +40,7 @@ main = do
     vim_command' "source ./test-file/init.vim"
     vim_command' "edit ./test-file/hoge.hs"
     cwd <- getCwd
-    startServer "haskell" cwd "hie-wrapper" ["--lsp", "-d", "-l", "/tmp/hie.log"]
+    startServer "haskell" cwd
       [ notificationHandler, requestHandler, callbackHandler ]
     void $ focusLang "haskell" handler2
     finalizeLSP
@@ -49,6 +49,7 @@ main = do
 handler2 :: Neovim LanguageEnv ()
 handler2 = do
   b <- vim_get_current_buffer'
+  uri <- getBufUri b
 
   -- didOpen
   ----------
@@ -68,7 +69,7 @@ handler2 = do
   -- Hover
   --------
   threadDelaySec 3
-  waitCallback $ hoverRequest b (6,3) nopCallback
+  waitCallback $ hoverRequest uri (fromNvimPos (6,3)) nopCallback
   -- line,charは0-indexedでvimのと1ずれる(?)
   -- 次のreturnは range (5,2)~(5,8)
   --   6|  return ()

@@ -33,8 +33,12 @@ import           System.Directory                  (getCurrentDirectory, removeD
 spec :: Spec
 spec = do
   Just baseDirectory <- parseAbsDir <$> runIO getCurrentDirectory
-  let removeStackWorkDir =
-        runIO $ void $ tryIO $ removeDirectoryRecursive "./test-file/.stack-work"
+  let removeStackWorkDir = do
+          cwd <- getCurrentDirectory
+          x <- tryIO $ removeDirectoryRecursive $ cwd <> "/test-file/.stack-work"
+          case x of
+            Left e -> print (show e)
+            Right () -> pure ()
 
   describe "completion" $ do
     specify "findStart simple" $ do
@@ -58,13 +62,13 @@ spec = do
       completionFindStart curLine col `shouldBe` 6
 
   describe "definition" $ do
-    removeStackWorkDir
     specify "simple" $ do
-      let src = $(mkRelFile "./test-file/Definition.hs")
+      removeStackWorkDir
+      let src = $(mkRelFile "test-file/Definition.hs")
           definition1 = testWithHie (Seconds 10) src $ do
               threadDelaySec 1 -- wait for loading
-              b <- vim_get_current_buffer'
-              waitCallback $ definitionRequest b (8,11) return
+              b <- getBufUri =<< vim_get_current_buffer'
+              waitCallback $ definitionRequest b (fromNvimPos (8,11)) return
           expected = Response . Record
               $  #jsonrpc @= "2.0"
               <: #id @= Just (IDNum 2.0)
@@ -79,14 +83,14 @@ spec = do
               <: #error @= None <: nil
       definition1 `shouldReturn` expected
 
-    removeStackWorkDir
     specify "other file" $ do
+      removeStackWorkDir
       let src = $(mkRelFile "test-file/Definition.hs")
           tgt = $(mkRelFile "test-file/Definition2.hs")
           definition2 = testWithHie (Seconds 10) src $ do
               threadDelaySec 1 -- wait for loading
-              b <- vim_get_current_buffer'
-              waitCallback $ definitionRequest b (9,3) return
+              uri <- getBufUri =<< vim_get_current_buffer'
+              waitCallback $ definitionRequest uri (fromNvimPos (9,3)) return
           expected = Response . Record
               $  #jsonrpc @= "2.0"
               <: #id @= Just (IDNum 2.0)
@@ -102,8 +106,8 @@ spec = do
       definition2 `shouldReturn` expected
 
   describe "tekito example" $ do
-    removeStackWorkDir
     specify "example 1" $ do
+      removeStackWorkDir
       example1 `shouldReturn` ()
 
 -------------------------------------------------------------------------------
@@ -112,7 +116,7 @@ spec = do
 testWithHie
   :: Show a
   => Seconds
-  -> Path Rel File 
+  -> Path Rel File
   -> Neovim LanguageEnv a
   -> IO a
 testWithHie time file action = do
@@ -121,8 +125,7 @@ testWithHie time file action = do
     finally `flip` finalizeLSP $ do
       vim_command' "source ./test-file/init.vim"
       cwd <- getCwd
-      startServer "haskell" cwd "hie-wrapper" ["--lsp", "-d", "-l", "/tmp/hie.log"]
-        [ callbackHandler ]
+      startServer "haskell" cwd [ callbackHandler ]
       void $ focusLang "haskell" $
         sendRequest' @'InitializeK (initializeParam Nothing (Just (pathToUri cwd)))
       vim_command' $ "edit " ++ toFilePath (cwd </> file)
@@ -136,6 +139,7 @@ testWithHie time file action = do
 example1 :: IO ()
 example1 = testWithHie (Seconds 10) $(mkRelFile "./test-file/hoge.hs") $ do
   b <- vim_get_current_buffer'
+  uri <- getBufUri b
 
   -- didOpen
   ----------
@@ -157,7 +161,7 @@ example1 = testWithHie (Seconds 10) $(mkRelFile "./test-file/hoge.hs") $ do
   -- Hover
   --------
   threadDelaySec 1
-  waitCallback $ hoverRequest b (6,3) (const (return ()))
+  waitCallback $ hoverRequest uri (fromNvimPos (6,3)) (const (return ()))
   -- line,charは0-indexedでvimのと1ずれる(?)
   -- 次のreturnは range (5,2)~(5,8)
   --   6|  return ()
