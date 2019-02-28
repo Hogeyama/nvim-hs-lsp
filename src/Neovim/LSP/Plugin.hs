@@ -78,32 +78,28 @@ nvimHsLspInitialize _ = loggingError $ do
         if M.member (fromString lang) languageMap then
           vim_out_write' $ "nvim-hs-lsp: Already initialized" ++ "\n"
         else do
-          map' <- errOnInvalidResult $ vim_get_var "NvimHsLsp_serverCommands"
-          case M.lookup lang map' of
-            Just (cmd:args) -> do
-              cwd <- getCwd
-              startServer (fromString lang) cwd cmd args
-                [ notificationHandler, requestHandler, callbackHandler ]
-              let pat = def { acmdPattern = "*" }
-                  arg = def { bang = Just True }
-              Just Right{} <- addAutocmd "BufRead,BufNewFile"
-                                pat (nvimHsLspOpenBuffer arg)
-              Just Right{} <- addAutocmd "TextChanged,TextChangedI"
-                                pat (nvimHsLspChangeBuffer arg)
-              Just Right{} <- addAutocmd "BufWrite"
-                                pat (nvimHsLspSaveBuffer arg)
-              nvimHsLspOpenBuffer def
-              -- TODO lspConfig
-              void $ focusLang (fromString lang) $
-                whenM (readContext . view $
-                        field @"lspConfig".
-                        field @"autoLoadQuickfix")
-                      (vim_command' "copen")
-              vim_out_write' $
-                "nvim-hs-lsp: Initialized for filetype `" ++ lang ++ "`\n"
-            _ ->
-              vim_report_error' $
-                "no language server registered for filetype `" ++ lang ++ "`"
+          cwd <- getCwd
+          startServer (fromString lang) cwd
+            [ notificationHandler, requestHandler, callbackHandler ]
+          let pat = def { acmdPattern = "*" }
+              arg = def { bang = Just True }
+          Just Right{} <- addAutocmd "BufRead,BufNewFile"
+                            pat (nvimHsLspOpenBuffer arg)
+          Just Right{} <- addAutocmd "TextChanged,TextChangedI"
+                            pat (nvimHsLspChangeBuffer arg)
+          Just Right{} <- addAutocmd "BufWrite"
+                            pat (nvimHsLspSaveBuffer arg)
+          nvimHsLspOpenBuffer def
+          void $ focusLang (fromString lang) $
+            whenM (readContext . view $
+                    field @"lspConfig".
+                    field @"autoLoadQuickfix")
+                  (vim_command' "copen")
+          vim_out_write' $
+            "nvim-hs-lsp: Initialized for filetype `" ++ lang ++ "`\n"
+            -- _ ->
+            --   vim_report_error' $
+            --     "no language server registered for filetype `" ++ lang ++ "`"
       Nothing ->
         vim_report_error'
           "nvim-hs-lsp: Could not initialize: Could not determine the filetype"
@@ -313,10 +309,8 @@ nvimHsLspHieHsImport _ moduleToImport = focusLang' False $ do
 nvimHsLspFormatting :: CommandArguments -> NeovimLsp ()
 nvimHsLspFormatting CommandArguments{range,bang} = whenInitialized $ focusLang' False $ whenAlreadyOpened $ do
     uri <- getBufUri =<< vim_get_current_buffer'
-    let fopts = FormattingOptions . Record
-              $ #tabSize @= 2 -- TODO configured by vim variable
-             <! #insertSpaces @= True
-             <! nil
+    fopts <- readContext $ view $
+                field @"lspConfig" . field @"formattingOptions"
     case (bang, range) of
       (Just True, _) ->
         waitCallback $ textDocumentFormatting uri fopts

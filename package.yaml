@@ -86,6 +86,7 @@ library:
   - unliftio
   - either
   - resourcet
+  - typenums
 
 tests:
   doctests:

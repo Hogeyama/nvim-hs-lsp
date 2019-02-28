@@ -45,9 +45,9 @@ module LSP.Types
   , uriToFilePath
   , uriToAbsFilePath
   , uriToAbsDirPath
-  , ErrorCode--(..)
+  , ErrorCode
   , prettyResponceError
-  , DiagnosticSeverity(..)
+  , DiagnosticSeverity
   , TextDocumentSync
   , TextDocumentSyncKind
   , TextDocumentSyncOptions
@@ -70,7 +70,7 @@ module LSP.Types
   , DocumentFilter
   , DocumentSelector
   , Trace
-  , MessageType--(..)
+  , MessageType
   , MessageActionItem
   , Hover
   , MarkedString
@@ -104,14 +104,16 @@ import           Data.Aeson                      hiding (Error)
 import           Data.Extensible                 as E hiding (Nullable, Record,
                                                        record)
 import           Data.Singletons                 (SingI, SingKind(..), sing)
-import           GHC.TypeLits
+import           Data.TypeLits
 import           Path                            (Path, Abs, File, Dir,
                                                   parseAbsFile, parseAbsDir,
                                                   toFilePath)
 
+import           Neovim                          (NvimObject(..))
 import           Data.Kind                       (Constraint)
 import           LSP.Method
 import           LSP.Record
+import           LSP.Enum
 
 -- Interfaces defined in
 -- https://microsoft.github.io/language-server-protocol/specification
@@ -427,79 +429,38 @@ type DocumentSelector = [DocumentFilter]
 -- ErrorCode
 ----------------------------------------
 
-type ErrorCode = EnumAs "ErrorCode" ErrorCodeF
-type ErrorCodeF =
-  '[ "parseError"
-   , "invalidRequest"
-   , "methodNotFound"
-   , "invalidParams"
-   , "internalError"
-   , "serverErrorStart"
-   , "serverErrorEnd"
-   , "serverNotInitialized"
-   , "unknownErrorCode"
-   , "requestCancelled"
-   ]
-instance EnumAsDef "ErrorCode" ErrorCodeF where
-  enumAsDict _ = Const @_ @"parseError"           (Number (-32700))
-              <! Const @_ @"invalidRequest"       (Number (-32600))
-              <! Const @_ @"methodNotFound"       (Number (-32601))
-              <! Const @_ @"invalidParams"        (Number (-32602))
-              <! Const @_ @"internalError"        (Number (-32603))
-              <! Const @_ @"serverErrorStart"     (Number (-32099))
-              <! Const @_ @"serverErrorEnd"       (Number (-32000))
-              <! Const @_ @"serverNotInitialized" (Number (-32002))
-              <! Const @_ @"unknownErrorCode"     (Number (-32001))
-              <! Const @_ @"requestCancelled"     (Number (-32800))
-              <! nil
+type ErrorCode = EnumN
+ '[ "parseError"           >: 'Neg 32700
+  , "invalidRequest"       >: 'Neg 32600
+  , "methodNotFound"       >: 'Neg 32601
+  , "invalidParams"        >: 'Neg 32602
+  , "internalError"        >: 'Neg 32603
+  , "serverErrorStart"     >: 'Neg 32099
+  , "serverErrorEnd"       >: 'Neg 32000
+  , "serverNotInitialized" >: 'Neg 32002
+  , "unknownErrorCode"     >: 'Neg 32001
+  , "requestCancelled"     >: 'Neg 32800
+  ]
 
 -- DiagnosticSeverity
 ----------------------------------------
 
-data DiagnosticSeverity
-  = Error
-  | Warning
-  | Information
-  | Hint
-  | OtherSeverity Int
-  deriving (Show, Eq)
-
 -- |
 -- >>> :m + Data.List
--- >>> sort [Error, Warning, Hint]
--- [Error,Warning,Hint]
-instance Ord DiagnosticSeverity where
-  compare = compare `on` toInt
-    where
-      toInt = \case
-        Error           -> 1
-        Warning         -> 2
-        Information     -> 3
-        Hint            -> 4
-        OtherSeverity m -> m
+-- >>> sort ([#error, #warning, #hint] :: [DiagnosticSeverity])
+-- [#error,#warning,#hint]
+type DiagnosticSeverity = EnumN
+  '[ "error"       >: 'Pos 1
+   , "warning"     >: 'Pos 2
+   , "information" >: 'Pos 3
+   , "hint"        >: 'Pos 4
+   ]
 
-instance FromJSON DiagnosticSeverity where
-  parseJSON (Number n) = return $ case round n of
-      1 -> Error
-      2 -> Warning
-      3 -> Information
-      4 -> Hint
-      m -> OtherSeverity m
-  parseJSON _ = mzero
-instance ToJSON DiagnosticSeverity where
-  toJSON Error             = toJSON (1 :: Int)
-  toJSON Warning           = toJSON (2 :: Int)
-  toJSON Information       = toJSON (3 :: Int)
-  toJSON Hint              = toJSON (4 :: Int)
-  toJSON (OtherSeverity m) = toJSON m
-
-type TextDocumentSyncKind = EnumAs "SyncKind" TextDocumentSyncKindF
-type TextDocumentSyncKindF = '[ "none", "full", "incremental" ]
-instance EnumAsDef "SyncKind" TextDocumentSyncKindF where
-  enumAsDict _ = Const @_ @"none"        (Number 0)
-              <! Const @_ @"full"        (Number 1)
-              <! Const @_ @"incremental" (Number 2)
-              <! nil
+type TextDocumentSyncKind = EnumN
+  '[ "none"        >: 'Pos 0
+   , "fulL"        >: 'Pos 1
+   , "incremental" >: 'Pos 2
+   ]
 
 -------------------------------------------------------------------------------
 -- Client Request --{{{
@@ -620,7 +581,7 @@ initializeParam processId rootUri
 -- Other Data
 --------------
 
-type Trace = Enum' '[ "off", "messages", "verbose" ]
+type Trace = EnumS '[ "off", "messages", "verbose" ]
 
 type ClientCapabilities = Record
   '[ "workspace"    >: Option WorkspaceClientCapabilities
@@ -742,7 +703,7 @@ type MarkupContent = Record
   '[ "kind"  >: MarkupKind
    , "value" >: String
    ]
-type MarkupKind = Enum' '[ "plaintext", "markdown" ]
+type MarkupKind = EnumS '[ "plaintext", "markdown" ]
 
 -- 後回し
 type SymbolKind = Value
@@ -841,13 +802,11 @@ type WillSaveTextDocumentParams = Record
   '[ "textDocument" >: TextDocumentIdentifier
    , "reason"       >: TextDocumentSaveReason
    ]
-type TextDocumentSaveReason = EnumAs "TextDocumentSaveReason" TextDocumentSaveReasonF
-type TextDocumentSaveReasonF = '[ "manual", "afterDelay", "focusOut" ]
-instance EnumAsDef "TextDocumentSaveReason" TextDocumentSaveReasonF where
-  enumAsDict _ = Const @_ @"manual"     (Number 1)
-              <! Const @_ @"afterDelay" (Number 2)
-              <! Const @_ @"focusOut"   (Number 3)
-              <! nil
+type TextDocumentSaveReason = EnumN
+  '[ "manual"     >: 'Pos 1
+   , "afterDelay" >: 'Pos 2
+   , "focusOut"   >: 'Pos 3
+   ]
 
 -- }}}
 
@@ -955,13 +914,11 @@ type DocumentHighlight = Record
   '[ "range" >: Range
    , "kind"  >: Option DocumentHighlightKind
    ]
-type DocumentHighlightKind = EnumAs "DocumentHighlightKind" DocumentHighlightKindF
-type DocumentHighlightKindF = '[ "text", "read", "write" ]
-instance EnumAsDef "DocumentHighlightKind" DocumentHighlightKindF where
-  enumAsDict _ = Const @_ @"text"  (Number 1)
-              <! Const @_ @"read"  (Number 2)
-              <! Const @_ @"write" (Number 3)
-              <! nil
+type DocumentHighlightKind = EnumN
+  '[ "text"  >: 'Pos 1
+   , "read"  >: 'Pos 2
+   , "write" >: 'Pos 3
+   ]
 
 -- }}}
 
@@ -1028,6 +985,8 @@ data FormattingOptions where
           , Show (Record xs)
           , ToJSON (Record xs)
           , FromJSON (Record xs)
+          , NvimObject (Record xs)
+          , NFData (Record xs)
           )
     => Record xs -> FormattingOptions
 instance Show FormattingOptions where
@@ -1041,6 +1000,12 @@ instance FromJSON FormattingOptions where
     FormattingOptions
       @'["tabSize" >: Number, "insertSpaces" >: Bool]
       <$> parseJSON x
+instance NFData FormattingOptions where
+  rnf (FormattingOptions xs) = rnf xs
+instance NvimObject FormattingOptions where
+  fromObject o = FormattingOptions <$>
+    fromObject @(Record '["tabSize" >: Number, "insertSpaces" >: Bool]) o
+  toObject (FormattingOptions fo) = toObject fo
 type family FOField' x :: Constraint where
   FOField' Number = ()
   FOField' Bool = ()
@@ -1094,7 +1059,7 @@ type CodeActionContext = Record
    , "only"        >: Option [CodeActionKind]
    ]
 
-type CodeActionKind = Enum'
+type CodeActionKind = EnumS
   '[ "quickfix"
    , "refactor"
    , "refactor.extract"
@@ -1179,6 +1144,8 @@ type instance ResponseErrorParam  ('ClientRequestMiscK s) = Value
 
 --}}}
 
+--}}}
+
 -------------------------------------------------------------------------------
 -- Client Notification --{{{
 -------------------------------------------------------------------------------
@@ -1214,13 +1181,11 @@ type FileEvent = Record
   '[ "uri"  >: Uri
    , "type" >: FileChangeType
    ]
-type FileChangeType = EnumAs "FileChangeType" FileChangeTypeF
-type FileChangeTypeF = '[ "created", "changed", "deleted" ]
-instance EnumAsDef "FileChangeType" FileChangeTypeF where
-  enumAsDict _ = Const @_ @"created" (Number 1)
-              <! Const @_ @"changed" (Number 2)
-              <! Const @_ @"deleted" (Number 3)
-              <! nil
+type FileChangeType = EnumN
+  '[ "created" >: 'Pos 1
+   , "changed" >: 'Pos 2
+   , "deleted" >: 'Pos 3
+   ]
 
 -- }}}
 
@@ -1374,15 +1339,12 @@ type instance NotificationParam 'WindowShowMessageK = Record
   '[ "type"    >: MessageType
    , "message" >: Text
    ]
-
-type MessageType = EnumAs "MessageType" MessageTypeF
-type MessageTypeF = '[ "error", "warning", "info", "log" ]
-instance EnumAsDef "MessageType" MessageTypeF where
-  enumAsDict _ = Const @_ @"error"   (Number 1)
-              <! Const @_ @"warning" (Number 2)
-              <! Const @_ @"info"    (Number 3)
-              <! Const @_ @"log"     (Number 3)
-              <! nil
+type MessageType = EnumN
+  '[ "error"   >: 'Pos 1
+   , "warning" >: 'Pos 2
+   , "info"    >: 'Pos 3
+   , "log"     >: 'Pos 4
+   ]
 --}}}
 
 -- WindowLogMessage {{{

@@ -1,4 +1,4 @@
-
+{-# LANGUAGE PartialTypeSignatures #-}
 {-# OPTIONS_GHC -Wall            #-}
 
 module Neovim.LSP.Util where
@@ -127,11 +127,13 @@ toNvimPos pos = (1 + pos^. #line, 1 + pos^. #character)
 startServer
     :: Language       -- ^ Language
     -> Path Abs Dir   -- ^ CWD
-    -> String         -- ^ LSP server
-    -> [String]       -- ^ Command
     -> [Worker]       -- ^ Worker
     -> NeovimLsp ()
-startServer lang cwd cmd args workers = do
+startServer lang cwd {-cmd args-} workers = do
+    config <- loadLspConfig
+    logDebug $ displayShow config
+    let cmd:args = serverCommand config
+
     -- spawn
     --------
     (Just hin, Just hout, Just herr, ph) <-
@@ -200,22 +202,35 @@ startServer lang cwd cmd args workers = do
         let param = Record (#settings @= v <! nil)
         sendNotification @'WorkspaceDidChangeConfigurationK param
   where
-    loadLspConfig :: Neovim env LspConfig
-    loadLspConfig = updateLspConfig defaultLspConfig
+    loadLspConfig = do
+        allConfig <- errOnInvalidResult $ vim_get_var "NvimHsLsp_languageConfig"
+        let wildConfig = M.findWithDefault M.empty "_" allConfig
+            langConfig = M.findWithDefault M.empty (encodeUtf8 lang) allConfig
+            config     = langConfig `M.union` wildConfig -- langConfig is preferred
+        update config defaultLspConfig
       where
-        updateLspConfig =
-            update' "NvimHsLsp_autoLoadQuickfix" (field @"autoLoadQuickfix") >=>
-            update' "NvimHsLsp_settingsPath" (field @"settingsPath") >=>
-            update' "NvimHsLsp_serverCommands" (field @"lspCommands") >=>
+        update :: Map ByteString Object -> LspConfig -> Neovim env LspConfig
+        update config =
+            update' "autoloadQuickfix"  (field @"autoLoadQuickfix")  >=>
+            update' "settingsPath"      (field @"settingsPath")      >=>
+            update' "serverCommand"     (field @"serverCommand")     >=>
+            update' "formattingOptions" (field @"formattingOptions") >=>
             return
           where
-            update' var field' before = vim_get_var var >>= \case
-              Right o -> case fromObject o of
-                Right new -> return $ before & field' .~ new
+            update' :: NvimObject o
+                    => ByteString
+                    -> Lens' LspConfig o
+                    -> LspConfig
+                    -> Neovim env LspConfig
+            update' var field' before = case M.lookup var config of
+              Just o -> case fromObject o of
+                Right new ->
+                  return $ before & field' .~ new
                 Left{} -> do
-                  nvimEchoe $ "invalid config: " <> var
+                  nvimEchoe $ "invalid config: " <> show var
                   return before
               _ -> return before
+
 
     getWorkspaceSettings :: LspConfig -> Neovim env (Maybe J.Value)
     getWorkspaceSettings lspConfig = case lspConfig^.field @"settingsPath" of
@@ -379,10 +394,12 @@ diagnosticToQfItems uri d
         lnum = 1 + start^. #line
         col  = 1 + start^. #character
         errorType = case d^. #severity of
-            Some Error        -> "E"
-            Some Warning      -> "W"
-            Some Information  -> "I"
-            Some Hint         -> "I"
+            Some s -> caseOfEnum s
+               $ MatchEnum @"error"       "E"
+              <! MatchEnum @"warning"     "W"
+              <! MatchEnum @"information" "I"
+              <! MatchEnum @"hint"        "I"
+              <! nil
             _                 -> "W"
         text = case d^. #source of
             None   -> ""

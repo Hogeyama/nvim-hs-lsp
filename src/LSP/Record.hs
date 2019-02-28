@@ -1,59 +1,40 @@
-
+{-# LANGUAGE AllowAmbiguousTypes        #-}
 {-# LANGUAGE DeriveFunctor              #-}
 {-# LANGUAGE DeriveGeneric              #-}
 {-# LANGUAGE EmptyCase                  #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE UndecidableInstances       #-}
 
-{-# LANGUAGE AllowAmbiguousTypes        #-}
-
-{-# OPTIONS_GHC -Wall                   #-}
-{-# OPTIONS_GHC -Wno-orphans            #-}
-
 module LSP.Record
-  (
-    Record(..)
+  ( module Export
+  , Record(..)
   , Option(..)
   , Nullable
   , Void
   , (:|:)(..), pattern L, pattern R
   , FieldJSON
   , __
-
-  , Enum'(..)
-  , mkEnum
-  , mkEnum'
-  , mkEnum''
-  , EnumAs(..)
-  , EnumAsDef(..)
-  , mkEnumAs
-  , MatchEnum(..)
-  , matchEnum
-  , caseOfEnum
-  , matchEnumAs
-  , caseOfEnumAs
-
-  , module Export
   ) where
 
-import           RIO                     hiding (Void)
-import qualified RIO.HashMap             as HM
-import qualified RIO.Map                 as M
+import           RIO                  hiding (Enum, Void)
+import qualified RIO.HashMap          as HM
+import qualified RIO.Map              as M
 
-import           Data.Aeson              hiding (KeyValue, Object)
-import qualified Data.Aeson.Types        as J
-import           Data.Extensible         as Export hiding (Nullable, Record, record)
-import qualified Data.Extensible         as E
-import           GHC.Generics            (Generic, Generic1)
+import           Data.Aeson           hiding (KeyValue, Object)
+import qualified Data.Aeson.Types     as J
+import           Data.Extensible      as Export hiding (Nullable, Record,
+                                                 record)
+import qualified Data.Extensible      as E
+import           Data.TypeLits
+import           GHC.Generics         (Generic, Generic1)
 import           GHC.OverloadedLabels
-import           GHC.TypeLits            (KnownSymbol, Symbol, symbolVal)
-import           Unsafe.Coerce           (unsafeCoerce)
+import           Unsafe.Coerce        (unsafeCoerce)
 
-import           Neovim                  (NvimObject (..), Doc, AnsiStyle)
-import qualified Neovim                  as N (Object (..))
+import           Neovim               (AnsiStyle, Doc, NvimObject (..))
+import qualified Neovim               as N (Object (..))
 
 -------------------------------------------------------------------------------
--- Some data types
+-- Record
 -------------------------------------------------------------------------------
 
 newtype Record (xs :: [Assoc Symbol *]) = Record { fields :: E.Record xs } deriving (Generic)
@@ -222,12 +203,12 @@ instance {-# OVERLAPPING #-} NvimObject o => FieldNvimObject (Option o) where
   toObject' None     = Nothing
   toObject' (Some x) = Just $ toObject x
   lookupObject' key m = case M.lookup (N.ObjectString (fromString key)) m of
-    Nothing -> Right None
+    Nothing  -> Right None
     Just obj -> Some <$> fromObject obj
 instance NvimObject o => FieldNvimObject o where
   toObject' = Just . toObject
   lookupObject' key m = case M.lookup (N.ObjectString (fromString key)) m of
-    Nothing -> Left (fromString $ "key " <> key <> " not found")
+    Nothing  -> Left (fromString $ "key " <> key <> " not found")
     Just obj -> fromObject obj
 
 instance
@@ -252,130 +233,4 @@ instance
             z = lookupObject' k map'
         in  Field . Identity <$> z
     fromObject o = Left . fromString $ "ObjectMap is expected, but got " <> show o
-
--------------------------------------------------------------------------------
--- Enum
--------------------------------------------------------------------------------
-
-newtype Enum' (xs :: [Symbol]) = Enum' (Proxy :| xs)
-deriving instance Forall (Instance1 Eq Proxy) xs => Eq (Enum' xs)
-deriving instance (Forall (Instance1 Eq Proxy) xs,
-                   Forall (Instance1 Ord  Proxy) xs) => Ord (Enum' xs)
-deriving instance Forall (Instance1 Show Proxy) xs => Show (Enum' xs)
-instance Forall KnownSymbol xs => ToJSON (Enum' xs) where
-  toJSON (Enum' v) = matchWith
-      (\c _ -> toJSON $ getConst c)
-      (htabulateFor (Proxy @KnownSymbol) (Const . symbolVal))
-      v
-instance Forall KnownSymbol xs => FromJSON (Enum' xs) where
-  parseJSON = withText "Enum" $ \s ->
-      hfoldMapWithIndexFor @_ @xs (Proxy @KnownSymbol)
-        (\i x -> if s == fromString (symbolVal x)
-                 then return (remember i (mkEnum x))
-                 else mempty)
-        vacancy
-
-instance Member xs k => IsLabel k (Enum' xs) where
-  fromLabel = mkEnum (Proxy @k)
-
-mkEnum :: forall x xs proxy. Member xs x => proxy x -> Enum' xs
-mkEnum _ = Enum' (embed (Proxy @x))
-
--- -- | use with overloaded labels:
--- --
--- -- >>> mkEnum' #refactor :: CodeActionKind
--- -- Enum' (EmbedAt $(mkMembership 1) Proxy)
-mkEnum' :: Member xs x => Proxy x -> Enum' xs
-mkEnum' p = Enum' (embed p)
-
--- -- | use with type application:
--- --
--- -- >>> mkEnum'' @"refactor.inline" :: CodeActionKind
--- -- Enum' (EmbedAt $(mkMembership 3) Proxy)
-mkEnum'' :: forall x xs. Member xs x => Enum' xs
-mkEnum'' = Enum' (embed (Proxy @x))
-
--------------------------------------------------------------------------------
--- EnumAs
--------------------------------------------------------------------------------
-
--- TODO
--- + lspには OtherErrorCode Int みたいな例外を表現するアレがある
--- + OrdとかはJSONに基づいてやるべき
---    + でもJ.ValueはOrdじゃない
-
--- |
--- >>> :set -Wno-orphans
--- >>> type Sevirity = EnumAs "Sevirity" ["warning", "error"]
--- >>> :{
---  instance EnumAsDef "Sevirity" ["warning", "error"] where
---    enumAsDict _ = Const (J.Number 1)
---                <! Const (J.Number 2)
---                <! nil
--- >>> :}
---
--- >>> toJSON (#warning :: Sevirity)
--- Number 1.0
--- >>> fromJSON @Sevirity (J.Number 1)
--- Success Sevirity::warning
---
-data EnumAs (name :: Symbol) (xs :: [Symbol]) = EnumAs { unEnumAs :: Proxy :| xs }
-deriving instance Forall (Instance1 Eq Proxy) xs => Eq (EnumAs name xs)
-deriving instance (Forall (Instance1 Eq Proxy) xs,
-                   Forall (Instance1 Ord  Proxy) xs) => Ord (EnumAs name xs)
-instance (KnownSymbol name, Forall KnownSymbol xs) => Show (EnumAs name xs) where
-  show (EnumAs v) = matchWith
-      (\c _ -> symbolVal (Proxy @name) <> "::" <> getConst c)
-      (htabulateFor (Proxy @KnownSymbol) (Const . symbolVal))
-      v
-
-class EnumAsDef (name :: Symbol) (xs :: [Symbol]) | name -> xs where
-  enumAsDict :: Proxy name -> Const J.Value :* xs
-
-instance (EnumAsDef name xs, Forall KnownSymbol xs) => ToJSON (EnumAs name xs) where
-  toJSON (EnumAs v) = matchWith
-      (\c _ -> getConst c)
-      (htabulateFor (Proxy @KnownSymbol) $ \i -> hlookup i (enumAsDict (Proxy @name)))
-      v
-instance (EnumAsDef name xs, Forall KnownSymbol xs) => FromJSON (EnumAs name xs) where
-  parseJSON v =
-      hfoldMapWithIndexFor @_ @xs (Proxy @KnownSymbol)
-        (\i x -> if v == getConst (hlookup i (enumAsDict (Proxy @name)))
-                 then return (remember i (mkEnumAs x))
-                 else mempty)
-        vacancy
-
-instance (EnumAsDef name xs, Member xs k) => IsLabel k (EnumAs name xs) where
-  fromLabel = mkEnumAs (Proxy @k)
-
-mkEnumAs :: forall name x xs proxy. Member xs x => proxy x -> EnumAs name xs
-mkEnumAs _ = EnumAs (embed (Proxy @x))
-
--------------------------------------------------------------------------------
--- Matcher for Enum
--------------------------------------------------------------------------------
-
-newtype MatchEnum a x where
-  MatchEnum :: forall x a. a -> MatchEnum a x
-
-matchEnum :: (MatchEnum a :* xs) -> Enum' xs -> a
-matchEnum matcher (Enum' e) = match (hmap f matcher) e
-  where f (MatchEnum a) = Match (const a)
-
-caseOfEnum :: Enum' xs -> (MatchEnum a :* xs) -> a
-caseOfEnum = flip matchEnum
-
-matchEnumAs :: (MatchEnum a :* xs) -> EnumAs name xs -> a
-matchEnumAs matcher (EnumAs e) = match (hmap f matcher) e
-  where f (MatchEnum a) = Match (const a)
-
-caseOfEnumAs :: EnumAs name xs -> (MatchEnum a :* xs) -> a
-caseOfEnumAs = flip matchEnumAs
-
--------------------------------------------------------------------------------
--- class用意するくらいならもはやあれでは
--------------------------------------------------------------------------------
-
-
-
 

@@ -39,7 +39,7 @@ windowShowMessageRequest (Request req) = do
     let type'   = req^. #params.__#type
         message = req^. #params.__#message
         actions = req^. #params.__#actions
-    caseOfEnumAs type'
+    caseOfEnum type'
        $ (MatchEnum @"error"   $ nvimEchoe $ "LSP: Error: " <> T.unpack message)
       <! (MatchEnum @"warning" $ nvimEchow $ "LSP: Warning: " <> T.unpack message)
       <! (MatchEnum @"info"    $ nvimEchom $ "LSP: Info: " <> T.unpack message)

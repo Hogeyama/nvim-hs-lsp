@@ -65,7 +65,7 @@ windowLogMessage (Notification noti) = do
         log' l = do
           -- nvimEchom $ "window/logMessage: " <> T.unpack message
           l $ "window/logMessage: " <> displayShow message
-    caseOfEnumAs type'
+    caseOfEnum type'
       $ (MatchEnum @"error"   $ log' logError)
      <! (MatchEnum @"warning" $ log' logWarn)
      <! (MatchEnum @"info"    $ log' logInfo)
@@ -81,11 +81,11 @@ windowShowMessage :: ServerNotification 'WindowShowMessageK
 windowShowMessage (Notification noti) = do
     let type'   = noti^. #params.__#type
         message = noti^. #params.__#message
-    caseOfEnumAs type'
-       $ (MatchEnum @"error"   $ nvimEchoe $ "LSP: Error: " <> T.unpack message)
+    caseOfEnum type'
+       $ (MatchEnum @"error"   $ nvimEchoe $ "LSP: Error: "   <> T.unpack message)
       <! (MatchEnum @"warning" $ nvimEchow $ "LSP: Warning: " <> T.unpack message)
-      <! (MatchEnum @"info"    $ nvimEchom $ "LSP: Info: " <> T.unpack message)
-      <! (MatchEnum @"log"     $ nvimEchom $ "LSP: Log: " <> T.unpack message)
+      <! (MatchEnum @"info"    $ nvimEchom $ "LSP: Info: "    <> T.unpack message)
+      <! (MatchEnum @"log"     $ nvimEchom $ "LSP: Log: "     <> T.unpack message)
       <! nil
 
 -------------------------------------------------------------------------------

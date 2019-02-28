@@ -169,7 +169,7 @@ data ServerHandles = ServerHandles
   , serverOut        :: Handle
   , serverErr        :: Handle
   , serverProcHandle :: ProcessHandle
-  }
+  } deriving (Generic)
 
 -- sender, receiver, watcher of serverErr, dispatcher, plugins
 newtype OtherHandles = OtherHandles
@@ -177,19 +177,26 @@ newtype OtherHandles = OtherHandles
   -- 'String' refers to the name of Handle
 
 data LspConfig = LspConfig
-  { autoLoadQuickfix :: Bool
-  , settingsPath     :: Maybe FilePath
-  , lspCommands      :: Map Language [String]
-  } deriving (Generic)
+  { autoLoadQuickfix  :: Bool
+  , settingsPath      :: Maybe FilePath
+  , serverCommand     :: ~[String]
+  , formattingOptions :: FormattingOptions
+  } deriving (Generic, Show)
 
 defaultLspConfig :: LspConfig
 defaultLspConfig =  LspConfig
-  { autoLoadQuickfix = False
-  , settingsPath     = Nothing
-  , lspCommands      = M.empty
+  { autoLoadQuickfix  = False
+  , settingsPath      = Nothing
+  , serverCommand     = error "No server command provided"
+  , formattingOptions = FormattingOptions . Record
+                      $ #tabSize @= 2
+                     <! #insertSpaces @= True
+                     <! nil
   }
 
 type Language = Text
+
+--instance NvimObject
 
 -------------------------------------------------------------------------------
 -- Worker
