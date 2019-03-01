@@ -14,7 +14,7 @@ before_install:
 install:
 - stack --no-terminal --install-ghc test --only-dependencies
 - git clone https://github.com/haskell/haskell-ide-engine
-- (cd haskell-ide-engine; make install hie-8.4.4)
+- (cd haskell-ide-engine; make hie-8.4.4)
 
 
 script:
