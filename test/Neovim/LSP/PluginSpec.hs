@@ -89,14 +89,9 @@ spec = do
       let src = $(mkRelFile "test-file/Definition.hs")
           tgt = $(mkRelFile "test-file/Definition2.hs")
           definition2 = testWithHie (Seconds 10) src $ do
-              liftIO $ print 0
               threadDelaySec 1 -- wait for loading
-              liftIO $ print 1
               uri <- getBufUri =<< vim_get_current_buffer'
-              liftIO $ print 2
-              x <- waitCallback $ definitionRequest uri (fromNvimPos (9,3)) return
-              liftIO $ print 3
-              return x
+              waitCallback $ definitionRequest uri (fromNvimPos (9,3)) return
           expected = Response . Record
               $  #jsonrpc @= "2.0"
               <: #id @= Just (IDNum 2.0)

@@ -34,7 +34,7 @@ hoverRequest :: (HasOutChan env, HasContext env)
              => Uri
              -> Position
              -> CallbackOf 'TextDocumentHoverK a
-             -> Neovim env (TMVar a)
+             -> Neovim env (CallbackTicket a)
 hoverRequest uri pos callback = do
   let param = textDocumentPositionParams uri pos
   sendRequest param callback
@@ -101,7 +101,7 @@ signatureHelpRequest :: (HasOutChan env, HasContext env)
                      => Uri
                      -> Position
                      -> CallbackOf 'TextDocumentSignatureHelpK a
-                     -> Neovim env (TMVar a)
+                     -> Neovim env (CallbackTicket a)
 signatureHelpRequest uri pos callback = do
   let param = textDocumentPositionParams uri pos
   sendRequest param callback
@@ -118,7 +118,7 @@ definitionRequest :: (HasOutChan env, HasContext env)
                   => Uri
                   -> Position
                   -> CallbackOf 'TextDocumentDefinitionK a
-                  -> Neovim env (TMVar a)
+                  -> Neovim env (CallbackTicket a)
 definitionRequest uri pos callback = do
   let param = textDocumentPositionParams uri pos
   sendRequest param callback
@@ -157,7 +157,7 @@ executeCommandRequest :: (HasOutChan env, HasContext env)
                       => String
                       -> Option [Value]
                       -> Maybe (CallbackOf 'WorkspaceExecuteCommandK a)
-                      -> Neovim env (Maybe (TMVar a))
+                      -> Neovim env (Maybe (CallbackTicket a))
 executeCommandRequest cmd margs mcallback = do
   let param = Record
             $ #command   @= cmd
@@ -177,7 +177,7 @@ workspaceSymbol
   :: (HasOutChan env, HasContext env)
   => String
   -> CallbackOf 'WorkspaceSymbolK a
-  -> Neovim env (TMVar a)
+  -> Neovim env (CallbackTicket a)
 workspaceSymbol sym callback =
     sendRequest (Record (#query @= sym <! nil)) callback
 
@@ -201,7 +201,7 @@ completionRequest :: (HasOutChan env, HasContext env)
                   => Uri
                   -> Position
                   -> CallbackOf 'TextDocumentCompletionK a
-                  -> Neovim env (TMVar a)
+                  -> Neovim env (CallbackTicket a)
 completionRequest uri pos callback = do
   let params = Record
              $ #textDocument @= textDocumentIdentifier uri
@@ -282,7 +282,7 @@ codeAction :: (HasOutChan env, HasContext env)
            => Uri
            -> Range
            -> CallbackOf 'TextDocumentCodeActionK a
-           -> Neovim env (TMVar a)
+           -> Neovim env (CallbackTicket a)
 codeAction uri range callback = do
     allDiagnostics <- readContext $
       views (field @"diagnosticsMap") (fromMaybe [] . M.lookup uri)
@@ -356,7 +356,7 @@ textDocumentFormatting
   :: (HasOutChan env, HasContext env, HasLogFunc env)
   => Uri
   -> FormattingOptions
-  -> Neovim env (TMVar ())
+  -> Neovim env (CallbackTicket ())
 textDocumentFormatting uri fopts = do
     let param = Record
               $ #textDocument @= Record (#uri @= uri <! nil)
@@ -369,7 +369,7 @@ textDocumentRangeFormatting
   => Uri
   -> Range
   -> FormattingOptions
-  -> Neovim env (TMVar ())
+  -> Neovim env (CallbackTicket ())
 textDocumentRangeFormatting uri range fopts = do
     let param = Record
               $ #textDocument @= Record (#uri @= uri <! nil)
@@ -405,7 +405,7 @@ textDocumentReferences
   => Uri
   -> Position
   -> CallbackOf 'TextDocumentReferencesK a
-  -> Neovim env (TMVar a)
+  -> Neovim env (CallbackTicket a)
 textDocumentReferences uri p callback = do
     let pos     = textDocumentPositionParams uri p
         param   = Record
@@ -443,7 +443,7 @@ callbackTextDocumentReferences (Response resp) = void $ withResponse resp $ \cas
 textDocumentDocumentSymbol
   :: (HasOutChan env, HasContext env)
   => Uri
-  -> Neovim env (TMVar ())
+  -> Neovim env (CallbackTicket ())
 textDocumentDocumentSymbol uri = do
     let params = Record
                $ #textDocument @= textDocumentIdentifier uri

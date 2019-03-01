@@ -208,7 +208,9 @@ nvimHsLspComplete findstart base =
           curPos <- getNvimPos
           let compPos = fromNvimPos $ completionPos base curPos
           uri <- getBufUri =<< vim_get_current_buffer'
-          xs <- waitCallback $ completionRequest uri compPos callbackComplete
+          xs <- fromMaybe [] <$>
+                  waitCallbackWithTimeout (1*1000*1000)
+                    (completionRequest uri compPos callbackComplete)
           let sorted = uncurry (++) $ partition (isPrefixOf base . view #word . fields)  xs
           return (Right sorted)
 
@@ -229,10 +231,9 @@ nvimHsLspAsyncComplete lnum col =
     Just (fromString -> lang) -> check $ focusLang lang $ do
       let pos = fromNvimPos (lnum,col)
       uri <- getBufUri =<< vim_get_current_buffer'
-      -- s <- nvim_get_current_line'
-      -- logDebug $ "COMPLETION: async: col = " <> displayShow col
-      -- logDebug $ "COMPLETION: async: s   = " <> displayShow (take col s)
-      xs <- waitCallback $ completionRequest uri pos callbackComplete
+      xs <- fromMaybe [] <$>
+              waitCallbackWithTimeout (1*1000*1000)
+                (completionRequest uri pos callbackComplete)
       nvim_set_var' nvimHsCompleteResultVar (toObject xs)
     Nothing ->
       recover

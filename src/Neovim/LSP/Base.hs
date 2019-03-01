@@ -41,10 +41,12 @@ module Neovim.LSP.Base
 
   , Callback(..)
   , CallbackOf
+  , CallbackTicket(..)
   , registerCallback
   , getCallbackById
   , removeCallback
   , waitCallback
+  , waitCallbackWithTimeout
   , nopCallback
   , withResponse
 
@@ -151,6 +153,10 @@ data Context = Context
 data Callback where
   Callback :: Typeable m => TMVar a -> CallbackOf m a -> Callback
 type CallbackOf m a = ServerResponse m -> WorkerAction a
+data CallbackTicket a = CallbackTicket
+  { callbackID  :: ID
+  , callbackVar :: TMVar a
+  }
 
 initialContext :: Context
 initialContext = Context
@@ -334,16 +340,24 @@ registerCallback :: (MonadReader env m, MonadIO m, HasContext env)
 registerCallback id' callback = modifyContext (field @"callbacks" %~ M.insert id' callback)
 
 getCallbackById :: (MonadReader env m, MonadIO m, HasContext env)
-            => ID -> m (Maybe Callback)
+                => ID -> m (Maybe Callback)
 getCallbackById id' = readContext $ views (field @"callbacks") (M.lookup id')
 
 removeCallback :: (MonadReader env m, MonadIO m, HasContext env)
                => ID -> m ()
 removeCallback id' = modifyContext $ field @"callbacks" %~ M.delete id'
 
--- TODO 次の3つはUtil辺りに移動
-waitCallback :: MonadIO m => m (TMVar a) -> m a
-waitCallback m = atomically . takeTMVar =<< m
+waitCallback :: MonadIO m => m (CallbackTicket a) -> m a
+waitCallback m = atomically . takeTMVar . callbackVar =<< m
+
+waitCallbackWithTimeout
+  :: (MonadUnliftIO m, MonadReader env m, HasContext env)
+  => Int -> m (CallbackTicket a) -> m (Maybe a)
+waitCallbackWithTimeout musec m = do
+    c <- m
+    timeout musec (waitCallback (return c)) >>= \case
+      Nothing -> removeCallback (callbackID c) >> return Nothing
+      Just x  -> return (Just x)
 
 nopCallback :: ImplResponse m => CallbackOf m ()
 nopCallback (Response resp) = void $ withResponse resp (const (return ()))
@@ -375,7 +389,7 @@ sendRequest :: forall (m :: ClientRequestMethodK) env a
             .  (ImplRequest m, HasOutChan env, HasContext env)
             => RequestParam m
             -> CallbackOf m a
-            -> Neovim env (TMVar a)
+            -> Neovim env (CallbackTicket a)
 sendRequest param callback = do
     let method = fromSing (sing :: Sing m)
     id' <- genUniqueID
@@ -383,7 +397,7 @@ sendRequest param callback = do
     sendMessage $ request @m id' param
     var <- newEmptyTMVarIO
     registerCallback id' $ Callback var callback
-    return var
+    return (CallbackTicket id' var)
 
 sendRequest' :: forall (m :: ClientRequestMethodK) env
              .  (ImplRequest m, ImplResponse m, HasOutChan env, HasContext env)
