@@ -4,6 +4,19 @@ let s:project_name = 'nvim-hs-lsp'
 let s:starter = get(g:, 'nvimhsPluginStarter', nvimhs#stack#pluginstarter())
 let s:buildCommand = s:starter.buildCommand(s:project_name)
 
+" This will be overridden when nvim-hs-lsp is loaded
+function! NvimHsLspComplete(findStart, base) abort
+  echomsg "nvim-hs-lsp is not loaded"
+  if a:findStart
+    return -3
+  else
+    return {}
+  endif
+endfunction
+function! NvimHsLspAsyncComplete(...) abort
+  let g:NvimHsLspCompleteResult = {}
+endfunction
+
 function! s:buildAsyncThenStart()
   let l:out = []
   let l:err = []
