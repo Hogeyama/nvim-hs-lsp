@@ -1,34 +1,35 @@
 
-{-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE OverloadedLabels    #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TemplateHaskell     #-}
 {-# LANGUAGE TypeApplications    #-}
-{-# LANGUAGE OverloadedLabels    #-}
 {-# OPTIONS_GHC -Wno-name-shadowing #-}
 {-# OPTIONS_GHC -Wno-unused-imports #-}
 
 module Neovim.LSP.PluginSpec (spec) where
 
+import           Control.Lens                   ((.~))
+import           Neovim
+import           Neovim.Context.Internal
+import           Neovim.Test.Wrapper
+import           Path
 import           Prelude
 import           RIO
-import           RIO.Partial                       (fromJust)
-import           RIO.List.Partial                  (tail)
+import           RIO.List.Partial               (tail)
+import           RIO.Partial                    (fromJust)
+import           System.Directory               (getCurrentDirectory,
+                                                 removeDirectoryRecursive)
 import           Test.Hspec
-import           Neovim.Test.Wrapper
-import           Neovim.Context.Internal
-import           Path
-
-import           Neovim
 
 import           LSP
 import           Neovim.LSP.Action.Notification
 import           Neovim.LSP.Action.Request
-import           Neovim.LSP.LspPlugin.Callback
 import           Neovim.LSP.Base
+import           Neovim.LSP.LspPlugin.Callback
 import           Neovim.LSP.Plugin
 import           Neovim.LSP.Util
-import           System.Directory                  (getCurrentDirectory, removeDirectoryRecursive)
 
 spec :: Spec
 spec = do
@@ -37,7 +38,7 @@ spec = do
           cwd <- getCurrentDirectory
           x <- tryIO $ removeDirectoryRecursive $ cwd <> "/test-file/.stack-work"
           case x of
-            Left e -> print (show e)
+            Left e   -> print (show e)
             Right () -> pure ()
 
   describe "completion" $ do
@@ -88,9 +89,14 @@ spec = do
       let src = $(mkRelFile "test-file/Definition.hs")
           tgt = $(mkRelFile "test-file/Definition2.hs")
           definition2 = testWithHie (Seconds 10) src $ do
+              liftIO $ print 0
               threadDelaySec 1 -- wait for loading
+              liftIO $ print 1
               uri <- getBufUri =<< vim_get_current_buffer'
-              waitCallback $ definitionRequest uri (fromNvimPos (9,3)) return
+              liftIO $ print 2
+              x <- waitCallback $ definitionRequest uri (fromNvimPos (9,3)) return
+              liftIO $ print 3
+              return x
           expected = Response . Record
               $  #jsonrpc @= "2.0"
               <: #id @= Just (IDNum 2.0)
@@ -120,7 +126,7 @@ testWithHie
   -> Neovim LanguageEnv a
   -> IO a
 testWithHie time file action = do
-  initialEnv <- initialEnvM
+  initialEnv <- initialEnvM "/dev/null"
   testNeovim time initialEnv $ do
     finally `flip` finalizeLSP $ do
       vim_command' "source ./test-file/init.vim"

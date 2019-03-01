@@ -92,9 +92,9 @@ data LspEnv = LspEnv
   , languageMap      :: TVar (Map Language LanguageEnv)
   } deriving (Generic)
 
-initialEnvM :: MonadIO m => m LspEnv
-initialEnvM = do
-    logFileHandle <- liftIO $ openFile "/tmp/nvim-hs-lsp.log" AppendMode
+initialEnvM :: MonadIO m => FilePath -> m LspEnv
+initialEnvM logFile = do
+    logFileHandle <- liftIO $ openFile logFile AppendMode
     (logFunc, logFuncFinalizer) <- liftIO $ makeLogFunc logFileHandle
     languageMap <- newTVarIO M.empty
     return LspEnv {..}

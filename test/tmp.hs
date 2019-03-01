@@ -34,7 +34,7 @@ import           System.Exit (exitSuccess)
 main :: IO ()
 main = do
   putStrLn ""
-  initialEnv <- initialEnvM
+  initialEnv <- initialEnvM "/dev/null"
   mapM_ unsetEnv [ "GHC_PACKAGE_PATH" ]
   testWithEmbeddedNeovim Nothing (Seconds 10000) initialEnv $ do
     vim_command' "source ./test-file/init.vim"
