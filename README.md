@@ -135,5 +135,5 @@ In `haskell-lsp-types`, again, many boilerplates is used to make lenses or `ToJS
 In `nvim-hs-lsp`, all lenses and `ToJSON`/`FromJSON` instances are defined at once in [this file][nvim-hs-lsp-record].
 
 [haskell-lsp-types-lens]: https://github.com/alanz/haskell-lsp/blob/master/haskell-lsp-types/src/Language/Haskell/LSP/Types/Lens.hs
-[nvim-hs-lsp-record]: ./src/Neovim/LSP/Protocol/Type/Record.hs
+[nvim-hs-lsp-record]: ./src/LSP/Record.hs
 
