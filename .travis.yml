@@ -42,7 +42,6 @@ before_install:
 - find $HOME/.ghcup -maxdepth 5
 - find $HOME/.cabal -maxdepth 5
 - find $HOME/.local/bin -maxdepth 5
-- find $HOME/haskell-ide-engine -maxdepth 5
 - which cabal
 
 # [fetch hie repository]
