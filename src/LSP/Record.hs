@@ -13,6 +13,7 @@ module LSP.Record
   , Void
   , (:|:)(..), pattern L, pattern R
   , FieldJSON
+  , type (&)
   , __
   ) where
 
@@ -136,6 +137,11 @@ instance Eq       Void where _ == _      = True
 instance Show     Void where show        = \case{}
 instance ToJSON   Void where toJSON      = \case{}
 instance FromJSON Void where parseJSON _ = mempty
+
+-- Concat
+type family (&) r1 r2 where
+  (&) (Record xs) (Record ys) = Record (xs ++ ys)
+infixr 5 &
 
 -------------------------------------------------------------------------------
 -- JSON

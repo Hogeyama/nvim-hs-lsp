@@ -39,6 +39,8 @@ prfClientReq = \case -- {{{
     STextDocumentDocumentLink        -> Dict
     SDocumentLinkResolve             -> Dict
     STextDocumentRename              -> Dict
+    STextDocumentDocumentColor       -> Dict
+    STextDocumentColorPresentation   -> Dict
     SClientRequestMisc SSym          -> Dict
 -- }}}
 
@@ -55,6 +57,7 @@ prfClientNoti = \case-- {{{
     STextDocumentDidSave             -> Dict
     STextDocumentDidClose            -> Dict
     SClientNotificationMisc SSym     -> Dict
+    SDidChangeWorkspaceFolders       -> Dict
   -- }}}
 
 prfServerResp :: forall (m :: ClientRequestMethodK). Sing m -> Dict (ImplResponse m)
@@ -81,16 +84,20 @@ prfServerResp = \case  -- {{{
     STextDocumentDocumentLink        -> Dict
     SDocumentLinkResolve             -> Dict
     STextDocumentRename              -> Dict
+    STextDocumentDocumentColor       -> Dict
+    STextDocumentColorPresentation   -> Dict
     SClientRequestMisc SSym          -> Dict
 -- }}}
 
 prfServerReq :: forall (m :: ServerRequestMethodK). Sing m -> Dict (ImplRequest m)
 prfServerReq = \case -- {{{
-  SWindowShowMessageRequest       -> Dict
-  SClientRegisterCapability       -> Dict
-  SClientUnregisterCapability     -> Dict
-  SWorkspaceApplyEdit             -> Dict
-  SServerRequestMisc SSym         -> Dict
+    SWindowShowMessageRequest       -> Dict
+    SClientRegisterCapability       -> Dict
+    SClientUnregisterCapability     -> Dict
+    SWorkspaceApplyEdit             -> Dict
+    SServerRequestMisc SSym         -> Dict
+    SWorkspaceFolders               -> Dict
+    SWorkspaceConfiguration         -> Dict
 -- }}}
 
 prfServerNoti :: forall (m :: ServerNotificationMethodK). Sing m -> Dict (ImplNotification m)
@@ -105,11 +112,13 @@ prfServerNoti = \case -- {{{
 
 prfClientResp :: forall (m :: ServerRequestMethodK). Sing m -> Dict (ImplResponse m)
 prfClientResp = \case -- {{{
-  SWindowShowMessageRequest       -> notImplemented
-  SClientRegisterCapability       -> notImplemented
-  SClientUnregisterCapability     -> notImplemented
-  SWorkspaceApplyEdit             -> Dict
-  SServerRequestMisc SSym         -> Dict
+  SWindowShowMessageRequest   -> notImplemented
+  SClientRegisterCapability   -> notImplemented
+  SClientUnregisterCapability -> notImplemented
+  SWorkspaceApplyEdit         -> Dict
+  SWorkspaceFolders           -> Dict
+  SWorkspaceConfiguration     -> Dict
+  SServerRequestMisc SSym     -> Dict
 -- }}}
 
 notImplemented :: HasCallStack => a

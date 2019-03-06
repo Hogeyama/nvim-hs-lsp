@@ -491,3 +491,31 @@ callbackTextDocumentDocumentSymbol uri (Response resp) = void $ withResponse res
 
 --}}}
 
+-------------------------------------------------------------------------------
+-- TextDocumentRename
+-------------------------------------------------------------------------------
+
+textDocumentRename
+  :: (HasOutChan env, HasContext env)
+  => Uri
+  -> Position
+  -> String
+  -> Neovim env (CallbackTicket ())
+textDocumentRename uri pos newName = do
+    let params = Record
+               $ #textDocument @= textDocumentIdentifier uri
+              <! #position     @= pos
+              <! #newName      @= newName
+              <! nil
+    sendRequest params callbackTextDocumentRename
+
+callbackTextDocumentRename :: CallbackOf 'TextDocumentRenameK ()
+callbackTextDocumentRename (Response resp) = void $ withResponse resp $ \case
+  Nothing -> return ()
+  Just _  -> undefined
+
+applyWorkspaceEdit :: a
+applyWorkspaceEdit = undefined
+
+
+

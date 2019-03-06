@@ -43,7 +43,9 @@ data ClientRequestMethod-- {{{
   | TextDocumentCodeAction
   | TextDocumentCodeLens
   | CodeLensResolve
+  | TextDocumentDocumentColor
   | TextDocumentDocumentLink
+  | TextDocumentColorPresentation
   | DocumentLinkResolve
   | TextDocumentRename
   | ClientRequestMisc Text
@@ -59,6 +61,7 @@ data ClientNotificationMethod-- {{{
   | TextDocumentWillSave
   | TextDocumentDidSave
   | TextDocumentDidClose
+  | DidChangeWorkspaceFolders
   | ClientCancel
   | ClientNotificationMisc Text
   deriving (Eq,Ord,Read,Show)
@@ -69,6 +72,8 @@ data ServerRequestMethod -- {{{
   | ClientRegisterCapability
   | ClientUnregisterCapability
   | WorkspaceApplyEdit
+  | WorkspaceFolders
+  | WorkspaceConfiguration
   | ServerRequestMisc Text
   deriving (Eq,Ord,Read,Show)
 -- }}}
@@ -103,24 +108,27 @@ instance FromJSON ClientRequestMethod where -- {{{
   parseJSON (String "textDocument/codeLens")            = return TextDocumentCodeLens
   parseJSON (String "codeLens/resolve")                 = return CodeLensResolve
   parseJSON (String "textDocument/documentLink")        = return TextDocumentDocumentLink
+  parseJSON (String "textDocument/documentColor")       = return TextDocumentDocumentColor
+  parseJSON (String "textDocument/colorPresentation")   = return TextDocumentColorPresentation
   parseJSON (String "documentLink/resolve")             = return DocumentLinkResolve
   parseJSON (String "textDocument/rename")              = return TextDocumentRename
   parseJSON (String x) | "$/" `T.isPrefixOf` x          = return (ClientRequestMisc (T.drop 2 x))
   parseJSON _                                           = mempty
 -- }}}
 instance FromJSON ClientNotificationMethod where -- {{{
-  parseJSON (String "initialized")                      = return Initialized
-  parseJSON (String "exit")                             = return Exit
-  parseJSON (String "$/cancelRequest")                  = return ClientCancel
-  parseJSON (String "workspace/didChangeConfiguration") = return WorkspaceDidChangeConfiguration
-  parseJSON (String "workspace/didChangeWatchedFiles")  = return WorkspaceDidChangeWatchedFiles
-  parseJSON (String "textDocument/didOpen")             = return TextDocumentDidOpen
-  parseJSON (String "textDocument/didChange")           = return TextDocumentDidChange
-  parseJSON (String "textDocument/willSave")            = return TextDocumentWillSave
-  parseJSON (String "textDocument/didSave")             = return TextDocumentDidSave
-  parseJSON (String "textDocument/didClose")            = return TextDocumentDidClose
-  parseJSON (String x) | "$/" `T.isPrefixOf` x          = return (ClientNotificationMisc (T.drop 2 x))
-  parseJSON _                                           = mempty
+  parseJSON (String "initialized")                         = return Initialized
+  parseJSON (String "exit")                                = return Exit
+  parseJSON (String "$/cancelRequest")                     = return ClientCancel
+  parseJSON (String "workspace/didChangeConfiguration")    = return WorkspaceDidChangeConfiguration
+  parseJSON (String "workspace/didChangeWatchedFiles")     = return WorkspaceDidChangeWatchedFiles
+  parseJSON (String "textDocument/didOpen")                = return TextDocumentDidOpen
+  parseJSON (String "textDocument/didChange")              = return TextDocumentDidChange
+  parseJSON (String "textDocument/willSave")               = return TextDocumentWillSave
+  parseJSON (String "textDocument/didSave")                = return TextDocumentDidSave
+  parseJSON (String "textDocument/didClose")               = return TextDocumentDidClose
+  parseJSON (String "workspace/didChangeWorkspaceFolders") = return DidChangeWorkspaceFolders
+  parseJSON (String x) | "$/" `T.isPrefixOf` x             = return (ClientNotificationMisc (T.drop 2 x))
+  parseJSON _                                              = mempty
 -- }}}
 instance ToJSON ClientRequestMethod where -- {{{
   toJSON Initialize                      = String "initialize"
@@ -144,6 +152,8 @@ instance ToJSON ClientRequestMethod where -- {{{
   toJSON CodeLensResolve                 = String "codeLens/resolve"
   toJSON TextDocumentRename              = String "textDocument/rename"
   toJSON TextDocumentDocumentLink        = String "textDocument/documentLink"
+  toJSON TextDocumentDocumentColor       = String "textDocument/documentColor"
+  toJSON TextDocumentColorPresentation   = String "textDocument/colorPresentation"
   toJSON DocumentLinkResolve             = String "documentLink/resolve"
   toJSON (ClientRequestMisc x)           = String ("$/" `T.append` x)
 -- }}}
@@ -158,6 +168,7 @@ instance ToJSON ClientNotificationMethod where -- {{{
   toJSON TextDocumentDidChange           = String "textDocument/didChange"
   toJSON TextDocumentDidSave             = String "textDocument/didSave"
   toJSON TextDocumentDidClose            = String "textDocument/didClose"
+  toJSON DidChangeWorkspaceFolders       = String "textDocument/didClose"
   toJSON (ClientNotificationMisc x)      = String ("$/" `T.append` x)
 -- }}}
 
@@ -166,6 +177,8 @@ instance FromJSON ServerRequestMethod where -- {{{
   parseJSON (String "client/registerCapability")       = return ClientRegisterCapability
   parseJSON (String "client/unregisterCapability")     = return ClientUnregisterCapability
   parseJSON (String "workspace/applyEdit")             = return WorkspaceApplyEdit
+  parseJSON (String "workspace/workspaceFolders")      = return WorkspaceFolders
+  parseJSON (String "workspace/configuration")         = return WorkspaceConfiguration
   parseJSON (String x) | "$/" `T.isPrefixOf` x         = return (ServerRequestMisc (T.drop 2 x))
   parseJSON _                                          = mempty
 -- }}}
@@ -182,6 +195,8 @@ instance ToJSON ServerRequestMethod where -- {{{
   toJSON ClientRegisterCapability   = String "client/registerCapability"
   toJSON ClientUnregisterCapability = String "client/unregisterCapability"
   toJSON WorkspaceApplyEdit         = String "workspace/applyEdit"
+  toJSON WorkspaceFolders           = String "workspace/WorkspaceFolders"
+  toJSON WorkspaceConfiguration     = String "workspace/configuration"
   toJSON (ServerRequestMisc x)      = String ("$/" `T.append` x)
 -- }}}
 instance ToJSON ServerNotificationMethod where -- {{{
@@ -219,6 +234,8 @@ data ClientRequestMethodK --{{{
   | CodeLensResolveK
   | TextDocumentDocumentLinkK
   | DocumentLinkResolveK
+  | TextDocumentDocumentColorK
+  | TextDocumentColorPresentationK
   | TextDocumentRenameK
   | ClientRequestMiscK Symbol
 -- }}}
@@ -233,6 +250,7 @@ data ClientNotificationMethodK --{{{
   | TextDocumentWillSaveK
   | TextDocumentDidSaveK
   | TextDocumentDidCloseK
+  | DidChangeWorkspaceFoldersK
   | ClientNotificationMiscK Symbol
 -- }}}
 
@@ -241,6 +259,8 @@ data ServerRequestMethodK -- {{{
   | ClientRegisterCapabilityK
   | ClientUnregisterCapabilityK
   | WorkspaceApplyEditK
+  | WorkspaceFoldersK
+  | WorkspaceConfigurationK
   | ServerRequestMiscK Symbol
 -- }}}
 data ServerNotificationMethodK -- {{{
@@ -281,6 +301,8 @@ data instance Sing (m :: ClientRequestMethodK) where -- {{{
   STextDocumentCodeLens            :: Sing 'TextDocumentCodeLensK
   SCodeLensResolve                 :: Sing 'CodeLensResolveK
   STextDocumentDocumentLink        :: Sing 'TextDocumentDocumentLinkK
+  STextDocumentDocumentColor       :: Sing 'TextDocumentDocumentColorK
+  STextDocumentColorPresentation   :: Sing 'TextDocumentColorPresentationK
   SDocumentLinkResolve             :: Sing 'DocumentLinkResolveK
   STextDocumentRename              :: Sing 'TextDocumentRenameK
   SClientRequestMisc               :: Sing n -> Sing ('ClientRequestMiscK n)
@@ -296,6 +318,7 @@ data instance Sing (m :: ClientNotificationMethodK) where -- {{{
   STextDocumentWillSave            :: Sing 'TextDocumentWillSaveK
   STextDocumentDidSave             :: Sing 'TextDocumentDidSaveK
   STextDocumentDidClose            :: Sing 'TextDocumentDidCloseK
+  SDidChangeWorkspaceFolders       :: Sing 'DidChangeWorkspaceFoldersK
   SClientNotificationMisc          :: Sing n -> Sing ('ClientNotificationMiscK n)
 --}}}
 -- }}}
@@ -315,6 +338,7 @@ instance SingI 'TextDocumentWillSaveK            where sing = STextDocumentWillS
 instance SingI 'TextDocumentWillSaveWaitUntilK   where sing = STextDocumentWillSaveWaitUntil
 instance SingI 'TextDocumentDidSaveK             where sing = STextDocumentDidSave
 instance SingI 'TextDocumentDidCloseK            where sing = STextDocumentDidClose
+instance SingI 'DidChangeWorkspaceFoldersK       where sing = SDidChangeWorkspaceFolders
 instance SingI 'TextDocumentCompletionK          where sing = STextDocumentCompletion
 instance SingI 'CompletionItemResolveK           where sing = SCompletionItemResolve
 instance SingI 'TextDocumentHoverK               where sing = STextDocumentHover
@@ -330,6 +354,8 @@ instance SingI 'TextDocumentCodeActionK          where sing = STextDocumentCodeA
 instance SingI 'TextDocumentCodeLensK            where sing = STextDocumentCodeLens
 instance SingI 'CodeLensResolveK                 where sing = SCodeLensResolve
 instance SingI 'TextDocumentDocumentLinkK        where sing = STextDocumentDocumentLink
+instance SingI 'TextDocumentDocumentColorK       where sing = STextDocumentDocumentColor
+instance SingI 'TextDocumentColorPresentationK   where sing = STextDocumentColorPresentation
 instance SingI 'DocumentLinkResolveK             where sing = SDocumentLinkResolve
 instance SingI 'TextDocumentRenameK              where sing = STextDocumentRename
 instance KnownSymbol n => SingI ('ClientRequestMiscK n) where sing = SClientRequestMisc sing
@@ -359,6 +385,8 @@ instance SingKind ClientRequestMethodK where-- {{{
     STextDocumentCodeLens            -> TextDocumentCodeLens
     SCodeLensResolve                 -> CodeLensResolve
     STextDocumentDocumentLink        -> TextDocumentDocumentLink
+    STextDocumentDocumentColor       -> TextDocumentDocumentColor
+    STextDocumentColorPresentation   -> TextDocumentColorPresentation
     SDocumentLinkResolve             -> DocumentLinkResolve
     STextDocumentRename              -> TextDocumentRename
     SClientRequestMisc s             -> ClientRequestMisc (fromSing s)
@@ -384,6 +412,8 @@ instance SingKind ClientRequestMethodK where-- {{{
     TextDocumentCodeLens               -> SomeSing STextDocumentCodeLens
     CodeLensResolve                    -> SomeSing SCodeLensResolve
     TextDocumentDocumentLink           -> SomeSing STextDocumentDocumentLink
+    TextDocumentDocumentColor          -> SomeSing STextDocumentDocumentColor
+    TextDocumentColorPresentation      -> SomeSing STextDocumentColorPresentation
     DocumentLinkResolve                -> SomeSing SDocumentLinkResolve
     TextDocumentRename                 -> SomeSing STextDocumentRename
     ClientRequestMisc n                -> case toSing n of
@@ -403,6 +433,7 @@ instance SingKind ClientNotificationMethodK where -- {{{
     STextDocumentWillSave            -> TextDocumentWillSave
     STextDocumentDidSave             -> TextDocumentDidSave
     STextDocumentDidClose            -> TextDocumentDidClose
+    SDidChangeWorkspaceFolders       -> DidChangeWorkspaceFolders
     SClientNotificationMisc s        -> ClientNotificationMisc (fromSing s)
     -- }}}
   toSing = \case --{{{
@@ -416,6 +447,7 @@ instance SingKind ClientNotificationMethodK where -- {{{
     TextDocumentWillSave               -> SomeSing STextDocumentWillSave
     TextDocumentDidSave                -> SomeSing STextDocumentDidSave
     TextDocumentDidClose               -> SomeSing STextDocumentDidClose
+    DidChangeWorkspaceFolders          -> SomeSing SDidChangeWorkspaceFolders
     ClientNotificationMisc n           -> case toSing n of
                                             SomeSing s -> SomeSing (SClientNotificationMisc s)
     -- }}}
@@ -430,6 +462,8 @@ data instance Sing (m :: ServerRequestMethodK) where -- {{{
   SWindowShowMessageRequest       :: Sing 'WindowShowMessageRequestK
   SClientRegisterCapability       :: Sing 'ClientRegisterCapabilityK
   SWorkspaceApplyEdit             :: Sing 'WorkspaceApplyEditK
+  SWorkspaceFolders               :: Sing 'WorkspaceFoldersK
+  SWorkspaceConfiguration         :: Sing 'WorkspaceConfigurationK
   SClientUnregisterCapability     :: Sing 'ClientUnregisterCapabilityK
   SServerRequestMisc              :: Sing n -> Sing ('ServerRequestMiscK n)
 -- }}}
@@ -450,6 +484,8 @@ instance SingI 'TelemetryEventK                 where sing = STelemetryEvent
 instance SingI 'ClientRegisterCapabilityK       where sing = SClientRegisterCapability
 instance SingI 'ClientUnregisterCapabilityK     where sing = SClientUnregisterCapability
 instance SingI 'WorkspaceApplyEditK             where sing = SWorkspaceApplyEdit
+instance SingI 'WorkspaceFoldersK               where sing = SWorkspaceFolders
+instance SingI 'WorkspaceConfigurationK         where sing = SWorkspaceConfiguration
 instance SingI 'TextDocumentPublishDiagnosticsK where sing = STextDocumentPublishDiagnostics
 instance KnownSymbol n => SingI ('ServerRequestMiscK n) where sing = SServerRequestMisc sing
 instance KnownSymbol n => SingI ('ServerNotificationMiscK n) where sing = SServerNotificationMisc sing
@@ -462,6 +498,8 @@ instance SingKind ServerRequestMethodK where -- {{{
     SClientRegisterCapability       -> ClientRegisterCapability
     SClientUnregisterCapability     -> ClientUnregisterCapability
     SWorkspaceApplyEdit             -> WorkspaceApplyEdit
+    SWorkspaceFolders               -> WorkspaceFolders
+    SWorkspaceConfiguration         -> WorkspaceConfiguration
     SServerRequestMisc s            -> ServerRequestMisc (fromSing s)
   -- }}}
   toSing = \case --{{{
@@ -469,6 +507,8 @@ instance SingKind ServerRequestMethodK where -- {{{
     ClientRegisterCapability       -> SomeSing SClientRegisterCapability
     ClientUnregisterCapability     -> SomeSing SClientUnregisterCapability
     WorkspaceApplyEdit             -> SomeSing SWorkspaceApplyEdit
+    WorkspaceFolders               -> SomeSing SWorkspaceFolders
+    WorkspaceConfiguration         -> SomeSing SWorkspaceConfiguration
     ServerRequestMisc n            -> case toSing n of
                                         SomeSing s -> SomeSing (SServerRequestMisc s)
   -- }}}

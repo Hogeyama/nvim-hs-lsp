@@ -47,7 +47,6 @@ module LSP.Types
   , uriToAbsDirPath
   , ErrorCode
   , prettyResponceError
-  , DiagnosticSeverity
   , TextDocumentSync
   , TextDocumentSyncKind
   , TextDocumentSyncOptions
@@ -55,13 +54,15 @@ module LSP.Types
   , Range
   , Location
   , Diagnostic
+  , DiagnosticSeverity
+  , DiagnosticRelatedInformation
   , Command
   , TextEdit
   , TextDocumentEdit
   , WorkspaceEdit
   , TextDocumentIdentifier
   , textDocumentIdentifier
-  , VersionedTextDocmentIdentifier
+  , VersionedTextDocumentIdentifier
   , versionedTextDocmentIdentifier
   , TextDocumentItem
   , TextDocumentPositionParams
@@ -84,6 +85,13 @@ module LSP.Types
   , DocumentSymbol(..)
   , CodeAction
   , CodeActionKind
+  , LocationLink
+
+  -- Registration Options
+  , DocumentOnTypeFormattingRegistrationOptions
+  , CodeActionRegistrationOptions
+  , RenameRegistrationOptions
+  , DidChangeWatchedFilesRegistrationOptions
 
   -- param
   -- TODO: 拡充
@@ -119,7 +127,7 @@ import           LSP.Enum
 -- https://microsoft.github.io/language-server-protocol/specification
 
 -------------------------------------------------------------------------------
--- Base Protocol
+-- Base Protocol -- {{{
 -------------------------------------------------------------------------------
 
 -- Message
@@ -196,10 +204,23 @@ type ResponseMessageF a e = MessageF ++
    ]
 type ResponseError  e = Record (ResponseErrorF e)
 type ResponseErrorF e =
-  '[ "code"    >: ErrorCode
+  '[ "code"    >: ErrorCode -- TODO :|: Int
    , "message" >: Text
    , "data"    >: Option e
    ]
+type ErrorCode = EnumN
+ '[ "parseError"           >: 'Neg 32700
+  , "invalidRequest"       >: 'Neg 32600
+  , "methodNotFound"       >: 'Neg 32601
+  , "invalidParams"        >: 'Neg 32602
+  , "internalError"        >: 'Neg 32603
+  , "serverErrorStart"     >: 'Neg 32099
+  , "serverErrorEnd"       >: 'Neg 32000
+  , "serverNotInitialized" >: 'Neg 32002
+  , "unknownErrorCode"     >: 'Neg 32001
+  , "requestCancelled"     >: 'Neg 32800
+  ]
+
 prettyResponceError :: Show e => ResponseError e -> Text
 prettyResponceError err =
     tshow (err^. #code) <> ": " <> err^. #message <> mdata
@@ -266,8 +287,10 @@ deriving instance ImplNotification m => FromJSON (Notification m)
 type ClientNotification (m :: ClientNotificationMethodK) = Notification m
 type ServerNotification (m :: ServerNotificationMethodK) = Notification m
 
+--}}}
+
 -------------------------------------------------------------------------------
--- Common Data
+-- Common Data --{{{
 -------------------------------------------------------------------------------
 
 -- Number
@@ -341,21 +364,56 @@ type Range = Record
 
 -- Location
 ----------------------------------------
+
+-- """
+-- Represents a location inside a resource, such as a line inside a text file.
+-- """
 type Location = Record
   '[ "uri"   >: Uri
    , "range" >: Range
    ]
 
+-- """
+-- Represents a link between a source and a target location.
+-- """
+type LocationLink = Record
+ '[ "originSelectionRange" >: Option Range
+  , "targetUri" >: Uri
+  , "targetRange" >: Range
+  , "targetSelectionRange" >: Range
+  ]
+
 -- Diagnostic
 ----------------------------------------
 type Diagnostic = Record
-  '[ "range"    >: Range
-   , "severity" >: Option DiagnosticSeverity
-   , "code"     >: Option (ErrorCode :|: String)
-   , "source"   >: Option String
-   , "message"  >: Text
+  '[ "range"              >: Range
+   , "severity"           >: Option DiagnosticSeverity
+   , "code"               >: Option (ErrorCode :|: String)
+   , "source"             >: Option String
+   , "message"            >: Text
+   , "relatedInformation" >: Option [DiagnosticRelatedInformation]
    ]
 
+-- |
+-- >>> :m + Data.List
+-- >>> sort ([#error, #warning, #hint] :: [DiagnosticSeverity])
+-- [#error,#warning,#hint]
+type DiagnosticSeverity = EnumN
+  '[ "error"       >: 'Pos 1
+   , "warning"     >: 'Pos 2
+   , "information" >: 'Pos 3
+   , "hint"        >: 'Pos 4
+   ]
+
+-- """
+-- Represents a related message and source code location for a diagnostic. This should be
+-- used to point to code locations that cause or related to a diagnostics, e.g when duplicating
+-- a symbol in a scope.
+-- """
+type DiagnosticRelatedInformation = Record
+ '[ "location" >: Location
+  , "message"  >: String
+  ]
 -- Command
 ----------------------------------------
 type Command = Record
@@ -371,15 +429,56 @@ type TextEdit = Record
    , "newText" >: Text
    ]
 type TextDocumentEdit = Record
-  '[ "textDocument" >: VersionedTextDocmentIdentifier
+  '[ "textDocument" >: VersionedTextDocumentIdentifier
    , "edits"        >: [TextEdit]
+   ]
+
+-- File Resource changes
+----------------------------------------
+type CreateFile = Record
+  '[ "kind"    >: ResourceOperationKind
+   , "uri"     >: Uri
+   , "options" >: Option CreateFileOptions
+   ]
+type CreateFileOptions = Record
+  '[ "overwrite"      >: Bool
+   , "ignoreIfExists" >: Bool
+   ]
+type RenameFile = Record
+  '[ "overwrite"      >: Bool
+   , "oldUri"         >: Uri
+   , "newUri"         >: Uri
+   , "options"        >: Option RenameFileOptions
+   ]
+type RenameFileOptions = Record
+  '[ "overwrite"      >: Bool
+   , "ignoreIfExists" >: Bool
+   ]
+type DeleteFile = Record
+  '[ "kind"    >: ResourceOperationKind
+   , "uri"     >: Uri
+   , "options" >: Option DeleteFileOptions
+   ]
+type DeleteFileOptions = Record
+  '[ "recursive" >: Bool
+   , "ignoreIfExists" >: Bool
+   ]
+type ResourceOperationKind = EnumS
+  '[ "create"
+   , "rename"
+   , "delete"
    ]
 
 -- WorkspaceEdit
 ----------------------------------------
 type WorkspaceEdit = Record
   '[ "changes"         >: Option (Map Uri [TextEdit])
-   , "documentChanges" >: Option [TextDocumentEdit]
+   , "documentChanges" >: Option ([TextDocumentEdit]
+                              :|: [  TextDocumentEdit
+                                 :|: CreateFile
+                                 :|: RenameFile
+                                 :|: DeleteFile
+                                  ])
    ]
 
 -- TextDocumentIdentifier
@@ -387,17 +486,19 @@ type WorkspaceEdit = Record
 type TextDocumentIdentifier  = Record TextDocumentIdentifierF
 type TextDocumentIdentifierF = '[ "uri" >: Uri ]
 
-type VersionedTextDocmentIdentifier  = Record VersionedTextDocmentIdentifierF
-type VersionedTextDocmentIdentifierF =
-  TextDocumentIdentifierF ++
-  '[ "version" >: Option Version
-   ]
-
 textDocumentIdentifier :: Uri -> TextDocumentIdentifier
 textDocumentIdentifier uri = Record $ uri =<: nil
 
-versionedTextDocmentIdentifier :: Uri -> Version -> VersionedTextDocmentIdentifier
-versionedTextDocmentIdentifier uri version = Record (uri =<: Some version =<: nil)
+-- VersionedTextDocumentIdentifier
+----------------------------------------
+type VersionedTextDocumentIdentifier  = Record VersionedTextDocumentIdentifierF
+type VersionedTextDocumentIdentifierF =
+  TextDocumentIdentifierF ++
+  '[ "version" >: Nullable Version
+   ]
+
+versionedTextDocmentIdentifier :: Uri -> Version -> VersionedTextDocumentIdentifier
+versionedTextDocmentIdentifier uri version = Record (uri =<: Just version =<: nil)
 
 -- TextDocumentItem
 --   An item to transfer a text document from the client to the server.
@@ -426,41 +527,16 @@ type DocumentFilter = Record
    ]
 type DocumentSelector = [DocumentFilter]
 
--- ErrorCode
+-- MarkupContent
 ----------------------------------------
+type MarkupKind = EnumS '[ "plaintext", "markdown" ]
 
-type ErrorCode = EnumN
- '[ "parseError"           >: 'Neg 32700
-  , "invalidRequest"       >: 'Neg 32600
-  , "methodNotFound"       >: 'Neg 32601
-  , "invalidParams"        >: 'Neg 32602
-  , "internalError"        >: 'Neg 32603
-  , "serverErrorStart"     >: 'Neg 32099
-  , "serverErrorEnd"       >: 'Neg 32000
-  , "serverNotInitialized" >: 'Neg 32002
-  , "unknownErrorCode"     >: 'Neg 32001
-  , "requestCancelled"     >: 'Neg 32800
-  ]
-
--- DiagnosticSeverity
-----------------------------------------
-
--- |
--- >>> :m + Data.List
--- >>> sort ([#error, #warning, #hint] :: [DiagnosticSeverity])
--- [#error,#warning,#hint]
-type DiagnosticSeverity = EnumN
-  '[ "error"       >: 'Pos 1
-   , "warning"     >: 'Pos 2
-   , "information" >: 'Pos 3
-   , "hint"        >: 'Pos 4
+type MarkupContent = Record
+  '[ "kind"  >: MarkupKind
+   , "value" >: String
    ]
 
-type TextDocumentSyncKind = EnumN
-  '[ "none"        >: 'Pos 0
-   , "fulL"        >: 'Pos 1
-   , "incremental" >: 'Pos 2
-   ]
+--}}}
 
 -------------------------------------------------------------------------------
 -- Client Request --{{{
@@ -477,6 +553,7 @@ type instance RequestParam 'InitializeK = Record
    , "initializationOptions" >: Option Value
    , "capabilities"          >: ClientCapabilities
    , "trace"                 >: Option Trace
+   , "workspaceFolders"      >: Option (Nullable [WorkspaceFolder])
    ]
 
 -- | Initialize Response > Result
@@ -484,12 +561,18 @@ type instance ResponseResultParam 'InitializeK = Record
   '[ "capabilities" >: ServerCapabilities
    ]
 
+-- """
+-- * Indicates whether the client execute the following retry logic:
+-- * (1) show the message provided by the ResponseError to the user
+-- * (2) user selects retry or cancel
+-- * (3) if user selected retry the initialize method is sent again.
+-- """
 -- | Initialize Response > Error
 type instance ResponseErrorParam 'InitializeK = Record
   '[ "retry" >: Bool
    ]
 
-initializeParam :: Nullable Number -> Nullable Uri -> RequestParam 'InitializeK
+initializeParam :: Nullable Number -> Nullable Uri -> RequestParam 'InitializeK -- {{{
 initializeParam processId rootUri
      = Record
      $ #processId             @= processId
@@ -503,6 +586,7 @@ initializeParam processId rootUri
                                     <! #experimental @= None
                                     <! nil }
     <! #trace                 @= Some #off
+    <! #workspaceFolders      @= None -- TODO
     <! nil
   where
     workspaceOption :: WorkspaceClientCapabilities
@@ -510,10 +594,13 @@ initializeParam processId rootUri
       =  Record
       $  #applyEdit @= Some True
       <! #workspaceEdit @= Some Record {
-              fields = #documentChanges @= Some False <! nil
+              fields = #documentChanges   @= Some False
+                    <! #resouceOperations @= None -- TODO
+                    <! #failureHandling   @= None -- TODO
+                    <! nil
             }
       <! #didChangeConfiguration @= Some Record {
-              fields = #dynamicRegistration @= Some False <! nil
+              fields = #dynamicRegistration @= Some True <! nil
             }
       <! #didChangeWatchedFiles @= Some Record {
               fields = #dynamicRegistration @= Some False <! nil
@@ -523,7 +610,7 @@ initializeParam processId rootUri
                     <! #symbolKind @= None -- TODO
                     <! nil
             }
-      <! #executeCommand @= noDyn
+      <! #executeCommand @= Some noDyn
       <! #workspaceFolders @= Some False
       <! #configuration @= Some False
       <! nil @(Field Identity)
@@ -540,13 +627,15 @@ initializeParam processId rootUri
       <! #completion @= Some Record { fields =
                #dynamicRegistration @= Some False
             <! #completionItem @= Some Record { fields =
-                     #snippetSupport @= Some True -- use neosnippet
+                     #snippetSupport @= Some False
                   <! #commitCharactersSupport @= Some True
                   <! #documentationFormat @= Some [ #plaintext ]
+                  <! #deprecatedSupport   @= None -- TODO
+                  <! #preselectSupport    @= None
                   <! nil }
             <! #completionItemKind @= Some Record { fields =
                      #valueSet @= None <! nil }
-            <! #contextSupport @= Some True -- TODO
+            <! #contextSupport @= Some False -- TODO
             <! nil }
       <! #hover @= Some Record { fields =
                #dynamicRegistration @= Some False
@@ -555,33 +644,51 @@ initializeParam processId rootUri
       <! #signatureHelp @= Some Record { fields =
                #dynamicRegistration @= Some False
             <! #signatureInformation @= Some Record { fields =
-                     #documentationFormat @= Some [ #plaintext ] <! nil }
+                     #documentationFormat  @= Some [ #plaintext ]
+                  <! #parameterInformation @=  None
+                  <! nil }
             <! nil }
-      <! #references @= noDyn
-      <! #documentHightlight @= noDyn
+      <! #references @= Some noDyn
+      <! #documentHightlight @= Some noDyn
       <! #documentSymbol @= Some Record { fields =
                #dynamicRegistration @= Some False
             <! #symbolKind @= None
+            <! #hierarchicalDocumentSymbolSupport @= None
             <! nil }
-      <! #formatting         @= noDyn
-      <! #rangeFormatting    @= noDyn
-      <! #onTypeFormatting   @= noDyn
-      <! #definition         @= noDyn
-      <! #typeDefinition     @= noDyn
-      <! #implementation     @= noDyn
-      <! #codeAction         @= noDyn
-      <! #codeLens           @= noDyn
-      <! #documentLink       @= noDyn
-      <! #colorProvider      @= noDyn
-      <! #rename             @= noDyn
+      <! #formatting         @= Some noDyn
+      <! #rangeFormatting    @= Some noDyn
+      <! #onTypeFormatting   @= Some noDyn
+      <! #declaration        @= Some noDynNoLink
+      <! #definition         @= Some noDynNoLink
+      <! #typeDefinition     @= None -- TODO
+      <! #implementation     @= None -- TODO
+      <! #codeAction         @= None -- TODO
+      <! #codeLens           @= Some noDyn
+      <! #documentLink       @= Some noDyn
+      <! #colorProvider      @= Some noDyn
+      <! #rename             @= Some noDyn
+      <! #publishDiagnostics @= None -- TODO
+      <! #foldingRange       @= None -- TODO
       <! nil
     -- }}}
-    noDyn = Some Record { fields = #dynamicRegistration @= Some False <! nil }
+    noDyn = Record { fields = #dynamicRegistration @= Some False <! nil }
+    noDynNoLink = Record { fields =
+                  #dynamicRegistration @= Some False
+               <! #linkSupport         @= Some False
+               <! nil }
+-- }}}
 
 -- Other Data
 --------------
 
 type Trace = EnumS '[ "off", "messages", "verbose" ]
+
+type FailureHandlingKind = EnumS
+  '[ "abort"
+   , "transactional"
+   , "undo"
+   , "textOnlyTransaction"
+   ]
 
 type ClientCapabilities = Record
   '[ "workspace"    >: Option WorkspaceClientCapabilities
@@ -595,7 +702,9 @@ type WorkspaceClientCapabilities = Record
   -- {{{
   '[ "applyEdit" >: Option Bool
    , "workspaceEdit" >: OptionalRecord
-        '[ "documentChanges" >: Option Bool
+        '[ "documentChanges"   >: Option Bool
+         , "resouceOperations" >: Option [ResourceOperationKind]
+         , "failureHandling"   >: Option FailureHandlingKind
          ]
    , "didChangeConfiguration" >: OptionalRecord
         '[ "dynamicRegistration" >: Option Bool
@@ -631,6 +740,8 @@ type TextDocumentClientCapabilities = Record
               '[ "snippetSupport"          >: Option Bool
                , "commitCharactersSupport" >: Option Bool
                , "documentationFormat"     >: Option [MarkupKind]
+               , "deprecatedSupport"       >: Option Bool
+               , "preselectSupport"        >: Option Bool
                ]
          , "completionItemKind"   >: OptionalRecord
               '[ "valueSet" >: Option [CompletionItemKind]
@@ -645,6 +756,9 @@ type TextDocumentClientCapabilities = Record
         '[ "dynamicRegistration"  >: Option Bool
          , "signatureInformation" >: OptionalRecord
               '[ "documentationFormat" >: Option [MarkupKind]
+               , "parameterInformation" >: OptionalRecord
+                    '[ "labelOffsetSupport" >: Option Bool
+                     ]
                ]
          ]
    , "references"         >: OptionalRecord
@@ -658,6 +772,7 @@ type TextDocumentClientCapabilities = Record
          , "symbolKind"          >: OptionalRecord
               '[ "valueSet" >: Option [SymbolKind]
                ]
+         , "hierarchicalDocumentSymbolSupport" >: Option Bool -- TODO
          ]
    , "formatting"         >: OptionalRecord
         '[ "dynamicRegistration" >: Option Bool
@@ -668,17 +783,29 @@ type TextDocumentClientCapabilities = Record
    , "onTypeFormatting"   >: OptionalRecord
         '[ "dynamicRegistration" >: Option Bool
          ]
+   , "declaration"        >: OptionalRecord
+        '[ "dynamicRegistration" >: Option Bool
+         , "linkSupport"         >: Option Bool
+         ]
    , "definition"         >: OptionalRecord
         '[ "dynamicRegistration" >: Option Bool
+         , "linkSupport"         >: Option Bool
          ]
    , "typeDefinition"     >: OptionalRecord
         '[ "dynamicRegistration" >: Option Bool
+         , "linkSupport"         >: Option Bool
          ]
    , "implementation"     >: OptionalRecord
         '[ "dynamicRegistration" >: Option Bool
+         , "linkSupport"         >: Option Bool
          ]
    , "codeAction"         >: OptionalRecord
         '[ "dynamicRegistration" >: Option Bool
+         , "codeActionLiteralSupport" >: OptionalRecord
+              '[ "codeActionKind" >: Record
+                    '[ "valueSet" >: [CodeActionKind]
+                     ]
+               ]
          ]
    , "codeLens"           >: OptionalRecord
         '[ "dynamicRegistration" >: Option Bool
@@ -692,45 +819,144 @@ type TextDocumentClientCapabilities = Record
    , "rename"             >: OptionalRecord
         '[ "dynamicRegistration" >: Option Bool
          ]
+   , "publishDiagnostics" >: OptionalRecord
+        '[ "realatedInformation" >: Option Bool
+         ]
+   , "foldingRange"       >: OptionalRecord
+        '[ "dynamicRegistration" >: Option Bool
+         , "rangeLimity"         >: Option Int
+         , "lineFoldingOnly"     >: Option Bool
+         ]
    ]
 -- }}}
 
-type MarkedString = String :|: Record
-  '[ "language" >: String
-   , "value"    >: String
-   ]
-type MarkupContent = Record
-  '[ "kind"  >: MarkupKind
-   , "value" >: String
-   ]
-type MarkupKind = EnumS '[ "plaintext", "markdown" ]
-
--- 後回し
-type SymbolKind = Value
-type CompletionItemKind = Value
-
 type ServerCapabilities = Record
-  '[ "textDocumentSync"                 >: Option TextDocumentSync
-   , "hoverProvider"                    >: Option Bool
+  '[ --"""
+     -- Defines how text documents are synced. Is either a detailed structure
+     -- defining each notification or for backwards compatibility the
+     -- TextDocumentSyncKind number. If omitted it defaults to `TextDocumentSyncKind.None`.
+     -- """
+     "textDocumentSync"                 >: Option TextDocumentSync
+   , "hoverProvider"                    >: Option HoverOptions
    , "completionProvider"               >: Option CompletionOptions
    , "signatureHelpProvider"            >: Option SignatureHelpOptions
-   , "definitionProvider"               >: Option Bool
-   , "referencesProvider"               >: Option Bool
-   , "documentHighlightProvider"        >: Option Bool
-   , "documentSymbolProvider"           >: Option Bool
-   , "workspaceSymbolProvider"          >: Option Bool
-   , "codeActionProvider"               >: Option Bool
+   , "definitionProvider"               >: Option DefinitionOptions
+   , "typeDefinitionProvider"           >: Option TypeDefinitionOptions
+   , "implementationProvider"           >: Option ImplementationOptions
+   , "referencesProvider"               >: Option ReferenceOptions
+   , "documentHighlightProvider"        >: Option DocumentHighlightOptions
+   , "documentSymbolProvider"           >: Option DocumentSymbolOptions
+   , "workspaceSymbolProvider"          >: Option WorkspaceSymbolOptions
+     -- """
+     -- The server provides code actions. The `CodeActionOptions` return type is only
+     -- valid if the client signals code action literal support via the property
+     -- `textDocument.codeAction.codeActionLiteralSupport`.
+     -- """
+   , "codeActionProvider"               >: Option (Bool :|: CodeActionOptions)
    , "codeLensProvider"                 >: Option CodeLensOptions
-   , "documentFormattingProvider"       >: Option Bool
-   , "documentRangeFormattingProvider"  >: Option Bool
+   , "documentFormattingProvider"       >: Option DocumentFormattingOptions
+   , "documentRangeFormattingProvider"  >: Option DocumentRangeFormattingOptions
    , "documentOnTypeFormattingProvider" >: Option DocumentOnTypeFormattingOptions
-   , "renameProvider"                   >: Option Bool
+   , "renameProvider"                   >: Option (Bool :|: RenameOptions)
    , "documentLinkProvider"             >: Option DocumentLinkOptions
+   , "colorProvider"                    >: Option ColorOptions
+   , "foldingRangeProvider"             >: Option FoldingRangeOptions
    , "executeCommandProvider"           >: Option ExecuteCommandOptions
+   , "workspace"                        >: Option WorkspaceOptions
    , "experimental"                     >: Option Value
    ]
 
-type TextDocumentSync = TextDocumentSyncOptions :|: TextDocumentSyncKind
+type TextDocumentSyncKind = EnumN
+  '[ "none"        >: 'Pos 0
+   , "fulL"        >: 'Pos 1
+   , "incremental" >: 'Pos 2
+   ]
+
+type HoverOptions = Bool
+
+type CompletionOptions = Record
+  '[ "resolveProvider"   >: Option Bool
+   , "triggerCharacters" >: Option [String]
+   ]
+
+type SignatureHelpOptions = Record
+  '[ "triggerCharacters" >: Option [String]
+   ]
+
+-- Note: This type alias is not defined in original specification
+type DefinitionOptions = Bool
+
+type TypeDefinitionOptions = Bool :|:
+  TextDocumentRegistrationOptions & StaticRegistrationOptions
+
+type ImplementationOptions = Bool :|:
+  TextDocumentRegistrationOptions & StaticRegistrationOptions
+
+-- Note: This type alias is not defined in original specification
+type ReferenceOptions = Bool
+
+-- Note: This type alias is not defined in original specification
+type DocumentHighlightOptions = Bool
+
+-- Note: This type alias is not defined in original specification
+type DocumentSymbolOptions = Bool
+
+-- Note: This type alias is not defined in original specification
+type WorkspaceSymbolOptions = Bool
+
+type CodeActionOptions = Record
+  '[ "codeActionKinds" >: Option [CodeActionKind]
+   ]
+
+type CodeLensOptions = Record
+  '[ "resolveProvider" >: Option Bool
+   ]
+
+-- Note: This type alias is not defined in original specification
+type DocumentFormattingOptions = Bool
+
+-- Note: This type alias is not defined in original specification
+type DocumentRangeFormattingOptions = Bool
+
+type DocumentOnTypeFormattingOptions = Record
+  '[ "firstTriggerCharacter" >: String
+   , "moreTriggerCharacter"  >: Option [String]
+   ]
+
+type RenameOptions = Record
+  '[ "prepareProvider" >: Option Bool
+   ]
+
+type DocumentLinkOptions = Record
+  '[ "resolveProvider" >: Option Bool
+   ]
+
+-- Note: This type alias is not defined in original specification
+type ColorOptions = Bool :|: ColorProviderOptions :|:
+  ColorProviderOptions & TextDocumentRegistrationOptions & StaticRegistrationOptions
+
+-- Note: This type alias is not defined in original specification
+type FoldingRangeOptions = Bool :|: FoldingRangeProviderOptions :|:
+  FoldingRangeProviderOptions & TextDocumentRegistrationOptions & StaticRegistrationOptions
+
+type ExecuteCommandOptions = Record
+  '[ "commands" >: [String]
+   ]
+
+type WorkspaceOptions = Record
+ '[ "workspaceFolders" >: OptionalRecord
+        '[ "supported"           >: Option Bool
+         , "changeNotifications" >: (String :|: Bool)
+         ]
+  ]
+
+type SaveOptions = Record
+  '[ "includeText" >: Option Bool
+   ]
+
+type ColorProviderOptions = Record '[]
+
+type FoldingRangeProviderOptions = Record '[]
 
 type TextDocumentSyncOptions = Record
   '[ "openClose"         >: Option Bool
@@ -739,35 +965,27 @@ type TextDocumentSyncOptions = Record
    , "willSaveWaitUntil" >: Option Bool
    , "save"              >: Option SaveOptions
    ]
-type SaveOptions = Record
-  '[ "includeText" >: Option Bool
+
+type StaticRegistrationOptions = Record
+  '[ "id" >: Option String
    ]
 
-type CompletionOptions = Record
-  '[ "resolveProvider"   >: Option Bool
-   , "triggerCharacters" >: Option [String]
+type MarkedString = String :|: Record
+  '[ "language" >: String
+   , "value"    >: String
    ]
-type SignatureHelpOptions = Record
-  '[ "triggerCharacters" >: Option [String]
-   ]
-type CodeLensOptions = Record
-  '[ "resolveProvider" >: Option Bool
-   ]
-type DocumentOnTypeFormattingOptions = Record
-  '[ "firstTriggerCharacter" >: String
-   , "moreTriggerCharacter"  >: Option [String]
-   ]
-type DocumentLinkOptions = Record
-  '[ "resolveProvider" >: Option Bool
-   ]
-type ExecuteCommandOptions = Record
-  '[ "commands" >: [String]
-   ]
+
+-- 後回し
+type SymbolKind = Value -- TODO
+type CompletionItemKind = Value
+
+type TextDocumentSync = TextDocumentSyncOptions :|: TextDocumentSyncKind
+--}}}
 
 -- Shutdown {{{
 ----------------------------------------
 type instance RequestParam 'ShutdownK = Option Void
-type instance ResponseResultParam 'ShutdownK = Record '[]
+type instance ResponseResultParam 'ShutdownK = Void
 type instance ResponseErrorParam  'ShutdownK = Value
 -- }}}
 
@@ -1040,6 +1258,10 @@ type instance RequestParam 'TextDocumentOnTypeFormattingK = Record
 type instance ResponseResultParam 'TextDocumentOnTypeFormattingK = Nullable [TextEdit]
 type instance ResponseErrorParam  'TextDocumentOnTypeFormattingK = Value
 
+type DocumentOnTypeFormattingRegistrationOptions = TextDocumentRegistrationOptions & Record
+  '[ "firstTriggerCharacter" >: String
+   , "moreTriggerCharacter"  >: Option [String]
+   ]
 --}}}
 
 -- TextDocumentCodeAction {{{
@@ -1076,6 +1298,10 @@ type CodeAction = Record
    , "command"     >: Command
    ]
 
+-- for dynamic registration
+type CodeActionRegistrationOptions =
+  TextDocumentRegistrationOptions & CodeActionOptions
+
 -- }}}
 
 -- TextDocumentCodeLens {{{
@@ -1104,6 +1330,7 @@ type instance ResponseErrorParam  'CodeLensResolveK = Value
 -- }}}
 
 -- TextDocumentDocumentLink {{{
+----------------------------------------
 type instance RequestParam 'TextDocumentDocumentLinkK = Record
   '[ "textDocument" >: TextDocumentIdentifier
    ]
@@ -1118,10 +1345,48 @@ type DocumentLink = Record
 -- }}}
 
 -- DocumentLinkResolve {{{
+----------------------------------------
 type instance RequestParam 'DocumentLinkResolveK = DocumentLink
 type instance ResponseResultParam 'DocumentLinkResolveK = DocumentLink
 type instance ResponseErrorParam  'DocumentLinkResolveK = Value
 -- }}}
+
+-- TextDocumentDocumentColor {{{
+----------------------------------------
+type instance RequestParam 'TextDocumentDocumentColorK = DocumentColorParams
+type instance ResponseResultParam 'TextDocumentDocumentColorK = [ColorInformation]
+type instance ResponseErrorParam  'TextDocumentDocumentColorK = Value
+type ColorInformation = Record
+  '[ "range" >: Range
+   , "color" >: Color
+   ]
+type Color = Record
+  '[ "red"   >: Number
+   , "green" >: Number
+   , "blue"  >: Number
+   , "alpha" >: Number
+   ]
+type DocumentColorParams = Record
+  '[ "textDocument" >: TextDocumentIdentifier
+   ]
+--}}}
+
+-- TextDocumentColorPresentation {{{
+----------------------------------------
+type instance RequestParam 'TextDocumentColorPresentationK = ColorPresentationParams
+type instance ResponseResultParam 'TextDocumentColorPresentationK = [ColorPresentation]
+type instance ResponseErrorParam  'TextDocumentColorPresentationK = Value
+type ColorPresentationParams = Record 
+  '[ "textDocument" >: TextDocumentIdentifier
+   , "color"        >: Color
+   , "range"        >: Range
+   ]
+type ColorPresentation = Record
+  '[ "label"               >: String
+   , "textEdit"            >: Option TextEdit
+   , "additionalTextEdits" >: Option [TextEdit]
+   ]
+--}}}
 
 -- TextDocumentRename {{{
 type instance RequestParam 'TextDocumentRenameK = Record
@@ -1132,7 +1397,14 @@ type instance RequestParam 'TextDocumentRenameK = Record
 type instance ResponseResultParam 'TextDocumentRenameK = Nullable WorkspaceEdit
 type instance ResponseErrorParam  'TextDocumentRenameK = Value
 
+type RenameRegistrationOptions = TextDocumentRegistrationOptions & Record
+  '[ "prepareProvider" >: Option Bool
+   ]
+
 -- }}}
+
+-- TODO
+--type PrepareRename
 
 -- Misc {{{
 ----------------------------------------
@@ -1141,8 +1413,6 @@ type instance ResponseResultParam ('ClientRequestMiscK s) = Value
 type instance ResponseErrorParam  ('ClientRequestMiscK s) = Value
 
 -- }}}
-
---}}}
 
 --}}}
 
@@ -1187,6 +1457,20 @@ type FileChangeType = EnumN
    , "deleted" >: 'Pos 3
    ]
 
+-- for dynamic registration
+type DidChangeWatchedFilesRegistrationOptions = Record
+  '[ "watchers" >: [FileSystemWatcher]
+   ]
+type FileSystemWatcher = Record
+  '[ "globPattern" >: String
+   , "kind" >: Option WatchKind
+   ]
+type WatchKind = EnumN
+  '[ "create" >: 'Pos 1
+   , "change" >: 'Pos 2
+   , "delete" >: 'Pos 3
+   ]
+ 
 -- }}}
 
 -- TextDocumentDidOpen {{{
@@ -1203,7 +1487,7 @@ didOpenTextDocumentParam textDocument = Record $ #textDocument @= textDocument <
 -- TextDocumentDidChange {{{
 ----------------------------------------
 type instance NotificationParam 'TextDocumentDidChangeK = Record
-  '[ "textDocument"   >: VersionedTextDocmentIdentifier
+  '[ "textDocument"   >: VersionedTextDocumentIdentifier
    , "contentChanges" >: [TextDocumentContentChangeEvent]
    ]
 type TextDocumentContentChangeEvent = Record
@@ -1235,6 +1519,19 @@ type instance NotificationParam 'TextDocumentDidCloseK = Record
    ]
 -- }}}
 
+-- DidChangeWorkspaceFolders {{{
+----------------------------------------
+type instance NotificationParam 'DidChangeWorkspaceFoldersK = DidChangeWorkspaceFoldersParam
+type DidChangeWorkspaceFoldersParam = Record
+  '[ "event" >: WorkspaceFoldersChangeEvent
+   ]
+type WorkspaceFoldersChangeEvent = Record
+  '[ "added"   >: [WorkspaceFolder]
+   , "removed" >: [WorkspaceFolder]
+   ]
+
+--}}}
+
 -- Misc {{{
 ----------------------------------------
 type instance NotificationParam ('ClientNotificationMiscK s) = Value
@@ -1245,17 +1542,6 @@ type instance NotificationParam ('ClientNotificationMiscK s) = Value
 -------------------------------------------------------------------------------
 -- Server Request --{{{
 -------------------------------------------------------------------------------
-
--- WindowShowMessageRequest {{{
-type instance NotificationParam 'WindowShowMessageRequestK = Record
-  '[ "type"    >: MessageType
-   , "message" >: Text
-   , "actions" >: Option [MessageActionItem]
-   ]
-
-type MessageActionItem = Record
-  '[ "title" >: String ]
--- }}}
 
 -- ClientRegisterCapability{{{
 ----------------------------------------
@@ -1268,7 +1554,10 @@ type instance ResponseErrorParam  'ClientRegisterCapabilityK = Value
 type Registration = Record
   '[ "id"              >: String
    , "method"          >: String
-   , "registerOptions" >: Option Value
+   , "registerOptions" >: Option (TextDocumentRegistrationOptions :|: Value)
+   ]
+type TextDocumentRegistrationOptions = Record
+  '[ "documentSelector" >: Nullable DocumentSelector
    ]
 -- }}}
 
@@ -1312,6 +1601,33 @@ type Unregistration = Record
    ]
 --}}}
 
+-- WorkspaceFolders {{{
+----------------------------------------
+type instance RequestParam 'WorkspaceFoldersK = Void
+type instance ResponseResultParam 'WorkspaceFoldersK = Nullable [WorkspaceFolder]
+type instance ResponseErrorParam  'WorkspaceFoldersK = Value
+
+type WorkspaceFolder = Record
+  '[ "uri"  >: Uri
+   , "name" >: String
+   ]
+--}}}
+
+-- WorkspaceFolders {{{
+----------------------------------------
+type instance RequestParam 'WorkspaceConfigurationK = ConfigurationParams
+type ConfigurationParams = Record
+  '[ "items" >: [ConfigurationItem]
+   ]
+type ConfigurationItem = Record
+  '[ "scopeUri" >: Option String
+   , "section"  >: Option String
+   ]
+type instance ResponseResultParam 'WorkspaceConfigurationK = Nullable [WorkspaceFolder]
+type instance ResponseErrorParam  'WorkspaceConfigurationK = Value
+
+--}}}
+
 -- Misc {{{
 ----------------------------------------
 type instance RequestParam ('ServerRequestMiscK s) = Value
@@ -1324,6 +1640,17 @@ type instance ResponseErrorParam  ('ServerRequestMiscK s) = Value
 -------------------------------------------------------------------------------
 -- Server Notification --{{{
 -------------------------------------------------------------------------------
+
+-- WindowShowMessageNotification {{{
+type instance NotificationParam 'WindowShowMessageRequestK = Record
+  '[ "type"    >: MessageType
+   , "message" >: Text
+   , "actions" >: Option [MessageActionItem]
+   ]
+
+type MessageActionItem = Record
+  '[ "title" >: String ]
+-- }}}
 
 -- TextDocumentPublishDiagnostics {{{
 ----------------------------------------
