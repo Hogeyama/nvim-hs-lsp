@@ -31,6 +31,7 @@ import           LSP
 import           Util
 import           Neovim
 import           Neovim.LSP.Base
+import qualified Neovim.User.Choice       as Choice
 
 -------------------------------------------------------------------------------
 -- Neovim
@@ -69,6 +70,28 @@ nvimEchow s =
       , "echomsg " ++ show s
       , "echohl None"
       ]
+
+userChoise :: String -> (a -> String) -> [a] -> Neovim env (Maybe a)
+userChoise prompt pr = \case
+    []  -> return Nothing
+    [x] -> Choice.yesOrNo (prompt ++ ": " ++ pr x) >>= \case
+      True  -> return (Just x)
+      False -> return Nothing
+    xs -> do
+      let titles = map pr xs
+      x <- vimCallFunction "tlib#input#List"
+              [ ObjectString "si"
+              , ObjectString "choose a codeAction"
+              , toObject titles
+              ]
+      case x of
+        Right (fromObject -> Right i) -> return (Just  (xs L.!! (i-1)))
+        Left _ -> Choice.oneOf titles >>= \case
+            Nothing -> return Nothing
+            Just ans -> case L.find (\a -> pr a == ans) xs of
+              Nothing -> error "impossible"
+              Just x' -> return (Just x')
+        _ -> error "どうして"
 
 ---
 
@@ -433,13 +456,13 @@ locationToQfItem loc text = Record
 -- TextEdit
 -------------------------------------------------------------------------------
 
-applyTextEdit :: Uri -> [TextEdit] -> Neovim env ()
-applyTextEdit uri edits = do
+applyTextEdits :: Uri -> [TextEdit] -> Neovim env ()
+applyTextEdits uri edits = do
     text <- errOnInvalidResult $ vimCallFunction "readfile" (uriToFilePath uri+:[])
     let filePath = uriToFilePath uri
         -- NOTE: This sort must be stable.
         edits' = L.reverse $ L.sortOn (view (#range.__#start)) edits
-        newText = foldl' applyTextEditOne text edits'
+        newText = foldl' applyTextEdit text edits'
     void (vimCallFunction "writefile" (newText +: filePath +: []))
       `catchAny` \e -> nvimEchoe (show e)
     vim_command' $ "edit " ++ filePath
@@ -465,8 +488,8 @@ applyTextEdit uri edits = do
 --     | () -> ()
 --   end
 --
-applyTextEditOne :: [Text] -> TextEdit -> [Text]
-applyTextEditOne text edit =
+applyTextEdit :: [Text] -> TextEdit -> [Text]
+applyTextEdit text edit =
     let range = edit^. #range
         (before, r)   = L.splitAt (range^. #start.__#line) text
         (body, after) = L.splitAt (range^. #end.__#line - range^.__#start.__#line + 1) r
@@ -486,4 +509,36 @@ applyTextEditOne text edit =
 -- However, it is possible that multiple edits have the same start position:
 -- multiple inserts, or any number of inserts followed by a single remove or replace edit.
 -- If multiple inserts have the same position, the order in the array defines the order in which the inserted strings appear in the resulting text.
+
+-------------------------------------------------------------------------------
+-- WorkspaceEdit
+-------------------------------------------------------------------------------
+
+applyWorkspaceEdit :: (HasLogFunc env) => WorkspaceEdit -> Neovim env ()
+applyWorkspaceEdit edit = case edit^. #documentChanges of
+    Some documentChanges -> applyDocumentChanges documentChanges
+    None -> case edit^. #changes of
+      Some changes -> applyChanges changes
+      None -> return ()
+
+applyChanges :: Map Uri [TextEdit] -> Neovim env ()
+applyChanges cs = uncurry applyTextEdits `mapM_` M.toList cs
+
+applyDocumentChanges
+  :: (HasLogFunc env)
+  => ([TextDocumentEdit]
+      :|: [TextDocumentEdit :|: CreateFile :|: RenameFile :|: DeleteFile])
+  -> Neovim env ()
+applyDocumentChanges = \case
+    L xs -> applyTextDocumentEdits xs
+    R _  -> logError "Resource operation is not supported"
+
+applyTextDocumentEdits :: (HasLogFunc env) => [TextDocumentEdit] -> Neovim env ()
+applyTextDocumentEdits = mapM_ applyTextDocumentEdit
+
+applyTextDocumentEdit :: (HasLogFunc env) => TextDocumentEdit -> Neovim env ()
+applyTextDocumentEdit textDocumentEdit = do
+    let uri   = textDocumentEdit ^. #textDocument.__#uri -- XXX ignore version
+        edits = textDocumentEdit ^. #edits
+    applyTextEdits uri edits
 

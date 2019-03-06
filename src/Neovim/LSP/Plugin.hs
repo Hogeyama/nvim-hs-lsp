@@ -351,3 +351,13 @@ nvimHsLspWorkspaceSymbol :: CommandArguments -> String -> NeovimLsp ()
 nvimHsLspWorkspaceSymbol _ sym = whenInitialized $ focusLang' False $ whenAlreadyOpened $ do
     waitCallback $ workspaceSymbol sym callbackWorkspaceSymbol
 
+-------------------------------------------------------------------------------
+-- DocumentSymbol
+-------------------------------------------------------------------------------
+
+nvimHsLspRename :: CommandArguments -> String -> NeovimLsp ()
+nvimHsLspRename _ newName = whenInitialized $ focusLang' False $ whenAlreadyOpened $ do
+    uri <- getBufUri =<< vim_get_current_buffer'
+    pos <- fromNvimPos <$> getNvimPos
+    waitCallback $ textDocumentRename uri pos newName
+

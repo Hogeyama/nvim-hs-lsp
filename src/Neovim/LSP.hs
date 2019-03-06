@@ -37,6 +37,7 @@ plugin = do
               , $(command' 'nvimHsLspHieCaseSplit) ["async"]
               , $(command' 'nvimHsLspDocumentSymbol) ["async"]
               , $(command' 'nvimHsLspWorkspaceSymbol) ["async"]
+              , $(command' 'nvimHsLspRename) ["sync"]
               , $(command' 'nvimHsLspHieHsImport) ["sync"]
               -- Other
               , $(command' 'nvimHsLspLoadQuickfix) ["async", "!"]

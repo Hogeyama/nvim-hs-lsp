@@ -7,7 +7,7 @@ module Neovim.LSP.Action.Request where
 
 import           RIO
 import           RIO.List
-import           RIO.List.Partial         (head, (!!))
+import           RIO.List.Partial         (head)
 import qualified RIO.Map                  as M
 
 import           Control.Lens             (views)
@@ -20,7 +20,6 @@ import           LSP
 import           Neovim                   hiding (Plugin, range, (<>))
 import           Neovim.LSP.Base
 import           Neovim.LSP.Util
-import qualified Neovim.User.Choice       as Choice
 
 -------------------------------------------------------------------------------
 -- アレ
@@ -304,47 +303,28 @@ callbackCodeAction :: CallbackOf 'TextDocumentCodeActionK ()
 callbackCodeAction (Response resp) = void $ withResponse resp $ \case
     Nothing -> do
       logDebug "callbackCodeAction: got Nothing"
-      return ()
     Just xs -> do
-      let cmds = lefts $ coerce @_ @[Either _ CodeAction] xs
-      case cmds of
-        [] -> nvimEchom "no code action"
-        [cmd] -> executeCommandOrNot cmd
-        _  -> chooseCommandViaTlib cmds
-        -- _ -> chooseCommand cmds
-
-chooseCommand :: (HasOutChan env, HasContext env) => [Command] -> Neovim env ()
-chooseCommand cmds = do
-    let titles = map (view #title . fields) cmds
-    Choice.oneOf titles >>= \case
-      Nothing -> return ()
-      Just x -> case find (\cmd -> cmd^. #title == x) cmds of
-        Nothing -> error "impossible"
-        Just cmd -> executeCommand cmd
-
-chooseCommandViaTlib
-    :: (HasOutChan env, HasContext env, HasLogFunc env)
-    => [Command]
-    -> Neovim env ()
-chooseCommandViaTlib cmds = do
-    let titles = map (view #title . fields) cmds
-    x <- vimCallFunction "tlib#input#List"
-            [ ObjectString "si"
-            , ObjectString "choose a codeAction"
-            , toObject titles
-            ]
-    logInfo $ displayShow x
-    case x of
-      Right (fromObject -> Right i) -> executeCommand $ cmds !! (i-1)
-      _ -> error "どうして"
-
-executeCommandOrNot :: (HasOutChan env, HasContext env) => Command -> Neovim env ()
-executeCommandOrNot cmd = do
-    b <- Choice.yesOrNo ("execute this command?: " ++ cmd^. #title)
-    when b $ executeCommand cmd
+      let (cmds, codeActions) =
+              partitionEithers $ coerce @_ @[Either Command CodeAction] xs
+      case codeActions of
+        [] -> case cmds of
+          [] -> nvimEchom "no code action"
+          _ -> userChoise "command to execute" (view #title) cmds >>= \case
+            Nothing -> return ()
+            Just cmd -> executeCommand cmd
+        _ -> userChoise "command to execute" (view #title) codeActions >>= \case
+          Nothing -> return ()
+          Just action -> undefined action
 
 executeCommand :: (HasOutChan env, HasContext env) => Command -> Neovim env ()
 executeCommand cmd = void $ executeCommandRequest (cmd^. #command) (cmd^. #arguments) (Just nopCallback)
+
+executeCodeAction
+    :: (HasLogFunc env, HasOutChan env, HasContext env)
+    => CodeAction -> Neovim env ()
+executeCodeAction action = case action ^. #edit of
+    None -> executeCommand (action ^. #command)
+    Some edit -> applyWorkspaceEdit edit
 
 --}}}
 
@@ -392,7 +372,7 @@ callbackTextEdits
 callbackTextEdits uri resp =
     void $ withResponse resp $ \case
       Nothing -> return ()
-      Just edits -> applyTextEdit uri edits
+      Just edits -> applyTextEdits uri edits
 
 --}}}
 
@@ -492,7 +472,7 @@ callbackTextDocumentDocumentSymbol uri (Response resp) = void $ withResponse res
 --}}}
 
 -------------------------------------------------------------------------------
--- TextDocumentRename
+-- TextDocumentRename{{{
 -------------------------------------------------------------------------------
 
 textDocumentRename
@@ -512,10 +492,6 @@ textDocumentRename uri pos newName = do
 callbackTextDocumentRename :: CallbackOf 'TextDocumentRenameK ()
 callbackTextDocumentRename (Response resp) = void $ withResponse resp $ \case
   Nothing -> return ()
-  Just _  -> undefined
-
-applyWorkspaceEdit :: a
-applyWorkspaceEdit = undefined
-
-
+  Just edit -> applyWorkspaceEdit edit
+-- }}}
 
