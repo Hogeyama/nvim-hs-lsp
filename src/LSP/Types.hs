@@ -66,6 +66,7 @@ module LSP.Types
   , versionedTextDocmentIdentifier
   , TextDocumentItem
   , TextDocumentPositionParams
+  , textDocumentPositionParams
   , CompletionItem
   , CompletionList
   , DocumentFilter
@@ -86,6 +87,11 @@ module LSP.Types
   , CodeAction
   , CodeActionKind
   , LocationLink
+  -- file resource
+  , ResourceOperationKind
+  , CreateFile
+  , RenameFile
+  , DeleteFile
 
   -- Registration Options
   , DocumentOnTypeFormattingRegistrationOptions
@@ -204,7 +210,7 @@ type ResponseMessageF a e = MessageF ++
    ]
 type ResponseError  e = Record (ResponseErrorF e)
 type ResponseErrorF e =
-  '[ "code"    >: ErrorCode -- TODO :|: Int
+  '[ "code"    >: (ErrorCode :|: Int)
    , "message" >: Text
    , "data"    >: Option e
    ]
@@ -517,6 +523,12 @@ type TextDocumentPositionParamsF =
   '[ "textDocument" >: TextDocumentIdentifier
    , "position"     >: Position
    ]
+textDocumentPositionParams :: Uri -> Position -> TextDocumentPositionParams
+textDocumentPositionParams uri pos = Record
+      $ #textDocument @= textDocumentIdentifier uri
+     <! #position     @= pos
+     <! nil
+
 
 -- DocumentFilter
 ----------------------------------------
@@ -1623,7 +1635,7 @@ type ConfigurationItem = Record
   '[ "scopeUri" >: Option String
    , "section"  >: Option String
    ]
-type instance ResponseResultParam 'WorkspaceConfigurationK = Nullable [WorkspaceFolder]
+type instance ResponseResultParam 'WorkspaceConfigurationK = [Value]
 type instance ResponseErrorParam  'WorkspaceConfigurationK = Value
 
 --}}}

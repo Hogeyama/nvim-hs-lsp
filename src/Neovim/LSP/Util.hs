@@ -98,11 +98,11 @@ getNvimPos = vimCallFunction "getpos" [ObjectString "."] >>= \case
 getBufContents :: Buffer -> Neovim env Text
 getBufContents b = T.pack.unlines <$> nvim_buf_get_lines' b 0 maxBound False
 
-textDocumentPositionParams :: Uri -> Position -> TextDocumentPositionParams
-textDocumentPositionParams uri pos = Record
-      $ #textDocument @= textDocumentIdentifier uri
-     <! #position     @= pos
-     <! nil
+getCword :: Neovim env String
+getCword = errOnInvalidResult $ vim_call_function "expand" [ObjectString "<cword>"]
+
+getCWORD :: Neovim env String
+getCWORD = errOnInvalidResult $ vim_call_function "expand" [ObjectString "<cWORD>"]
 
 -------------------------------------------------------------------------------
 -- Pos
