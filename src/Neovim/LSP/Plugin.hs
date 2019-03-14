@@ -94,7 +94,7 @@ nvimHsLspInitialize _ = loggingError $ do
             whenM (readContext . view $
                     field @"lspConfig".
                     field @"autoLoadQuickfix")
-                  (vim_command' "copen")
+                  (vimCommand' "copen")
           vim_out_write' $
             "nvim-hs-lsp: Initialized for filetype `" ++ lang ++ "`\n"
             -- _ ->
@@ -262,8 +262,8 @@ nvimHsLspLoadQuickfix arg = focusLang' False $ do
                   -- TODO
     replaceQfList qfItems
     if null qfItems
-      then vim_command' "cclose" >> nvimEcho "nvim-hs-lsp: no diagnostics"
-      else vim_command' "ccopen"
+      then vimCommand' "cclose" >> nvimEcho "nvim-hs-lsp: no diagnostics"
+      else vimCommand' "ccopen"
   where
     showAll = Just True == bang arg
 

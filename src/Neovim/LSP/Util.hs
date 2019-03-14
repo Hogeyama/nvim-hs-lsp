@@ -49,23 +49,29 @@ vimCallFunction' func args = do
   evaluate (rnf args)
   vim_call_function' func args
 
+vimCommand' :: String -> Neovim env ()
+vimCommand' s = evaluate (rnf s) >> vim_command' s
+
+vimCommand :: String -> Neovim env (Either NeovimException ())
+vimCommand s = evaluate (rnf s) >> vim_command s
+
 nvimEcho :: String -> Neovim env ()
-nvimEcho s = vim_command' $ "echo " ++ show s
+nvimEcho s = vimCommand' $ "echo " ++ show s
 
 nvimEchom :: String -> Neovim env ()
-nvimEchom s = vim_command' $ "echomsg " ++ show s
+nvimEchom s = vimCommand' $ "echomsg " ++ show s
 
 nvimEchoe :: String -> Neovim env ()
 nvimEchoe s =
-    vim_command' $ L.intercalate "|"
-      [ "echohl ErrorMsg"
-      , "echomsg " ++ show s
-      , "echohl None"
-      ]
+  vimCommand' $ L.intercalate "|"
+    [ "echohl ErrorMsg"
+    , "echomsg " ++ show s
+    , "echohl None"
+    ]
 
 nvimEchow :: String -> Neovim env ()
 nvimEchow s =
-    vim_command' $ L.intercalate "|"
+    vimCommand' $ L.intercalate "|"
       [ "echohl WarningMsg"
       , "echomsg " ++ show s
       , "echohl None"
@@ -312,7 +318,7 @@ startServer lang cwd {-cmd args-} workers = do
                       go $ header { contentType = Just (drop 14 x) }
                  | "\r" == x          -> return header
                  | "ExitSuccess" == x -> exitSuccess -- hie only
-                 | otherwise          -> error $ "unknown input: " ++ show x
+                 | otherwise          -> error $ "receiver: unknown input: " ++ show x
 
 data Header = Header
   { contentLength :: ~Int -- lazy initialization
@@ -465,7 +471,7 @@ applyTextEdits uri edits = do
         newText = foldl' applyTextEdit text edits'
     void (vimCallFunction "writefile" (newText +: filePath +: []))
       `catchAny` \e -> nvimEchoe (show e)
-    vim_command' $ "edit " ++ filePath
+    vimCommand' $ "edit " ++ filePath
 
 -- TODO これはdoctestに置くべきではない
 -- |

@@ -347,11 +347,15 @@ removeCallback :: (MonadReader env m, MonadIO m, HasContext env)
                => ID -> m ()
 removeCallback id' = modifyContext $ field @"callbacks" %~ M.delete id'
 
-waitCallback :: MonadIO m => m (CallbackTicket a) -> m a
-waitCallback m = atomically . takeTMVar . callbackVar =<< m
+waitCallback :: (MonadIO m, MonadReader env m, HasLogFunc env)
+             => m (CallbackTicket a) -> m a
+waitCallback m = do
+    x <- m
+    logError $ "Waiting for callback: " <> displayShow (callbackID x)
+    atomically $ takeTMVar $ callbackVar x
 
 waitCallbackWithTimeout
-  :: (MonadUnliftIO m, MonadReader env m, HasContext env)
+  :: (MonadUnliftIO m, MonadReader env m, HasContext env, HasLogFunc env)
   => Int -> m (CallbackTicket a) -> m (Maybe a)
 waitCallbackWithTimeout musec m = do
     c <- m
