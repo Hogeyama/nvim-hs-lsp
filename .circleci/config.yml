@@ -20,6 +20,7 @@ aliases:
         key: stack-{{ checksum "cache_key" }}-{{ checksum "stack.yaml" }}-{{ checksum "package.yaml" }}
         paths:
           - ~/.stack
+          - ~/.cabal
           - ~/.local/bin
           - .stack-work
   - &display_stack_version
@@ -45,12 +46,15 @@ aliases:
         name: Build `hie` for test
         command: |
           git clone https://github.com/haskell/haskell-ide-engine ~/haskell-ide-engine
-          (cd ~/haskell-ide-engine; make hie-8.6.4)
+          (cd ~/haskell-ide-engine; make submodule)
+          (cd ~/haskell-ide-engine; make cabal)
+          # (cd ~/haskell-ide-engine; make hie-8.6.4)
   - &save_hie_build_results
       save_cache:
         key: hie-{{ checksum "cache_key" }}
         paths:
           - ~/haskell-ide-engine
+          - ~/.cabal
 
 jobs:
   build:
