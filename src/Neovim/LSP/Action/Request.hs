@@ -140,7 +140,7 @@ jumpToLocation loc = do
       start      = range^. #start
       (lnum,col) = toNvimPos start
   vimCommand "normal! m`"
-  m <- tryNeovim $ vimCommand $ unwords
+  m <- tryAny $ vimCommand $ unwords
               [ "edit"
               , "+call\\ cursor(" ++ show lnum ++ "," ++ show col ++ ")"
               , uriToFilePath uri

@@ -76,7 +76,7 @@ userChoise prompt pr = \case
       False -> return Nothing
     xs -> do
       let titles = map pr xs
-      x <- tryNeovim $ vimCallFunction "tlib#input#List"
+      x <- tryAny $ vimCallFunction "tlib#input#List"
               [ ObjectString "si"
               , ObjectString "choose a codeAction"
               , toObject titles
@@ -101,7 +101,7 @@ getCwd = do
 
 getBufLanguage :: (HasLogFunc env)
                => Buffer -> Neovim env (Maybe String)
-getBufLanguage b = tryNeovim (nvim_buf_get_var b "current_syntax" >>= fromObject') >>= \case
+getBufLanguage b = tryAny (nvim_buf_get_var b "current_syntax" >>= fromObject') >>= \case
     Right x -> return (Just x)
     _ -> return Nothing
 
@@ -111,7 +111,7 @@ getBufUri b = parseAbsFile <$> nvim_buf_get_name b >>= \case
     Just file -> return $ pathToUri file
 
 getNvimPos :: (HasLogFunc env) => Neovim env NvimPos
-getNvimPos = tryNeovim (vimCallFunction "getpos" [ObjectString "."] >>= fromObject') >>= \case
+getNvimPos = tryAny (vimCallFunction "getpos" [ObjectString "."] >>= fromObject') >>= \case
   Right ([_bufnum, lnum, col, _off] :: [Int]) -> return (lnum,col)
   e -> logError (displayShow e) >> error "getNvimPos"
 
