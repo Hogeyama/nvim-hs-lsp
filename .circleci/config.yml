@@ -27,8 +27,8 @@ aliases:
     run:
       name: Display stack version
       command: |
-        stack upgrade --binary-version=$STACK_VERSION
-        stack --version
+        stack --no-terminal upgrade --binary-version=$STACK_VERSION
+        stack --no-terminal --version
   - &install_nvim
       run:
         name: Install neovim
@@ -41,14 +41,26 @@ aliases:
           echo $PATH
           mv ./squashfs-root/usr/bin/nvim $HOME/.local/bin
           nvim --version
-  - &build_hie
+  - &build_hie_pre
       run:
         name: Build `hie` for test
         command: |
           git clone https://github.com/haskell/haskell-ide-engine ~/haskell-ide-engine
           (cd ~/haskell-ide-engine; make submodules)
           (cd ~/haskell-ide-engine; make cabal)
-          # (cd ~/haskell-ide-engine; make hie-8.6.4)
+  - &build_hie_deps
+      run:
+        name: Build `hie` for test
+        command: |
+          (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-8.6.4.yaml ghc-exactprint)
+          (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-8.6.4.yaml cabal-helper)
+          (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-8.6.4.yaml HaRe)
+          (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-8.6.4.yaml hie-plugin-api)
+  - &build_hie
+      run:
+        name: Build `hie` for test
+        command: |
+          (cd ~/haskell-ide-engine; make hie-8.6.4)
   - &save_hie_build_results
       save_cache:
         key: hie-{{ checksum "cache_key" }}
@@ -71,6 +83,10 @@ jobs:
       - *install_nvim
       - *restore_build_results
       - *display_stack_version
+      - *build_hie_pre
+      - *save_hie_build_results
+      # - *build_hie_deps
+      # - *save_hie_build_results
       - *build_hie
       - *save_hie_build_results
       - run:
@@ -79,12 +95,12 @@ jobs:
           no_output_timeout: 120m
       - run:
           name: Run stack test
-          command: stack test --fast
+          command: stack test --fast --no-terminal
       - run:
-          name: Run stack test --pedantic
+          name: Run stack test --pedantic --no-terminal
           command: |
             stack clean
-            stack test --pedantic --fast --no-run-tests
+            stack test --pedantic --fast --no-run-tests --no-terminal
       # - run:
       #     name: Run HLint
       #     command: |
