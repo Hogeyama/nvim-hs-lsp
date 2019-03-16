@@ -34,10 +34,11 @@ aliases:
         command: |
           curl https://github.com/neovim/neovim/releases/download/v0.3.4/nvim.appimage -L -o nvim
           chmod u+x nvim
+          ./nvim --appimage-extract
           mkdir -p ~/.local/bin
           export PATH=~/.local/bin:$PATH
           echo $PATH
-          mv nvim $HOME/.local/bin
+          mv ./squashfs-root/usr/bin/nvim $HOME/.local/bin
           nvim --version
   - &build_hie
       run:
