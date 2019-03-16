@@ -95,7 +95,11 @@ jobs:
           no_output_timeout: 120m
       - run:
           name: Run stack test
-          command: stack test --fast --no-terminal
+          command: |
+            export NVIM_LISTEN_ADDRESS=~/nvim_listen_address
+            nvim&
+            stack test --fast --no-terminal
+            kill `pgrep nvim`
       - run:
           name: Run stack test --pedantic --no-terminal
           command: |
