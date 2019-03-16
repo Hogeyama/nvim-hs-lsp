@@ -6,7 +6,7 @@ let g:NvimHsLsp_languageConfig = {
       \   },
       \   'haskell': {
       \     'serverCommand':
-      \       ['hie-wrapper', '--lsp'],
+      \       ['hie-wrapper', '--lsp', '-d', '-l', '/tmp/test-hie.log'],
       \     'formattingOptions': {
       \       'tabSize': 2,
       \       'insertSpaces': v:true,

@@ -43,7 +43,7 @@ callbackHoverPreview resp = void $ callbackHoverAux `flip` resp $ \case
   Left e -> nvimEcho e
   Right msg -> do
      writeFileUtf8Builder "/tmp/nvim-hs-lsp.preview" (fromString msg)
-     vimCommand' "pedit /tmp/nvim-hs-lsp.preview"
+     vimCommand "pedit /tmp/nvim-hs-lsp.preview"
 
 callbackHover :: CallbackOf 'TextDocumentHoverK ()
 callbackHover = callbackHoverWith removeLastNewlines
@@ -139,8 +139,8 @@ jumpToLocation loc = do
       range      = loc^. #range
       start      = range^. #start
       (lnum,col) = toNvimPos start
-  vimCommand' "normal! m`"
-  m <- vimCommand $ unwords
+  vimCommand "normal! m`"
+  m <- tryNeovim $ vimCommand $ unwords
               [ "edit"
               , "+call\\ cursor(" ++ show lnum ++ "," ++ show col ++ ")"
               , uriToFilePath uri
@@ -189,7 +189,7 @@ callbackWorkspaceSymbol (Response resp) = void $ withResponse resp $ \case
     Just symbolInfos -> do
       logInfo $ "workspace/Symbol: " <> displayShow symbolInfos
       replaceLocList 0 $ map symbolInfomartionToQfItem symbolInfos
-      unless (null symbolInfos) (vimCommand' "copen")
+      unless (null symbolInfos) (vimCommand "copen")
   where
     symbolInfomartionToQfItem symInfo =
         locationToQfItem (symInfo^. #location) (symInfo^. #name)
@@ -405,10 +405,10 @@ callbackTextDocumentReferences (Response resp) = void $ withResponse resp $ \cas
     Just locs -> do
       logInfo $ "textDocument/references: " <> displayShow locs
       replaceLocList 0 =<< mapM locationToQfItem' locs -- TODO set winId (current win is used when 0 is set)
-      unless (null locs) $ vimCommand' "botright lopen"
+      unless (null locs) $ vimCommand "botright lopen"
   where
     locationToQfItem' loc = do
-        Just text <- fmap lastMaybe $ errOnInvalidResult $
+        Just text <- fmap lastMaybe $ fromObject' =<<
                         vimCallFunction "readfile" (filename +: False +: lnum +: [])
         return $ locationToQfItem loc text
       where
@@ -439,11 +439,11 @@ callbackTextDocumentDocumentSymbol uri (Response resp) = void $ withResponse res
     Just (L docSyms) -> do
       logInfo $ "textDocument/documentSymbol: " <> displayShow docSyms
       replaceLocList 0 $ map documentSymbolToQfItem docSyms
-      unless (null docSyms) $ vimCommand' "botright lopen"
+      unless (null docSyms) $ vimCommand "botright lopen"
     Just (R symInfos) -> do
       logInfo $ "textDocument/documentSymbol: " <> displayShow symInfos
       replaceLocList 0 $ map symbolInfomartionToQfItem symInfos
-      unless (null symInfos) $ vimCommand' "botright lopen"
+      unless (null symInfos) $ vimCommand "botright lopen"
   where
     documentSymbolToQfItem (DocumentSymbol docSym) = Record
          $ #filename @= Some filename

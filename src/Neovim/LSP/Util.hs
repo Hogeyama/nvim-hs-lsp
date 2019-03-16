@@ -37,33 +37,24 @@ import qualified Neovim.User.Choice       as Choice
 -- Neovim
 -------------------------------------------------------------------------------
 
-vimCallFunction :: String -> [Object] -> Neovim env (Either NeovimException Object)
+vimCallFunction :: String -> [Object] -> Neovim env Object
 vimCallFunction func args = do
   evaluate (rnf func)
   evaluate (rnf args)
   vim_call_function func args
 
-vimCallFunction' :: String -> [Object] -> Neovim env Object
-vimCallFunction' func args = do
-  evaluate (rnf func)
-  evaluate (rnf args)
-  vim_call_function' func args
-
-vimCommand' :: String -> Neovim env ()
-vimCommand' s = evaluate (rnf s) >> vim_command' s
-
-vimCommand :: String -> Neovim env (Either NeovimException ())
+vimCommand :: String -> Neovim env ()
 vimCommand s = evaluate (rnf s) >> vim_command s
 
 nvimEcho :: String -> Neovim env ()
-nvimEcho s = vimCommand' $ "echo " ++ show s
+nvimEcho s = vimCommand $ "echo " ++ show s
 
 nvimEchom :: String -> Neovim env ()
-nvimEchom s = vimCommand' $ "echomsg " ++ show s
+nvimEchom s = vimCommand $ "echomsg " ++ show s
 
 nvimEchoe :: String -> Neovim env ()
 nvimEchoe s =
-  vimCommand' $ L.intercalate "|"
+  vimCommand $ L.intercalate "|"
     [ "echohl ErrorMsg"
     , "echomsg " ++ show s
     , "echohl None"
@@ -71,7 +62,7 @@ nvimEchoe s =
 
 nvimEchow :: String -> Neovim env ()
 nvimEchow s =
-    vimCommand' $ L.intercalate "|"
+    vimCommand $ L.intercalate "|"
       [ "echohl WarningMsg"
       , "echomsg " ++ show s
       , "echohl None"
@@ -85,7 +76,7 @@ userChoise prompt pr = \case
       False -> return Nothing
     xs -> do
       let titles = map pr xs
-      x <- vimCallFunction "tlib#input#List"
+      x <- tryNeovim $ vimCallFunction "tlib#input#List"
               [ ObjectString "si"
               , ObjectString "choose a codeAction"
               , toObject titles
@@ -103,35 +94,35 @@ userChoise prompt pr = \case
 
 getCwd :: Neovim env (Path Abs Dir)
 getCwd = do
-  cwd <- errOnInvalidResult (vimCallFunction "getcwd" [])
+  cwd <- fromObject' =<< vimCallFunction "getcwd" []
   case parseAbsDir cwd of
     Nothing -> error "impossible"
     Just cwd' -> return cwd'
 
 getBufLanguage :: (HasLogFunc env)
                => Buffer -> Neovim env (Maybe String)
-getBufLanguage b = nvim_buf_get_var b "current_syntax" >>= \case
-    Right (fromObject -> Right x) -> return (Just x)
+getBufLanguage b = tryNeovim (nvim_buf_get_var b "current_syntax" >>= fromObject') >>= \case
+    Right x -> return (Just x)
     _ -> return Nothing
 
 getBufUri :: Buffer -> Neovim env Uri
-getBufUri b = parseAbsFile <$> nvim_buf_get_name' b >>= \case
+getBufUri b = parseAbsFile <$> nvim_buf_get_name b >>= \case
     Nothing -> error "impossible"
     Just file -> return $ pathToUri file
 
 getNvimPos :: (HasLogFunc env) => Neovim env NvimPos
-getNvimPos = vimCallFunction "getpos" [ObjectString "."] >>= \case
-  Right (fromObject -> Right [_bufnum, lnum, col, _off]) -> return (lnum,col)
+getNvimPos = tryNeovim (vimCallFunction "getpos" [ObjectString "."] >>= fromObject') >>= \case
+  Right ([_bufnum, lnum, col, _off] :: [Int]) -> return (lnum,col)
   e -> logError (displayShow e) >> error "getNvimPos"
 
 getBufContents :: Buffer -> Neovim env Text
-getBufContents b = T.pack.unlines <$> nvim_buf_get_lines' b 0 maxBound False
+getBufContents b = T.pack.unlines <$> nvim_buf_get_lines b 0 maxBound False
 
 getCword :: Neovim env String
-getCword = errOnInvalidResult $ vim_call_function "expand" [ObjectString "<cword>"]
+getCword = fromObject' =<< vim_call_function "expand" [ObjectString "<cword>"]
 
 getCWORD :: Neovim env String
-getCWORD = errOnInvalidResult $ vim_call_function "expand" [ObjectString "<cWORD>"]
+getCWORD = fromObject' =<< vim_call_function "expand" [ObjectString "<cWORD>"]
 
 -------------------------------------------------------------------------------
 -- Pos
@@ -232,7 +223,7 @@ startServer lang cwd {-cmd args-} workers = do
         sendNotification @'WorkspaceDidChangeConfigurationK param
   where
     loadLspConfig = do
-        allConfig <- errOnInvalidResult $ vim_get_var "NvimHsLsp_languageConfig"
+        allConfig <- fromObject' =<< vim_get_var "NvimHsLsp_languageConfig"
         let wildConfig = M.findWithDefault M.empty "_" allConfig
             langConfig = M.findWithDefault M.empty (encodeUtf8 lang) allConfig
             config     = langConfig `M.union` wildConfig -- langConfig is preferred
@@ -394,10 +385,10 @@ type QfItem = Record
    ]
 
 replaceQfList :: HasLogFunc env => [QfItem] -> Neovim env ()
-replaceQfList qs = void $ vimCallFunction' "setqflist" $! qs +: ['r'] +: []
+replaceQfList qs = void $ vimCallFunction "setqflist" $! qs +: ['r'] +: []
 
 replaceLocList :: HasLogFunc env => Int -> [QfItem] -> Neovim env ()
-replaceLocList winId qs = void $ vimCallFunction' "setloclist" $! winId +: qs +: ['r'] +: []
+replaceLocList winId qs = void $ vimCallFunction "setloclist" $! winId +: qs +: ['r'] +: []
 
 diagnosticToQfItems :: Uri -> Diagnostic -> [QfItem]
 diagnosticToQfItems uri d
@@ -464,14 +455,14 @@ locationToQfItem loc text = Record
 
 applyTextEdits :: Uri -> [TextEdit] -> Neovim env ()
 applyTextEdits uri edits = do
-    text <- errOnInvalidResult $ vimCallFunction "readfile" (uriToFilePath uri+:[])
+    text <- fromObject' =<< vimCallFunction "readfile" (uriToFilePath uri+:[])
     let filePath = uriToFilePath uri
         -- NOTE: This sort must be stable.
         edits' = L.reverse $ L.sortOn (view (#range.__#start)) edits
         newText = foldl' applyTextEdit text edits'
     void (vimCallFunction "writefile" (newText +: filePath +: []))
       `catchAny` \e -> nvimEchoe (show e)
-    vimCommand' $ "edit " ++ filePath
+    vimCommand $ "edit " ++ filePath
 
 -- TODO これはdoctestに置くべきではない
 -- |
@@ -487,7 +478,7 @@ applyTextEdits uri edits = do
 --                             <! nil )
 --          <! #newText @= "let () =\n  begin match () with\n    | () -> ()\n  end\n"
 --          <! nil
---  in putStr $ T.unpack $ T.unlines $ applyTextEditOne text edit
+--  in putStr $ T.unpack $ T.unlines $ applyTextEdit text edit
 -- :}
 -- let () =
 --   begin match () with

@@ -44,7 +44,7 @@ custom-setup:
 dependencies:
 - base >= 4.7 && < 5
 - rio >= 0.1.5.0
-- nvim-hs >= 1.0.0.0
+- nvim-hs >= 2.0.0.0
 - generic-lens >= 1.1.0.0
 - lens
 
@@ -58,7 +58,6 @@ executables:
     - -with-rtsopts=-N
     - -Wall
     dependencies:
-    - nvim-hs
     - nvim-hs-lsp
 
 library:

@@ -37,13 +37,13 @@ whenInitialized' :: Bool -> NeovimLsp () -> NeovimLsp ()
 whenInitialized' silent m = isInitialized >>= \case
   True  -> m
   False -> unless silent $
-    vim_out_write' $ "nvim-hs-lsp: Not initialized!" ++ "\n"
+    vim_out_write $ "nvim-hs-lsp: Not initialized!" ++ "\n"
 
 whenInitialized :: NeovimLsp () -> NeovimLsp ()
 whenInitialized = whenInitialized' False
 
 focusLang' :: Bool -> Neovim LanguageEnv () -> NeovimLsp ()
-focusLang' silent m = vim_get_current_buffer' >>= getBufLanguage >>= \case
+focusLang' silent m = vim_get_current_buffer >>= getBufLanguage >>= \case
     Nothing -> error' "unknown filetype"
     Just lang ->
       focusLang (fromString lang) m >>= \case
@@ -54,10 +54,10 @@ focusLang' silent m = vim_get_current_buffer' >>= getBufLanguage >>= \case
 
 whenAlreadyOpened' :: Bool -> Neovim LanguageEnv () -> Neovim LanguageEnv ()
 whenAlreadyOpened' silent m = do
-  uri <- getBufUri =<< vim_get_current_buffer'
+  uri <- getBufUri =<< vim_get_current_buffer
   ifM (alreadyOpened uri)
     m
-    (unless silent $ vim_out_write' "nvim-hs-lsp: Not opened yet\n")
+    (unless silent $ vim_out_write "nvim-hs-lsp: Not opened yet\n")
 
 whenAlreadyOpened :: Neovim LanguageEnv () -> Neovim LanguageEnv ()
 whenAlreadyOpened = whenAlreadyOpened' False
@@ -71,12 +71,12 @@ alreadyOpened uri = readContext $ views (field @"openedFiles") (M.member uri)
 
 nvimHsLspInitialize :: CommandArguments -> NeovimLsp ()
 nvimHsLspInitialize _ = loggingError $ do
-    mft <- getBufLanguage =<< vim_get_current_buffer'
+    mft <- getBufLanguage =<< vim_get_current_buffer
     case mft of
       Just lang -> do
         languageMap <- useTV (field @"languageMap")
         if M.member (fromString lang) languageMap then
-          vim_out_write' $ "nvim-hs-lsp: Already initialized" ++ "\n"
+          vim_out_write $ "nvim-hs-lsp: Already initialized" ++ "\n"
         else do
           cwd <- getCwd
           startServer (fromString lang) cwd
@@ -94,14 +94,14 @@ nvimHsLspInitialize _ = loggingError $ do
             whenM (readContext . view $
                     field @"lspConfig".
                     field @"autoLoadQuickfix")
-                  (vimCommand' "copen")
-          vim_out_write' $
+                  (vimCommand "copen")
+          vim_out_write $
             "nvim-hs-lsp: Initialized for filetype `" ++ lang ++ "`\n"
             -- _ ->
             --   vim_report_error' $
             --     "no language server registered for filetype `" ++ lang ++ "`"
       Nothing ->
-        vim_report_error'
+        vim_report_error
           "nvim-hs-lsp: Could not initialize: Could not determine the filetype"
 
 nvimHsLspStartServer :: CommandArguments -> NeovimLsp ()
@@ -113,7 +113,7 @@ nvimHsLspStartServer = nvimHsLspInitialize
 
 nvimHsLspOpenBuffer :: CommandArguments -> NeovimLsp ()
 nvimHsLspOpenBuffer _arg = focusLang' True $ do
-  b   <- vim_get_current_buffer'
+  b   <- vim_get_current_buffer
   mft <- getBufLanguage b
   whenJust mft $ \ft -> do
     serverFT <- view (field @"language")
@@ -125,30 +125,30 @@ nvimHsLspOpenBuffer _arg = focusLang' True $ do
 
 nvimHsLspCloseBuffer :: CommandArguments -> NeovimLsp ()
 nvimHsLspCloseBuffer _ = focusLang' True $ do
-  b <- vim_get_current_buffer'
+  b <- vim_get_current_buffer
   uri <- getBufUri b
-  ifM (not <$> alreadyOpened uri) (vim_out_write' "nvim-hs-lsp: Not opened yet\n") $ do
+  ifM (not <$> alreadyOpened uri) (vim_out_write "nvim-hs-lsp: Not opened yet\n") $ do
     modifyContext $ field @"openedFiles" %~ M.delete uri
     didCloseBuffer b
 
 nvimHsLspChangeBuffer :: CommandArguments -> NeovimLsp ()
 nvimHsLspChangeBuffer arg = whenInitialized' silent $ focusLang' True $ whenAlreadyOpened' silent $
-    didChangeBuffer =<< vim_get_current_buffer'
+    didChangeBuffer =<< vim_get_current_buffer
   where silent = Just True == bang arg
 
 nvimHsLspSaveBuffer :: CommandArguments -> NeovimLsp ()
 nvimHsLspSaveBuffer arg = whenInitialized' silent $ focusLang' True $ whenAlreadyOpened' silent $
-    didSaveBuffer =<< vim_get_current_buffer'
+    didSaveBuffer =<< vim_get_current_buffer
   where silent = Just True == bang arg
 
 nvimHsLspStopServer :: CommandArguments -> NeovimLsp ()
-nvimHsLspStopServer _ = vim_get_current_buffer' >>= getBufLanguage >>= \case
+nvimHsLspStopServer _ = vim_get_current_buffer >>= getBufLanguage >>= \case
     Nothing -> return () -- TODO error
     Just lang -> stopServer (fromString lang)
 
 -- Exitは別に作る
 nvimHsLspExit :: CommandArguments -> NeovimLsp ()
-nvimHsLspExit _ = vim_get_current_buffer' >>= getBufLanguage >>= \case
+nvimHsLspExit _ = vim_get_current_buffer >>= getBufLanguage >>= \case
     Nothing -> return () -- TODO error
     Just lang -> stopServer (fromString lang)
 
@@ -166,13 +166,13 @@ nvimHsLspFinalize _ = do
 --------
 nvimHsLspInfo :: CommandArguments -> NeovimLsp ()
 nvimHsLspInfo _ = whenInitialized $ focusLang' False $ whenAlreadyOpened . loggingError $ do
-  uri <- getBufUri =<< vim_get_current_buffer'
+  uri <- getBufUri =<< vim_get_current_buffer
   pos <- fromNvimPos <$> getNvimPos
   void $ hoverRequest uri pos callbackHoverOneLine
 
 nvimHsLspHover :: CommandArguments -> NeovimLsp ()
 nvimHsLspHover _ = whenInitialized $ focusLang' False $ whenAlreadyOpened $ do
-  uri <- getBufUri =<< vim_get_current_buffer'
+  uri <- getBufUri =<< vim_get_current_buffer
   pos <- fromNvimPos <$> getNvimPos
   void $ hoverRequest uri pos callbackHoverPreview
 
@@ -180,7 +180,7 @@ nvimHsLspHover _ = whenInitialized $ focusLang' False $ whenAlreadyOpened $ do
 -------------
 nvimHsLspDefinition :: CommandArguments -> NeovimLsp ()
 nvimHsLspDefinition _ = whenInitialized $ focusLang' False $ whenAlreadyOpened $ do
-  uri <- getBufUri =<< vim_get_current_buffer'
+  uri <- getBufUri =<< vim_get_current_buffer
   pos <- fromNvimPos <$> getNvimPos
   void $ definitionRequest uri pos callbackDefinition
 
@@ -191,7 +191,7 @@ nvimHsLspDefinition _ = whenInitialized $ focusLang' False $ whenAlreadyOpened $
 nvimHsLspComplete :: Object -> String
                   -> NeovimLsp (Either Int [VimCompleteItem])
 nvimHsLspComplete findstart base =
-  vim_get_current_buffer' >>= getBufLanguage >>= \case
+  vim_get_current_buffer >>= getBufLanguage >>= \case
     Nothing -> return (Left (-1))
     Just (fromString -> lang) -> fmap (fromMaybe (Left (-1))) $
       focusLang lang $ do
@@ -201,13 +201,13 @@ nvimHsLspComplete findstart base =
                 | Just n <- readMaybe (BC.unpack s) -> n
               _ -> error "流石にここに来たら怒っていいよね"
         if findStart == 1 then do
-          s   <- nvim_get_current_line'
+          s   <- nvim_get_current_line
           col <- snd <$> getNvimPos
           return $ Left $ completionFindStart s col
         else do
           curPos <- getNvimPos
           let compPos = fromNvimPos $ completionPos base curPos
-          uri <- getBufUri =<< vim_get_current_buffer'
+          uri <- getBufUri =<< vim_get_current_buffer
           xs <- fromMaybe [] <$>
                   waitCallbackWithTimeout (1*1000*1000)
                     (completionRequest uri compPos callbackComplete)
@@ -227,21 +227,21 @@ completionPos base (line, col) = (line, col+length base)
 -- Async
 nvimHsLspAsyncComplete :: Int -> Int -> NeovimLsp ()
 nvimHsLspAsyncComplete lnum col =
-  vim_get_current_buffer' >>= getBufLanguage >>= \case
+  vim_get_current_buffer >>= getBufLanguage >>= \case
     Just (fromString -> lang) -> check $ focusLang lang $ do
       let pos = fromNvimPos (lnum,col)
-      uri <- getBufUri =<< vim_get_current_buffer'
+      uri <- getBufUri =<< vim_get_current_buffer
       xs <- fromMaybe [] <$>
               waitCallbackWithTimeout (1*1000*1000)
                 (completionRequest uri pos callbackComplete)
-      nvim_set_var' nvimHsCompleteResultVar (toObject xs)
+      nvim_set_var nvimHsCompleteResultVar (toObject xs)
     Nothing ->
       recover
   where
     check m = m >>= \case
       Nothing -> recover
       Just () -> return ()
-    recover = nvim_set_var' nvimHsCompleteResultVar ObjectNil
+    recover = nvim_set_var nvimHsCompleteResultVar ObjectNil
 
 nvimHsCompleteResultVar :: String
 nvimHsCompleteResultVar = "NvimHsLspCompleteResult"
@@ -253,7 +253,7 @@ nvimHsCompleteResultVar = "NvimHsLspCompleteResult"
 nvimHsLspLoadQuickfix :: CommandArguments -> NeovimLsp ()
 nvimHsLspLoadQuickfix arg = focusLang' False $ do
     allDiagnostics <- readContext $ view (field @"diagnosticsMap")
-    curi <- getBufUri =<< nvim_get_current_buf'
+    curi <- getBufUri =<< nvim_get_current_buf
     let qfItems = if showAll
                   then diagnosticsToQfItems curi allDiagnostics
                   else diagnosticsToQfItems curi $
@@ -262,8 +262,8 @@ nvimHsLspLoadQuickfix arg = focusLang' False $ do
                   -- TODO
     replaceQfList qfItems
     if null qfItems
-      then vimCommand' "cclose" >> nvimEcho "nvim-hs-lsp: no diagnostics"
-      else vimCommand' "ccopen"
+      then vimCommand "cclose" >> nvimEcho "nvim-hs-lsp: no diagnostics"
+      else vimCommand "ccopen"
   where
     showAll = Just True == bang arg
 
@@ -273,7 +273,7 @@ nvimHsLspLoadQuickfix arg = focusLang' False $ do
 
 nvimHsLspCodeAction :: CommandArguments -> NeovimLsp ()
 nvimHsLspCodeAction _ = whenInitialized $ focusLang' False $ whenAlreadyOpened $ do
-    uri <- getBufUri =<< vim_get_current_buffer'
+    uri <- getBufUri =<< vim_get_current_buffer
     pos <- fromNvimPos <$> getNvimPos
     let range = Record $ #start @= pos <! #end @= pos <! nil
     waitCallback $ codeAction uri range callbackCodeAction
@@ -286,7 +286,7 @@ nvimHsLspHieCaseSplit _ = hiePointCommand "ghcmod:casesplit"
 
 hiePointCommand :: String -> NeovimLsp ()
 hiePointCommand cmd =  whenInitialized $ focusLang' False $ whenAlreadyOpened $ do
-    uri <- getBufUri =<< vim_get_current_buffer'
+    uri <- getBufUri =<< vim_get_current_buffer
     pos <- fromNvimPos <$> getNvimPos
     let arg = toJSON $ #file @= uri
                     <! #pos  @= pos
@@ -296,7 +296,7 @@ hiePointCommand cmd =  whenInitialized $ focusLang' False $ whenAlreadyOpened $ 
 -- TODO haskellに限定して良い
 nvimHsLspHieHsImport :: CommandArguments -> String -> NeovimLsp ()
 nvimHsLspHieHsImport _ moduleToImport = focusLang' False $ do
-    uri <- getBufUri =<< vim_get_current_buffer'
+    uri <- getBufUri =<< vim_get_current_buffer
     let arg = toJSON $ #file @= uri
                     <! #moduleToImport @= moduleToImport
                     <! nil @(Field Identity)
@@ -309,7 +309,7 @@ nvimHsLspHieHsImport _ moduleToImport = focusLang' False $ do
 
 nvimHsLspFormatting :: CommandArguments -> NeovimLsp ()
 nvimHsLspFormatting CommandArguments{range,bang} = whenInitialized $ focusLang' False $ whenAlreadyOpened $ do
-    uri <- getBufUri =<< vim_get_current_buffer'
+    uri <- getBufUri =<< vim_get_current_buffer
     fopts <- readContext $ view $
                 field @"lspConfig" . field @"formattingOptions"
     case (bang, range) of
@@ -330,7 +330,7 @@ nvimHsLspFormatting CommandArguments{range,bang} = whenInitialized $ focusLang' 
 
 nvimHsLspReferences :: CommandArguments -> NeovimLsp ()
 nvimHsLspReferences _ = whenInitialized $ focusLang' False $ whenAlreadyOpened $ do
-    uri <- getBufUri =<< vim_get_current_buffer'
+    uri <- getBufUri =<< vim_get_current_buffer
     pos <- fromNvimPos <$> getNvimPos
     waitCallback $ textDocumentReferences uri pos callbackTextDocumentReferences
 
@@ -340,7 +340,7 @@ nvimHsLspReferences _ = whenInitialized $ focusLang' False $ whenAlreadyOpened $
 
 nvimHsLspDocumentSymbol :: CommandArguments -> NeovimLsp ()
 nvimHsLspDocumentSymbol _ = whenInitialized $ focusLang' False $ whenAlreadyOpened $ do
-    uri <- getBufUri =<< vim_get_current_buffer'
+    uri <- getBufUri =<< vim_get_current_buffer
     waitCallback $ textDocumentDocumentSymbol uri
 
 -------------------------------------------------------------------------------
@@ -357,7 +357,7 @@ nvimHsLspWorkspaceSymbol _ sym = whenInitialized $ focusLang' False $ whenAlread
 
 nvimHsLspRename :: CommandArguments -> String -> NeovimLsp ()
 nvimHsLspRename _ newName = whenInitialized $ focusLang' False $ whenAlreadyOpened $ do
-    uri <- getBufUri =<< vim_get_current_buffer'
+    uri <- getBufUri =<< vim_get_current_buffer
     pos <- fromNvimPos <$> getNvimPos
     waitCallback $ textDocumentRename uri pos newName
 

@@ -52,6 +52,9 @@ module Neovim.LSP.Base
 
   , dispatch
   , registerAsyncHandle
+  , tryNeovim
+
+  , module API
   )
   where
 
@@ -78,6 +81,7 @@ import           System.Process               (ProcessHandle)
 import           LSP
 import           Util
 import           Neovim                       hiding (Plugin, (<>))
+import           Neovim.API.String            as API
 import qualified Neovim.Context.Internal      as Internal
 
 -------------------------------------------------------------------------------
@@ -372,7 +376,7 @@ withResponse :: (HasLogFunc env, Show e)
              -> Neovim env (Maybe ret)
 withResponse resp k =
   case resp^. #error of
-    Some e -> vim_report_error' msg >> return Nothing
+    Some e -> vim_report_error msg >> return Nothing
       where msg = "nvim-hs-lsp: error from server:"  <> T.unpack (prettyResponceError e)
     None -> case resp^. #result of
       None   -> logError "withCallbackResult: wrong input" >> return Nothing
@@ -491,4 +495,7 @@ resultMaybe _             = Nothing
 resultEither :: J.Result a -> Either String a
 resultEither (J.Success x) = Right x
 resultEither (J.Error e)   = Left e
+
+tryNeovim :: MonadUnliftIO m => m a -> m (Either NeovimException a)
+tryNeovim = try
 

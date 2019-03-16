@@ -37,8 +37,8 @@ main = do
   initialEnv <- initialEnvM "/dev/null"
   mapM_ unsetEnv [ "GHC_PACKAGE_PATH" ]
   testWithEmbeddedNeovim Nothing (Seconds 10000) initialEnv $ do
-    vim_command' "source ./test-file/init.vim"
-    vim_command' "edit ./test-file/hoge.hs"
+    vim_command "source ./test-file/init.vim"
+    vim_command "edit ./test-file/hoge.hs"
     cwd <- getCwd
     startServer "haskell" cwd
       [ notificationHandler, requestHandler, callbackHandler ]
@@ -48,7 +48,7 @@ main = do
 
 handler2 :: Neovim LanguageEnv ()
 handler2 = do
-  b <- vim_get_current_buffer'
+  b <- vim_get_current_buffer
   uri <- getBufUri b
 
   -- didOpen
@@ -59,7 +59,7 @@ handler2 = do
   -- didChange
   ------------
   threadDelaySec 3
-  nvim_buf_set_lines' b 5 6 False ["  return ()"]
+  nvim_buf_set_lines b 5 6 False ["  return ()"]
   -- startは含まない, endは含む 上のは6行目を置換している
   -- start=end=6とすると6,7行目の間に挿入される
   --void $ vim_command "update" -- とかしない限り実ファイルに影響はない

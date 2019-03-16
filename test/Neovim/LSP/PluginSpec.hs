@@ -33,13 +33,13 @@ import           Neovim.LSP.Util
 
 spec :: Spec
 spec = do
-  Just baseDirectory <- parseAbsDir <$> runIO getCurrentDirectory
+  baseDirectory <- parseAbsDir <$> runIO getCurrentDirectory >>= \case
+    Just x -> return x
+    Nothing -> error "impossible"
   let removeStackWorkDir = do
           cwd <- getCurrentDirectory
-          x <- tryIO $ removeDirectoryRecursive $ cwd <> "/test-file/.stack-work"
-          case x of
-            Left e   -> print (show e)
-            Right () -> pure ()
+          void $ tryIO $ removeDirectoryRecursive $
+            cwd <> "/test-file/.stack-work"
 
   describe "completion" $ do
     specify "findStart simple" $ do
@@ -68,7 +68,7 @@ spec = do
       let src = $(mkRelFile "test-file/Definition.hs")
           definition1 = testWithHie (Seconds 10) src $ do
               threadDelaySec 1 -- wait for loading
-              b <- getBufUri =<< vim_get_current_buffer'
+              b <- getBufUri =<< vim_get_current_buffer
               waitCallback $ definitionRequest b (fromNvimPos (8,11)) return
           expected = Response . Record
               $  #jsonrpc @= "2.0"
@@ -90,7 +90,7 @@ spec = do
           tgt = $(mkRelFile "test-file/Definition2.hs")
           definition2 = testWithHie (Seconds 10) src $ do
               threadDelaySec 1 -- wait for loading
-              uri <- getBufUri =<< vim_get_current_buffer'
+              uri <- getBufUri =<< vim_get_current_buffer
               waitCallback $ definitionRequest uri (fromNvimPos (9,3)) return
           expected = Response . Record
               $  #jsonrpc @= "2.0"
@@ -124,12 +124,12 @@ testWithHie time file action = do
   initialEnv <- initialEnvM "/dev/null"
   testNeovim time initialEnv $ do
     finally `flip` finalizeLSP $ do
-      vim_command' "source ./test-file/init.vim"
+      vim_command "source ./test-file/init.vim"
       cwd <- getCwd
       startServer "haskell" cwd [ callbackHandler ]
       void $ focusLang "haskell" $
         sendRequest' @'InitializeK (initializeParam Nothing (Just (pathToUri cwd)))
-      vim_command' $ "edit " ++ toFilePath (cwd </> file)
+      vim_command $ "edit " ++ toFilePath (cwd </> file)
       nvimHsLspOpenBuffer def
       x <- fromJust <$> focusLang "haskell" action
       -- TODO テストだとなぜかtimeoutが効かないみたい？
@@ -139,7 +139,7 @@ testWithHie time file action = do
 
 example1 :: IO ()
 example1 = testWithHie (Seconds 10) $(mkRelFile "./test-file/hoge.hs") $ do
-  b <- vim_get_current_buffer'
+  b <- vim_get_current_buffer
   uri <- getBufUri b
 
   -- didOpen
@@ -151,7 +151,7 @@ example1 = testWithHie (Seconds 10) $(mkRelFile "./test-file/hoge.hs") $ do
   -- didChange
   ------------
   threadDelaySec 1
-  nvim_buf_set_lines' b 5 6 False ["  return ()"]
+  nvim_buf_set_lines b 5 6 False ["  return ()"]
   -- startは含まない, endは含む 上のは6行目を置換している
   -- start=end=6とすると6,7行目の間に挿入される
   --void $ vim_command "update" -- とかしない限り実ファイルに影響はない

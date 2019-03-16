@@ -9,7 +9,7 @@ import           Data.Typeable            (cast, typeOf)
 
 import           LSP
 import           Util
-import           Neovim                   (vim_report_error')
+import           Neovim                   ()
 import           Neovim.LSP.Base
 
 callbackHandler :: Worker
@@ -29,12 +29,12 @@ callbackWorkerAction = forever $ loggingErrorImmortal $
                   x <- callback resp'
                   atomically $ putTMVar var x
                 Nothing -> do
-                  logError . fromString $ unlines
-                      [ "input type does not match for id: " ++ show id'
-                      , "Expected: " ++ show (typeOf expected)
-                      , "Actual:   " ++ show (typeOf resp)
-                      ]
-                  vim_report_error' "nvim-hs-lsp: error: callback function type mismatched"
+                    logError . fromString $ unlines
+                        [ "input type does not match for id: " ++ show id'
+                        , "Expected: " ++ show (typeOf expected)
+                        , "Actual:   " ++ show (typeOf resp)
+                        ]
+                    vim_report_error "nvim-hs-lsp: error: callback function type mismatched"
                   where expected = let _ = callback expected in expected
             Nothing ->
               logDebug $ "no callback set for id: " <> displayShow id'

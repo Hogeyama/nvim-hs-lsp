@@ -14,7 +14,7 @@ import           Data.Generics.Product    (field)
 
 import           LSP
 import           Util
-import           Neovim                   hiding (Plugin, whenM)
+import           Neovim                   ()
 import           Neovim.LSP.Base
 import           Neovim.LSP.Util
 
@@ -50,7 +50,7 @@ showDiagnotics (Notification noti) = do
             field @"lspConfig".
             field @"autoLoadQuickfix") $ do
       allDiagnostics <- readContext . view $ field @"diagnosticsMap"
-      curi <- getBufUri =<< nvim_get_current_buf'
+      curi <- getBufUri =<< nvim_get_current_buf
       replaceQfList $ diagnosticsToQfItems curi allDiagnostics
 
 -------------------------------------------------------------------------------
