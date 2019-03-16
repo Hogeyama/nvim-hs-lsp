@@ -52,7 +52,6 @@ module Neovim.LSP.Base
 
   , dispatch
   , registerAsyncHandle
-  , tryNeovim
 
   , module API
   )
@@ -495,7 +494,4 @@ resultMaybe _             = Nothing
 resultEither :: J.Result a -> Either String a
 resultEither (J.Success x) = Right x
 resultEither (J.Error e)   = Left e
-
-tryNeovim :: MonadUnliftIO m => m a -> m (Either NeovimException a)
-tryNeovim = try
 

@@ -6,4 +6,8 @@ import           Neovim
 import qualified Neovim.LSP as LSP
 
 main :: IO ()
-main = neovim defaultConfig { plugins = [ LSP.plugin ] }
+main = do
+    neovim defaultConfig
+      { plugins = [ LSP.plugin ]
+      , logOptions = Just ("/tmp/nvim-hs.log", ERROR)
+      }

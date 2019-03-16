@@ -10,7 +10,7 @@ import Neovim.LSP.Plugin
 
 plugin :: Neovim () NeovimPlugin
 plugin = do
-    logFile <- tryNeovim (nvim_get_var "NvimHsLsp_logFile" >>= fromObject') >>= \case
+    logFile <- tryAny (nvim_get_var "NvimHsLsp_logFile" >>= fromObject') >>= \case
       Right file -> return file
       _ -> return "/tmp/nvim-hs-lsp.log"
     initialEnv <- initialEnvM logFile
