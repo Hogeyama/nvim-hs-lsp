@@ -4,18 +4,21 @@ aliases:
   - &default_env
     environment:
       CACHE_KEY: _TRY1
+      HIE_CACHE_KEY: _TRY1
       STACK_VERSION: 1.9.1
   - &create_cache_key_file
     run:
       name: Create cache control key file
-      command: echo $CACHE_KEY > cache_key
+      command: |
+        echo $CACHE_KEY > cache_key
+        echo $HIE_CACHE_KEY > hie_cache_key
   - &restore_build_results
     restore_cache:
       keys:
         - stack-{{ checksum "cache_key" }}-{{ checksum "stack.yaml" }}-{{ checksum "package.yaml" }}
         - stack-{{ checksum "cache_key" }}-{{ checksum "stack.yaml" }}
         - stack-{{ checksum "cache_key" }}
-        - hie-{{ checksum "cache_key" }}-{{ checksum ".circleci/config.yml" }}
+        - hie-{{ checksum "cache_key" }}-{{ checksum "hie_cache_key" }}
         - hie-{{ checksum "cache_key" }}
   - &save_build_results
       save_cache:
@@ -68,8 +71,7 @@ aliases:
   - &save_hie_build_results
       save_cache:
         key:
-          - hie-{{ checksum "cache_key" }}-{{ checksum ".circleci/config.yml" }}
-          - hie-{{ checksum "cache_key" }}
+          hie-{{ checksum "cache_key" }}-{{ checksum "hie_cache_key" }}
         paths:
           - ~/haskell-ide-engine
           - ~/.cabal
