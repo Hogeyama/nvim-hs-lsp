@@ -115,10 +115,12 @@ jobs:
       - run:
           name: Run stack test
           command: |
+            mkdir -p ~/.config/nvim
             export NVIM_LISTEN_ADDRESS=~/nvim_listen_address
+            export VIM=~/.config/nvim
             nvim&
             cat test-file/init.vim
-            stack test --fast --no-terminal --ta '--match "/Neovim.LSP.Plugin/definition/simple/"'
+            stack test nvim-hs-lsp:test:spec --fast --no-terminal --ta '--match "/Neovim.LSP.Plugin/definition/simple/"'
             kill `pgrep nvim`
       - run:
           name: Run stack test --pedantic --no-terminal
