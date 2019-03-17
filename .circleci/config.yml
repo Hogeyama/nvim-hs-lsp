@@ -83,6 +83,7 @@ aliases:
         paths:
           - ~/haskell-ide-engine
           - ~/.cabal
+          - ~/.ghc
         when:
           always
 
