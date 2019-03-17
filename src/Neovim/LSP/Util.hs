@@ -223,7 +223,9 @@ startServer lang cwd {-cmd args-} workers = do
         sendNotification @'WorkspaceDidChangeConfigurationK param
   where
     loadLspConfig = do
-        allConfig <- fromObject' =<< vim_get_var "NvimHsLsp_languageConfig"
+        allConfig <- tryAny (fromObject' =<< vim_get_var "NvimHsLsp_languageConfig") >>= \case
+            Right allConfig -> return allConfig
+            Left e -> error (show e)
         let wildConfig = M.findWithDefault M.empty "_" allConfig
             langConfig = M.findWithDefault M.empty (encodeUtf8 lang) allConfig
             config     = langConfig `M.union` wildConfig -- langConfig is preferred
