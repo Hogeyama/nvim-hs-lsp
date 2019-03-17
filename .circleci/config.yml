@@ -23,6 +23,8 @@ aliases:
           - ~/.cabal
           - ~/.local/bin
           - .stack-work
+        when:
+          always
   - &display_stack_version
     run:
       name: Display stack version
@@ -67,6 +69,8 @@ aliases:
         paths:
           - ~/haskell-ide-engine
           - ~/.cabal
+        when:
+          always
 
 jobs:
   build:
