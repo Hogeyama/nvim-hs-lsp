@@ -4,7 +4,7 @@ aliases:
   - &default_env
     environment:
       CACHE_KEY: _TRY1
-      HIE_CACHE_KEY: _TRY7
+      HIE_CACHE_KEY: _TRY8
       STACK_VERSION: 1.9.1
   - &create_cache_key_file
     run:
@@ -15,21 +15,24 @@ aliases:
   - &restore_build_results
     restore_cache:
       keys:
+        - stack-{{ checksum "cache_key" }}-{{ checksum "stack.yaml" }}-{{ checksum "package.yaml" }}-{{ checksum "hie_cache_key" }}
         - stack-{{ checksum "cache_key" }}-{{ checksum "stack.yaml" }}-{{ checksum "package.yaml" }}
         - stack-{{ checksum "cache_key" }}-{{ checksum "stack.yaml" }}
         - stack-{{ checksum "cache_key" }}
-  - &restore_hie_build_results
-    restore_cache:
-      keys:
-        - hie-{{ checksum "cache_key" }}-{{ checksum "hie_cache_key" }}
-        - hie-{{ checksum "cache_key" }}
+  # - &restore_hie_build_results
+  #   restore_cache:
+  #     keys:
+  #       - hie-{{ checksum "cache_key" }}-{{ checksum "hie_cache_key" }}
+  #       - hie-{{ checksum "cache_key" }}
   - &save_build_results
       save_cache:
-        key: stack-{{ checksum "cache_key" }}-{{ checksum "stack.yaml" }}-{{ checksum "package.yaml" }}
+        - stack-{{ checksum "cache_key" }}-{{ checksum "stack.yaml" }}-{{ checksum "package.yaml" }}-{{ checksum "hie_cache_key" }}
         paths:
+          - ~/haskell-ide-engine
+          - ~/.local/bin
           - ~/.stack
           - ~/.cabal
-          - ~/.local/bin
+          - ~/.ghc
           - .stack-work
         when:
           always
@@ -77,18 +80,17 @@ aliases:
         name: Build hie for test
         command: |
           (cd ~/haskell-ide-engine; make hie-8.6.4)
-  - &save_hie_build_results
-      save_cache:
-        key:
-          hie-{{ checksum "cache_key" }}-{{ checksum "hie_cache_key" }}
-        paths:
-          - ~/haskell-ide-engine
-          - ~/haskell-ide-engine/.stack-work
-          - ~/.stack
-          - ~/.cabal
-          - ~/.ghc
-        when:
-          always
+  # - &save_hie_build_results
+  #     save_cache:
+  #       key:
+  #         hie-{{ checksum "cache_key" }}-{{ checksum "hie_cache_key" }}
+  #       paths:
+  #         - ~/haskell-ide-engine
+  #         - ~/.stack
+  #         - ~/.cabal
+  #         - ~/.ghc
+  #       when:
+  #         always
 
 jobs:
   build:
@@ -103,13 +105,13 @@ jobs:
       - checkout
       - *create_cache_key_file
       - *install_nvim
-      - *restore_hie_build_results
+      # - *restore_hie_build_results
       - *restore_build_results
       - *display_stack_version
       - *build_hie_pre
       - *build_hie_deps
       # - *build_hie
-      - *save_hie_build_results
+      # - *save_hie_build_results
       - run:
           name: Install dependencies
           command: stack test -j 1 --only-dependencies --no-terminal --no-run-tests
