@@ -4,7 +4,7 @@ aliases:
   - &default_env
     environment:
       CACHE_KEY: _TRY1
-      HIE_CACHE_KEY: _TRY6
+      HIE_CACHE_KEY: _TRY7
       STACK_VERSION: 1.9.1
   - &create_cache_key_file
     run:
@@ -84,6 +84,7 @@ aliases:
         paths:
           - ~/haskell-ide-engine
           - ~/haskell-ide-engine/.stack-work
+          - ~/.stack
           - ~/.cabal
           - ~/.ghc
         when:
@@ -102,8 +103,8 @@ jobs:
       - checkout
       - *create_cache_key_file
       - *install_nvim
-      - *restore_build_results
       - *restore_hie_build_results
+      - *restore_build_results
       - *display_stack_version
       - *build_hie_pre
       - *build_hie_deps
