@@ -71,6 +71,8 @@ aliases:
           (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-8.6.4.yaml cabal-helper)
           (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-8.6.4.yaml HaRe)
           (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-8.6.4.yaml hie-plugin-api)
+          (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-8.6.4.yaml ghc-mod)
+          (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-8.6.4.yaml )
   - &build_hie
       run:
         name: Build `hie` for test
