@@ -27,7 +27,7 @@ aliases:
   - &save_build_results
       save_cache:
         key:
-          - stack-{{ checksum "cache_key" }}-{{ checksum "stack.yaml" }}-{{ checksum "package.yaml" }}-{{ checksum "hie_cache_key" }}
+          stack-{{ checksum "cache_key" }}-{{ checksum "stack.yaml" }}-{{ checksum "package.yaml" }}-{{ checksum "hie_cache_key" }}
         paths:
           - ~/haskell-ide-engine
           - ~/.local/bin
