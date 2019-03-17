@@ -17,6 +17,7 @@ import           Neovim.Test.Wrapper
 import           Path
 import           Prelude
 import           RIO
+import qualified RIO.Map                        as M
 import           RIO.List.Partial               (tail)
 import           RIO.Partial                    (fromJust)
 import           System.Directory               (getCurrentDirectory,
@@ -124,7 +125,11 @@ testWithHie time file action = do
   initialEnv <- initialEnvM "/dev/null"
   testNeovim time initialEnv $ do
     finally `flip` finalizeLSP $ do
+      let print' x = hPutBuilder stdout $ getUtf8Builder $ displayShow x
       vim_command "source ./test-file/init.vim"
+      allConfig <- handleAny (\e -> print' e >> return M.empty) $
+        fromObject' =<< vim_get_var "NvimHsLsp_languageConfig"
+      print' (allConfig :: Map String (Map String Object))
       cwd <- getCwd
       startServer "haskell" cwd [ callbackHandler ]
       void $ focusLang "haskell" $

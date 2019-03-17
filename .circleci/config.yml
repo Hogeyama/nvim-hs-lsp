@@ -108,6 +108,7 @@ jobs:
           command: |
             export NVIM_LISTEN_ADDRESS=~/nvim_listen_address
             nvim&
+            cat test-file/init.vim
             stack test --fast --no-terminal
             kill `pgrep nvim`
       - run:
