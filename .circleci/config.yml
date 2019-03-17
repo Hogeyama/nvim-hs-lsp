@@ -91,8 +91,8 @@ jobs:
       - *save_hie_build_results
       # - *build_hie_deps
       # - *save_hie_build_results
-      - *build_hie
-      - *save_hie_build_results
+      # - *build_hie
+      # - *save_hie_build_results
       - run:
           name: Install dependencies
           command: stack test -j 1 --only-dependencies --no-terminal --no-run-tests
