@@ -118,7 +118,7 @@ jobs:
           command: |
             mkdir -p ~/.config/nvim
             export NVIM_LISTEN_ADDRESS=~/nvim_listen_address
-            export VIM=~/.config/nvim
+            export VIM=./squashfs-root/usr/share/nvim
             nvim&
             cat test-file/init.vim
             stack test nvim-hs-lsp:test:spec --fast --no-terminal --ta '--match "/Neovim.LSP.Plugin/definition/simple/"'
