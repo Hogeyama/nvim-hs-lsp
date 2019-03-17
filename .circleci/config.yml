@@ -4,7 +4,7 @@ aliases:
   - &default_env
     environment:
       CACHE_KEY: _TRY1
-      HIE_CACHE_KEY: _TRY2
+      HIE_CACHE_KEY: _TRY3
       STACK_VERSION: 1.9.1
   - &create_cache_key_file
     run:
