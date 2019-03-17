@@ -101,9 +101,8 @@ getCwd = do
 
 getBufLanguage :: (HasLogFunc env)
                => Buffer -> Neovim env (Maybe String)
-getBufLanguage b = tryAny (nvim_buf_get_var b "current_syntax" >>= fromObject') >>= \case
-    Right x -> return (Just x)
-    _ -> return Nothing
+getBufLanguage b = handleAny (\_ -> return Nothing) $
+    nvim_buf_get_var b "current_syntax" >>= fromObject'
 
 getBufUri :: Buffer -> Neovim env Uri
 getBufUri b = parseAbsFile <$> nvim_buf_get_name b >>= \case
@@ -223,9 +222,8 @@ startServer lang cwd {-cmd args-} workers = do
         sendNotification @'WorkspaceDidChangeConfigurationK param
   where
     loadLspConfig = do
-        allConfig <- tryAny (fromObject' =<< vim_get_var "NvimHsLsp_languageConfig") >>= \case
-            Right allConfig -> return allConfig
-            Left e -> error (show e)
+        allConfig <- handleAny (\_ -> return M.empty) $
+                        fromObject' =<< vim_get_var "NvimHsLsp_languageConfig"
         let wildConfig = M.findWithDefault M.empty "_" allConfig
             langConfig = M.findWithDefault M.empty (encodeUtf8 lang) allConfig
             config     = langConfig `M.union` wildConfig -- langConfig is preferred
