@@ -105,8 +105,8 @@ jobs:
       - *display_stack_version
       - *build_hie_pre
       - *save_hie_build_results
-      # - *build_hie_deps
-      # - *save_hie_build_results
+      - *build_hie_deps
+      - *save_hie_build_results
       # - *build_hie
       # - *save_hie_build_results
       - run:
