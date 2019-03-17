@@ -4,7 +4,7 @@ aliases:
   - &default_env
     environment:
       CACHE_KEY: _TRY1
-      HIE_CACHE_KEY: _TRY3
+      HIE_CACHE_KEY: _TRY4
       STACK_VERSION: 1.9.1
   - &create_cache_key_file
     run:
@@ -41,7 +41,7 @@ aliases:
         stack --no-terminal --version
   - &install_nvim
       run:
-        name: Install neovim
+        name: Install Neovim
         command: |
           curl https://github.com/neovim/neovim/releases/download/v0.3.4/nvim.appimage -L -o nvim
           chmod u+x nvim
@@ -53,7 +53,7 @@ aliases:
           nvim --version
   - &build_hie_pre
       run:
-        name: Build `hie` for test
+        name: Prepare for building hie
         command: |
           if [ -d ~/haskell-ide-engine ]
           then
@@ -65,17 +65,17 @@ aliases:
           (cd ~/haskell-ide-engine; make cabal)
   - &build_hie_deps
       run:
-        name: Build `hie` for test
+        name: Build hie dependencies
         command: |
           (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-8.6.4.yaml ghc-exactprint)
           (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-8.6.4.yaml cabal-helper)
           (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-8.6.4.yaml HaRe)
-          # (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-8.6.4.yaml hie-plugin-api)
-          # (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-8.6.4.yaml ghc-mod)
+          (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-8.6.4.yaml hie-plugin-api)
+          (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-8.6.4.yaml ghc-mod)
           # (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-8.6.4.yaml )
   - &build_hie
       run:
-        name: Build `hie` for test
+        name: Build hie for test
         command: |
           (cd ~/haskell-ide-engine; make hie-8.6.4)
   - &save_hie_build_results
