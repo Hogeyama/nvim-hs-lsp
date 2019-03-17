@@ -15,6 +15,7 @@ aliases:
         - stack-{{ checksum "cache_key" }}-{{ checksum "stack.yaml" }}-{{ checksum "package.yaml" }}
         - stack-{{ checksum "cache_key" }}-{{ checksum "stack.yaml" }}
         - stack-{{ checksum "cache_key" }}
+        - hie-{{ checksum "cache_key" }}
   - &save_build_results
       save_cache:
         key: stack-{{ checksum "cache_key" }}-{{ checksum "stack.yaml" }}-{{ checksum "package.yaml" }}
@@ -65,7 +66,8 @@ aliases:
           (cd ~/haskell-ide-engine; make hie-8.6.4)
   - &save_hie_build_results
       save_cache:
-        key: hie-{{ checksum "cache_key" }}
+        key:
+          - hie-{{ checksum "cache_key" }}
         paths:
           - ~/haskell-ide-engine
           - ~/.cabal
