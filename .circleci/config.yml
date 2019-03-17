@@ -75,7 +75,7 @@ aliases:
       run:
         name: Build hie for test
         command: |
-          (cd ~/haskell-ide-engine; make hie-8.6.4)
+          hie --version || (cd ~/haskell-ide-engine; make hie-8.6.4)
 
 jobs:
   build:
