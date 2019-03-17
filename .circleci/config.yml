@@ -55,7 +55,12 @@ aliases:
       run:
         name: Build `hie` for test
         command: |
-          git clone https://github.com/haskell/haskell-ide-engine ~/haskell-ide-engine
+          if [ -f ~/haskell-ide-engine ]
+          then
+            echo "cached"
+          else
+            git clone https://github.com/haskell/haskell-ide-engine ~/haskell-ide-engine
+          fi
           (cd ~/haskell-ide-engine; make submodules)
           (cd ~/haskell-ide-engine; make cabal)
   - &build_hie_deps
