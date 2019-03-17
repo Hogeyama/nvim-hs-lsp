@@ -107,7 +107,7 @@ jobs:
             export VIM=./squashfs-root/usr/share/nvim
             nvim&
             cat test-file/init.vim
-            stack test nvim-hs-lsp:test:spec --fast --no-terminal --ta '--match "/Neovim.LSP.Plugin/definition/simple/"'
+            stack test nvim-hs-lsp:test:spec --fast --no-terminal --ta '--match "/Neovim.LSP.Plugin/definition/simple/"' || cat /tmp/test-hie.log
             kill `pgrep nvim`
       - run:
           name: Run stack test --pedantic --no-terminal
