@@ -4,7 +4,7 @@ aliases:
   - &default_env
     environment:
       CACHE_KEY: _TRY1
-      HIE_CACHE_KEY: _TRY4
+      HIE_CACHE_KEY: _TRY5
       STACK_VERSION: 1.9.1
   - &create_cache_key_file
     run:
@@ -72,7 +72,6 @@ aliases:
           (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-8.6.4.yaml HaRe)
           (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-8.6.4.yaml hie-plugin-api)
           (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-8.6.4.yaml ghc-mod)
-          # (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-8.6.4.yaml )
   - &build_hie
       run:
         name: Build hie for test
@@ -84,6 +83,7 @@ aliases:
           hie-{{ checksum "cache_key" }}-{{ checksum "hie_cache_key" }}
         paths:
           - ~/haskell-ide-engine
+          - ~/haskell-ide-engine/.stack-work
           - ~/.cabal
           - ~/.ghc
         when:
