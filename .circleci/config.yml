@@ -18,6 +18,9 @@ aliases:
         - stack-{{ checksum "cache_key" }}-{{ checksum "stack.yaml" }}-{{ checksum "package.yaml" }}
         - stack-{{ checksum "cache_key" }}-{{ checksum "stack.yaml" }}
         - stack-{{ checksum "cache_key" }}
+  - &restore_hie_build_results
+    restore_cache:
+      keys:
         - hie-{{ checksum "cache_key" }}-{{ checksum "hie_cache_key" }}
         - hie-{{ checksum "cache_key" }}
   - &save_build_results
@@ -92,6 +95,7 @@ jobs:
       - *create_cache_key_file
       - *install_nvim
       - *restore_build_results
+      - *restore_hie_build_results
       - *display_stack_version
       - *build_hie_pre
       - *save_hie_build_results
@@ -109,7 +113,7 @@ jobs:
             export NVIM_LISTEN_ADDRESS=~/nvim_listen_address
             nvim&
             cat test-file/init.vim
-            stack test --fast --no-terminal
+            stack test --fast --no-terminal --ta '--match "/Neovim.LSP.Plugin/definition/simple/"'
             kill `pgrep nvim`
       - run:
           name: Run stack test --pedantic --no-terminal

@@ -126,6 +126,7 @@ testWithHie time file action = do
   testNeovim time initialEnv $ do
     finally `flip` finalizeLSP $ do
       let print' x = hPutBuilder stdout $ getUtf8Builder $ displayShow x
+      print' "ooo"
       vim_command "source ./test-file/init.vim"
       allConfig <- handleAny (\e -> print' e >> return M.empty) $
         fromObject' =<< vim_get_var "NvimHsLsp_languageConfig"
