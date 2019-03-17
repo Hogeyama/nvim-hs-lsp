@@ -4,7 +4,7 @@ aliases:
   - &default_env
     environment:
       CACHE_KEY: _TRY1
-      HIE_CACHE_KEY: _TRY1
+      HIE_CACHE_KEY: _TRY2
       STACK_VERSION: 1.9.1
   - &create_cache_key_file
     run:
@@ -70,9 +70,9 @@ aliases:
           (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-8.6.4.yaml ghc-exactprint)
           (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-8.6.4.yaml cabal-helper)
           (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-8.6.4.yaml HaRe)
-          (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-8.6.4.yaml hie-plugin-api)
-          (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-8.6.4.yaml ghc-mod)
-          (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-8.6.4.yaml )
+          # (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-8.6.4.yaml hie-plugin-api)
+          # (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-8.6.4.yaml ghc-mod)
+          # (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-8.6.4.yaml )
   - &build_hie
       run:
         name: Build `hie` for test
@@ -109,8 +109,8 @@ jobs:
       - *save_hie_build_results
       - *build_hie_deps
       - *save_hie_build_results
-      - *build_hie
-      - *save_hie_build_results
+      # - *build_hie
+      # - *save_hie_build_results
       - run:
           name: Install dependencies
           command: stack test -j 1 --only-dependencies --no-terminal --no-run-tests
