@@ -68,7 +68,7 @@ spec = do
       removeStackWorkDir
       let src = $(mkRelFile "test-file/Definition.hs")
           definition1 = testWithHie (Seconds 10) src $ do
-              threadDelaySec 1 -- wait for loading
+              threadDelaySec 5 -- wait for loading
               b <- getBufUri =<< vim_get_current_buffer
               waitCallback $ definitionRequest b (fromNvimPos (8,11)) return
           expected = Response . Record
