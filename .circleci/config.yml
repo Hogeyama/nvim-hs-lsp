@@ -49,6 +49,7 @@ aliases:
           export PATH=~/.local/bin:$PATH
           echo $PATH
           mv ./squashfs-root/usr/bin/nvim $HOME/.local/bin
+          export VIM=./squashfs-root/usr/share/nvim
           nvim --version
   - &build_hie_pre
       run:
@@ -104,10 +105,8 @@ jobs:
           command: |
             mkdir -p ~/.config/nvim
             export NVIM_LISTEN_ADDRESS=~/nvim_listen_address
-            export VIM=./squashfs-root/usr/share/nvim
             nvim&
-            cat test-file/init.vim
-            stack test nvim-hs-lsp:test:spec --fast --no-terminal --ta '--match "/Neovim.LSP.Plugin/definition/simple/"' || cat /tmp/test-hie.log
+            stack test nvim-hs-lsp:test:spec --fast --no-terminal
             kill `pgrep nvim`
       - run:
           name: Run stack test --pedantic --no-terminal
