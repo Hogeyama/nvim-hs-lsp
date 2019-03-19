@@ -4,7 +4,7 @@ aliases:
   - &default_env
     environment:
       CACHE_KEY: 0
-      SUB_CACHE_KEY: 1
+      SUB_CACHE_KEY: 2
       STACK_VERSION: 1.7.1
   - &create_cache_key_file
     run:
@@ -28,6 +28,7 @@ aliases:
           - ~/.local/bin
           - ~/.stack
           - ~/.cabal
+          - ~/.hoogle
           - ~/.ghc
           - .stack-work
         when:
