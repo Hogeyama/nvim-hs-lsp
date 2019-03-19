@@ -75,7 +75,8 @@ aliases:
       run:
         name: Build hie for test
         command: |
-          hie --version || (cd ~/haskell-ide-engine; ./install.hs hie-8.6.4)
+          (cd ~/haskell-ide-engine; (which hie || ./install.hs hie-8.6.4))
+          (cd ~/haskell-ide-engine; ./install.hs build-doc-8.6.4)
 
 jobs:
   build:
@@ -92,8 +93,8 @@ jobs:
       - *install_nvim
       - *restore_build_results
       - *display_stack_version
-      - *build_hie_pre
-      - *build_hie_deps
+      # - *build_hie_pre
+      # - *build_hie_deps
       - *build_hie
       - run:
           name: Install dependencies
