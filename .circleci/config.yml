@@ -5,7 +5,7 @@ aliases:
     environment:
       CACHE_KEY: 0
       SUB_CACHE_KEY: 0
-      STACK_VERSION: 1.9.1
+      STACK_VERSION: 1.7.1
   - &create_cache_key_file
     run:
       name: Create cache control key file
@@ -84,7 +84,6 @@ aliases:
           - circleci-test
       docker:
         - image: quay.io/haskell_works/stack-build-minimal
-      <<: *default_env
       steps:
         - checkout
         - *create_cache_key_file
@@ -117,5 +116,6 @@ aliases:
 
 jobs:
   build:
+    <<: *default_env
     <<: *default
 
