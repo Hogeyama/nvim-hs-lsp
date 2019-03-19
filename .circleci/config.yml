@@ -1,0 +1,117 @@
+version: 2
+
+aliases:
+  - &default_env
+    environment:
+      CACHE_KEY: 0
+      SUB_CACHE_KEY: 0
+      STACK_VERSION: 1.9.1
+  - &create_cache_key_file
+    run:
+      name: Create cache control key file
+      command: |
+        echo $CACHE_KEY > cache_key
+        echo $SUB_CACHE_KEY > sub_cache_key
+  - &restore_build_results
+    restore_cache:
+      keys:
+        - cache-{{ checksum "cache_key" }}-{{ checksum "stack.yaml" }}-{{ checksum "package.yaml" }}-{{ checksum "sub_cache_key" }}
+        - cache-{{ checksum "cache_key" }}-{{ checksum "stack.yaml" }}-{{ checksum "package.yaml" }}
+        - cache-{{ checksum "cache_key" }}-{{ checksum "stack.yaml" }}
+        - cache-{{ checksum "cache_key" }}
+  - &save_build_results
+      save_cache:
+        key:
+          cache-{{ checksum "cache_key" }}-{{ checksum "stack.yaml" }}-{{ checksum "package.yaml" }}-{{ checksum "sub_cache_key" }}
+        paths:
+          - ~/haskell-ide-engine
+          - ~/.local/bin
+          - ~/.stack
+          - ~/.cabal
+          - ~/.ghc
+          - .stack-work
+        when:
+          always
+  - &display_stack_version
+    run:
+      name: Display stack version
+      command: |
+        stack --no-terminal upgrade --binary-version=$STACK_VERSION
+        stack --no-terminal --version
+  - &install_nvim
+      run:
+        name: Install Neovim
+        command: |
+          curl https://github.com/neovim/neovim/releases/download/v0.3.4/nvim.appimage -L -o nvim
+          chmod u+x nvim
+          ./nvim --appimage-extract
+          mkdir -p ~/.local/bin
+          export PATH=~/.local/bin:$PATH
+          echo $PATH
+          mv ./squashfs-root/usr/bin/nvim $HOME/.local/bin
+          nvim --version
+  - &build_hie_pre
+      run:
+        name: Prepare for building hie
+        command: |
+          if [ -d ~/haskell-ide-engine ]
+          then
+            echo "cached"
+          else
+            git clone https://github.com/haskell/haskell-ide-engine ~/haskell-ide-engine
+          fi
+          (cd ~/haskell-ide-engine; ./install.hs submodules)
+          (cd ~/haskell-ide-engine; ./install.hs cabal)
+  - &build_hie_deps
+      run:
+        name: Build hie dependencies
+        command: |
+          (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-8.6.4.yaml ghc-exactprint)
+          (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-8.6.4.yaml cabal-helper)
+          (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-8.6.4.yaml HaRe)
+          (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-8.6.4.yaml hie-plugin-api)
+          (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-8.6.4.yaml ghc-mod)
+  - &build_hie
+      run:
+        name: Build hie for test
+        command: |
+          hie --version || (cd ~/haskell-ide-engine; ./install.hs hie-8.6.4)
+
+jobs:
+  build:
+    branches:
+      only:
+        - master
+        - circleci-test
+    docker:
+      - image: quay.io/haskell_works/stack-build-minimal
+    <<: *default_env
+    steps:
+      - checkout
+      - *create_cache_key_file
+      - *install_nvim
+      - *restore_build_results
+      - *display_stack_version
+      - *build_hie_pre
+      - *build_hie_deps
+      - *build_hie
+      - run:
+          name: Install dependencies
+          command: stack test -j 1 --only-dependencies --no-terminal --no-run-tests
+          no_output_timeout: 120m
+      - run:
+          name: Run stack test
+          command: |
+            mkdir -p ~/.config/nvim
+            export NVIM_LISTEN_ADDRESS=~/nvim_listen_address
+            export VIM=./squashfs-root/usr/share/nvim
+            nvim --headless &
+            cat test-file/init.vim
+            stack test nvim-hs-lsp:test:spec --fast --no-terminal || cat /tmp/test-hie.log
+            kill `pgrep nvim`
+      - run:
+          name: Run stack test --pedantic --no-terminal
+          command: |
+            stack clean
+            stack test --pedantic --fast --no-run-tests --no-terminal
+      - *save_build_results
