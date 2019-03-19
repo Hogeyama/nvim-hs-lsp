@@ -120,8 +120,14 @@ jobs:
   ghc-8.6.4:
     environment:
       - HOGE: 123
-      <<: *default_env_kvs
+      # <<: *default_env_kvs
     <<: *default
+  # - &default_env
+  #   environment:
+  #     CACHE_KEY: 0
+  #     SUB_CACHE_KEY: 0
+  #     STACK_VERSION: 1.9.1
+  #
   # default:
   #   branches:
   #     only:
