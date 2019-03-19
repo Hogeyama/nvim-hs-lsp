@@ -105,7 +105,7 @@ jobs:
             mkdir -p ~/.config/nvim
             export NVIM_LISTEN_ADDRESS=~/nvim_listen_address
             export VIM=./squashfs-root/usr/share/nvim
-            nvim&
+            nvim --headless &
             cat test-file/init.vim
             stack test nvim-hs-lsp:test:spec --fast --no-terminal || cat /tmp/test-hie.log
             kill `pgrep nvim`
