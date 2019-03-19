@@ -2,9 +2,9 @@ version: 2
 
 aliases:
   - &default_env_kvs:
-      CACHE_KEY: 0
-      SUB_CACHE_KEY: 0
-      STACK_VERSION: 1.9.1
+    - CACHE_KEY: 0
+    - SUB_CACHE_KEY: 0
+    - STACK_VERSION: 1.9.1
   # - &default_env
   #   environment:
   #     <<: *default_env_kvs
@@ -120,8 +120,9 @@ jobs:
   build:
     environment:
       <<: *default_env_kvs
-      # HOGE: 0
-    <<: *default
+      HOGE: 0
+    <<: 
+      CACHE_KEY: 0
   # - &default_env
   #   environment:
   #     CACHE_KEY: 0
