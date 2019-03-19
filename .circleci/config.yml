@@ -1,15 +1,10 @@
 version: 2
 
 aliases:
-  - &foo
+  - &default_env
     CACHE_KEY: 0
     SUB_CACHE_KEY: 2
-    STACK_VERSION: 1.7.1 
-  - &default_env
-    environment:
-      CACHE_KEY: 0
-      SUB_CACHE_KEY: 2
-      STACK_VERSION: 1.7.1
+    STACK_VERSION: 1.7.1
   - &create_cache_key_file
     run:
       name: Create cache control key file
@@ -122,6 +117,6 @@ aliases:
 jobs:
   build:
     environment:
-      - *foo
+      - *default_env
       - GHC_VERSION: 8.6.4
     <<: *default
