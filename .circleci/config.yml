@@ -121,5 +121,6 @@ aliases:
 
 jobs:
   build:
-    <<: *default_env
+    environment:
+      - *foo
     <<: *default
