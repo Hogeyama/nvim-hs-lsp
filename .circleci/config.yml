@@ -123,4 +123,5 @@ jobs:
   build:
     environment:
       - *foo
+      - GHC_VERSION: 8.6.4
     <<: *default
