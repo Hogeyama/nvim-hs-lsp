@@ -1,6 +1,10 @@
 version: 2
 
 aliases:
+  - &foo
+    CACHE_KEY: 0
+    SUB_CACHE_KEY: 2
+    STACK_VERSION: 1.7.1 
   - &default_env
     environment:
       CACHE_KEY: 0
