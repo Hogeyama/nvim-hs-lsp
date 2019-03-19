@@ -119,8 +119,8 @@ aliases:
 jobs:
   build:
     environment:
-      - HOGE: 123
-      # <<: *default_env_kvs
+      HOGE: 0
+      <<: *default_env_kvs
     <<: *default
   # - &default_env
   #   environment:
