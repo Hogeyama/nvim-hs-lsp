@@ -117,38 +117,5 @@ aliases:
 
 jobs:
   build:
-    branches:
-      only:
-        - master
-        - circleci-test
-    docker:
-      - image: quay.io/haskell_works/stack-build-minimal
-    steps:
-      - checkout
-      - *create_cache_key_file
-      - *install_nvim
-      - *restore_build_results
-      - *display_stack_version
-      # - *build_hie_pre
-      # - *build_hie_deps
-      - *build_hie
-      - run:
-          name: Install dependencies
-          command: stack test -j 1 --only-dependencies --no-terminal --no-run-tests
-          no_output_timeout: 120m
-      - run:
-          name: Run stack test
-          command: |
-            mkdir -p ~/.config/nvim
-            export NVIM_LISTEN_ADDRESS=~/nvim_listen_address
-            export VIM=./squashfs-root/usr/share/nvim
-            nvim --headless &
-            cat test-file/init.vim
-            stack test nvim-hs-lsp:test:spec --fast --no-terminal || cat /tmp/test-hie.log
-            kill `pgrep nvim`
-      - run:
-          name: Run stack test --pedantic --no-terminal
-          command: |
-            stack clean
-            stack test --pedantic --fast --no-run-tests --no-terminal
-      - *save_build_results
+    <<: *default
+
