@@ -117,7 +117,7 @@ aliases:
         - *save_build_results
 
 jobs:
-  ghc-8.6.4:
+  build:
     environment:
       - HOGE: 123
       # <<: *default_env_kvs
