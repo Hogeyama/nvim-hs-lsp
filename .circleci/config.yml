@@ -3,8 +3,8 @@ version: 2
 aliases:
   - &default_env
     environment:
-      CACHE_KEY: _TRY1
-      HIE_CACHE_KEY: _TRY10
+      CACHE_KEY: 0
+      HIE_CACHE_KEY: _TRY1
       STACK_VERSION: 1.9.1
   - &create_cache_key_file
     run:
@@ -60,8 +60,8 @@ aliases:
           else
             git clone https://github.com/haskell/haskell-ide-engine ~/haskell-ide-engine
           fi
-          (cd ~/haskell-ide-engine; make submodules)
-          (cd ~/haskell-ide-engine; make cabal)
+          (cd ~/haskell-ide-engine; ./install.hs submodules)
+          (cd ~/haskell-ide-engine; ./install.hs cabal)
   - &build_hie_deps
       run:
         name: Build hie dependencies
@@ -75,7 +75,7 @@ aliases:
       run:
         name: Build hie for test
         command: |
-          hie --version || (cd ~/haskell-ide-engine; make hie-8.6.4)
+          hie --version || (cd ~/haskell-ide-engine; ./install.hs hie-8.6.4)
 
 jobs:
   build:
