@@ -63,7 +63,7 @@ spec = do
           col     = 20
       completionFindStart curLine col `shouldBe` 6
 
-  describe "definition" $ do
+  when False $ describe "definition" $ do
     specify "simple" $ do
       removeStackWorkDir
       let src = $(mkRelFile "test-file/Definition.hs")
@@ -125,14 +125,7 @@ testWithHie time file action = do
   initialEnv <- initialEnvM "/dev/null"
   testNeovim time initialEnv $ do
     finally `flip` finalizeLSP $ do
-      let print' x = hPutBuilder stdout $ getUtf8Builder $ displayShow x
-      print' "ooo"
       vim_command "source ./test-file/init.vim"
-      print' "ooo2"
-      allConfig <- handleAny (\e -> print' e >> return M.empty) $
-        fromObject' =<< vim_get_var "NvimHsLsp_languageConfig"
-      print' "ooo3"
-      print' (allConfig :: Map String (Map String Object))
       cwd <- getCwd
       startServer "haskell" cwd [ callbackHandler ]
       void $ focusLang "haskell" $

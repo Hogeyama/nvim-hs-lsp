@@ -114,16 +114,4 @@ jobs:
           command: |
             stack clean
             stack test --pedantic --fast --no-run-tests --no-terminal
-      # - run:
-      #     name: Run HLint
-      #     command: |
-      #       curl -sL https://raw.github.com/ndmitchell/hlint/master/misc/travis.sh | sh -s -- --version
-      #       curl -sL https://raw.github.com/ndmitchell/hlint/master/misc/travis.sh | sh -s .
-      # - run:
-      #     name: Run stylish-haskell
-      #     command: |
-      #       # TODO: https://github.com/jaspervdj/stylish-haskell/pull/218
-      #       curl -sL https://raw.githubusercontent.com/waddlaw/stylish-haskell/master/scripts/latest.sh | sh -s -- -i $(find . -type f -name "*hs" -not -path '.git' -not -path '*.stack-work*')
-      #       git --no-pager diff --exit-code
       - *save_build_results
-      
