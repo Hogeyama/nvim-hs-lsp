@@ -67,7 +67,7 @@ library:
   - -fobject-code
     #- -fprint-explicit-kinds
   dependencies:
-  - nvim-hs-contrib
+  - nvim-hs-contrib >= 2.0.0.0
   - aeson
   - constraints
   - extensible >= 0.5
@@ -91,6 +91,8 @@ tests:
   doctests:
     source-dirs:   test
     main:          doctests.hs
+    generated-other-modules:
+    - Build_doctests
     other-modules:
     - Build_doctests
     dependencies:
