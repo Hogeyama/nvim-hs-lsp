@@ -131,8 +131,8 @@ workflows:
   all:
     jobs:
       - stack-8.6.4:
-          - filters:
-              branches:
-                only:
-                  - master
-                  - circleci-test
+          filters:
+            branches:
+              only:
+                - master
+                - circleci-test
