@@ -2,6 +2,8 @@
 
 [Language Server Protcol](https://microsoft.github.io/language-server-protocol/specification) implementation for neovim using [nvim-hs](https://github.com/neovimhaskell/nvim-hs).
 
+[![CircleCI](https://circleci.com/gh/Hogeyama/nvim-hs-lsp/tree/master.svg?style=svg)](https://circleci.com/gh/Hogeyama/nvim-hs-lsp/tree/master)
+
 ## Installation
 
 1. Install [stack](https://docs.haskellstack.org/en/stable/README/)
