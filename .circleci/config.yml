@@ -3,7 +3,7 @@ version: 2
 aliases:
   - &default_env
     CACHE_KEY: 0
-    SUB_CACHE_KEY: 5
+    SUB_CACHE_KEY: 6
     STACK_VERSION: 1.7.1
   - &create_cache_key_file
     run:
@@ -67,7 +67,7 @@ aliases:
           fi
           (cd ~/haskell-ide-engine; ./install.hs submodules)
           (cd ~/haskell-ide-engine; ./install.hs cabal)
-  - &build_hie_deps
+  - &build_hie_deps # 分けてbuildしないとメモリを使い果たして死ぬ
       run:
         name: Build hie dependencies
         command: |
