@@ -38,6 +38,13 @@ aliases:
       command: |
         stack --no-terminal upgrade --binary-version=$STACK_VERSION
         stack --no-terminal --version
+  - &set_path
+      run:
+        name: Set PATH
+        command: |
+          export PATH=~/.cabal/bin:~/.local/bin:$PATH
+          mkdir -p ~/.local/bin
+          echo $PATH
   - &install_nvim
       run:
         name: Install Neovim
@@ -45,9 +52,6 @@ aliases:
           curl https://github.com/neovim/neovim/releases/download/v0.3.4/nvim.appimage -L -o nvim
           chmod u+x nvim
           ./nvim --appimage-extract
-          mkdir -p ~/.local/bin
-          export PATH=~/.local/bin:$PATH
-          echo $PATH
           mv ./squashfs-root/usr/bin/nvim $HOME/.local/bin
           nvim --version
   - &build_hie_pre
@@ -87,6 +91,7 @@ aliases:
       steps:
         - checkout
         - *create_cache_key_file
+        - *set_path
         - *install_nvim
         - *restore_build_results
         - *display_stack_version
@@ -100,12 +105,15 @@ aliases:
         - run:
             name: Run stack test
             command: |
-              mkdir -p ~/.config/nvim
               export NVIM_LISTEN_ADDRESS=~/nvim_listen_address
               export VIM=./squashfs-root/usr/share/nvim
               nvim --headless &
-              cat test-file/init.vim
-              stack test nvim-hs-lsp:test:spec --fast --no-terminal || cat /tmp/test-hie.log
+              if [[ -z "$STACK_YAML" ]]
+              then
+                stack --stack-yaml=$STACK_YAML test --fast --no-terminal || cat /tmp/test-hie.log || exit 1
+              else
+                echo "TODO: test with cabal"
+              fi
               kill `pgrep nvim`
         - run:
             name: Run stack test --pedantic --no-terminal
@@ -115,8 +123,15 @@ aliases:
         - *save_build_results
 
 jobs:
-  build:
+  stack-8.6.4:
     environment:
       - *default_env
       - GHC_VERSION: 8.6.4
+      - STACK_YAML: stack-8.6.4.yaml
     <<: *default
+
+workflows:
+  version: 2
+  all:
+    jobs:
+      - stack-8.6.4
