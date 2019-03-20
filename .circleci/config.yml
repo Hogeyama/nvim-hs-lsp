@@ -71,6 +71,7 @@ aliases:
       run:
         name: Build hie dependencies
         command: |
+          (cd ~/haskell-ide-engine; stack clean --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml)
           (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml ghc-exactprint)
           (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml cabal-helper)
           (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml HaRe)
