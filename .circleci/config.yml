@@ -97,7 +97,13 @@ aliases:
         - *build_hie
         - run:
             name: Install dependencies
-            command: stack test -j 1 --only-dependencies --no-terminal --no-run-tests
+            command: |
+              if [[ -z "$STACK_YAML" ]]
+              then
+                stack --stack-yaml=$STACK_YAML test -j 1 --only-dependencies --no-terminal --no-run-tests
+              else
+                echo "TODO: test with cabal" || exit 1
+              fi
             no_output_timeout: 120m
         - run:
             name: Run stack test
@@ -109,27 +115,30 @@ aliases:
               then
                 stack --stack-yaml=$STACK_YAML test --fast --no-terminal || cat /tmp/test-hie.log || exit 1
               else
-                echo "TODO: test with cabal"
+                echo "TODO: test with cabal" || exit 1
               fi
               kill `pgrep nvim`
         - run:
             name: Run stack test --pedantic --no-terminal
             command: |
-              stack clean
-              stack test --pedantic --fast --no-run-tests --no-terminal
+              if [[ -z "$STACK_YAML" ]]
+              then
+                stack --stack-yaml=$STACK_YAML clean
+                stack --stack-yaml=$STACK_YAML test --pedantic --fast --no-run-tests --no-terminal
+              else
+                echo "TODO: test with cabal" || exit 1
+              fi
         - *save_build_results
 
 jobs:
   stack-8.6.4:
     environment:
       - *default_env
-      - GHC_VERSION: 8.6.4
       - STACK_YAML: stack-8.6.4.yaml
     <<: *default
   stack-8.4.4:
     environment:
       - *default_env
-      - GHC_VERSION: 8.4.4
       - STACK_YAML: stack-8.4.4.yaml
     <<: *default
 
