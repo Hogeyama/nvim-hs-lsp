@@ -1,0 +1,7 @@
+resolver: lts-12.26
+extra-deps:
+- extensible-0.5
+- generic-lens-1.1.0.0
+- nvim-hs-2.0.0.0
+- nvim-hs-contrib-2.0.0.0
+
