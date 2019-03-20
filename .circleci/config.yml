@@ -82,10 +82,6 @@ aliases:
           (cd ~/haskell-ide-engine; (which hie || ./install.hs hie-8.6.4))
           (cd ~/haskell-ide-engine; ./install.hs build-doc-8.6.4)
   - &default
-      branches:
-        only:
-          - master
-          - circleci-test
       docker:
         - image: quay.io/haskell_works/stack-build-minimal
       steps:
@@ -132,6 +128,10 @@ jobs:
 
 workflows:
   version: 2
+  branches:
+    only:
+      - master
+      - circleci-test
   all:
     jobs:
       - stack-8.6.4
