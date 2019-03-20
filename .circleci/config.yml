@@ -3,7 +3,7 @@ version: 2
 aliases:
   - &default_env
     CACHE_KEY: 0
-    SUB_CACHE_KEY: 3
+    SUB_CACHE_KEY: 5
     STACK_VERSION: 1.7.1
   - &create_cache_key_file
     run:
@@ -63,6 +63,7 @@ aliases:
             echo "cached"
           else
             git clone https://github.com/haskell/haskell-ide-engine ~/haskell-ide-engine
+            (cd ~/haskell-ide-engine; git checkout 0.7.0.0)
           fi
           (cd ~/haskell-ide-engine; ./install.hs submodules)
           (cd ~/haskell-ide-engine; ./install.hs cabal)
