@@ -1,0 +1,3 @@
+resolver: nightly-2019-03-16
+extra-deps:
+- extensible-0.5
