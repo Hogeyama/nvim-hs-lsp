@@ -11,7 +11,7 @@ aliases:
       command: |
         echo $CACHE_KEY     > cache_key
         echo $SUB_CACHE_KEY > sub_cache_key
-        cat  $STACK_VERSION > .stack.yaml
+        cat  $STACK_YAML    > .stack.yaml || touch .stack.yaml
   - &restore_build_results
     restore_cache:
       keys:
