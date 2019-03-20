@@ -40,7 +40,7 @@ function! s:afterBuild(out, err, jobId, exitCode, event)
     echom ' stderr: ' . l:err
     echohl None
   else
-    echo "nvim-hs-lsp build complete"
+    " echo "nvim-hs-lsp build complete"
     try
       call nvimhs#start(s:project_dir, s:project_name, [])
     catch /^Vim(call):E117/
