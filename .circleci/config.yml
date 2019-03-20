@@ -9,19 +9,20 @@ aliases:
     run:
       name: Create cache control key file
       command: |
-        echo $CACHE_KEY > cache_key
+        echo $CACHE_KEY     > cache_key
         echo $SUB_CACHE_KEY > sub_cache_key
+        cat  $STACK_VERSION > .stack.yaml
   - &restore_build_results
     restore_cache:
       keys:
-        - cache-{{ checksum "cache_key" }}-{{ checksum "stack.yaml" }}-{{ checksum "package.yaml" }}-{{ checksum "sub_cache_key" }}
-        - cache-{{ checksum "cache_key" }}-{{ checksum "stack.yaml" }}-{{ checksum "package.yaml" }}
-        - cache-{{ checksum "cache_key" }}-{{ checksum "stack.yaml" }}
+        - cache-{{ checksum "cache_key" }}-{{ checksum ".stack.yaml" }}-{{ checksum "package.yaml" }}-{{ checksum "sub_cache_key" }}
+        - cache-{{ checksum "cache_key" }}-{{ checksum ".stack.yaml" }}-{{ checksum "package.yaml" }}
+        - cache-{{ checksum "cache_key" }}-{{ checksum ".stack.yaml" }}
         - cache-{{ checksum "cache_key" }}
   - &save_build_results
       save_cache:
         key:
-          cache-{{ checksum "cache_key" }}-{{ checksum "stack.yaml" }}-{{ checksum "package.yaml" }}-{{ checksum "sub_cache_key" }}
+          cache-{{ checksum "cache_key" }}-{{ checksum ".stack.yaml" }}-{{ checksum "package.yaml" }}-{{ checksum "sub_cache_key" }}
         paths:
           - ~/haskell-ide-engine
           - ~/.local/bin
@@ -63,7 +64,6 @@ aliases:
             echo "cached"
           else
             git clone https://github.com/haskell/haskell-ide-engine ~/haskell-ide-engine
-            (cd ~/haskell-ide-engine; git checkout 0.7.0.0)
           fi
           (cd ~/haskell-ide-engine; ./install.hs submodules)
           (cd ~/haskell-ide-engine; ./install.hs cabal)
@@ -71,17 +71,17 @@ aliases:
       run:
         name: Build hie dependencies
         command: |
-          (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-8.6.4.yaml ghc-exactprint)
-          (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-8.6.4.yaml cabal-helper)
-          (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-8.6.4.yaml HaRe)
-          (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-8.6.4.yaml hie-plugin-api)
-          (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-8.6.4.yaml ghc-mod)
+          (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml ghc-exactprint)
+          (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml cabal-helper)
+          (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml HaRe)
+          (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml hie-plugin-api)
+          (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml ghc-mod)
   - &build_hie
       run:
         name: Build hie for test
         command: |
-          (cd ~/haskell-ide-engine; (which hie || ./install.hs hie-8.6.4))
-          (cd ~/haskell-ide-engine; ./install.hs build-doc-8.6.4)
+          (cd ~/haskell-ide-engine; (which hie || ./install.hs hie-"$GHC_VERSION"))
+          (cd ~/haskell-ide-engine; ./install.hs build-doc-"$GHC_VERSION")
   - &default
       docker:
         - image: quay.io/haskell_works/stack-build-minimal
@@ -98,6 +98,7 @@ aliases:
         - run:
             name: Install dependencies
             command: |
+              echo $STACK_YAML
               if [[ -z "$STACK_YAML" ]]
               then
                 stack --stack-yaml=$STACK_YAML test -j 1 --only-dependencies --no-terminal --no-run-tests
@@ -134,11 +135,13 @@ jobs:
   stack-8.6.4:
     environment:
       - *default_env
+      - GHC_VERSION: 8.6.4
       - STACK_YAML: stack-8.6.4.yaml
     <<: *default
   stack-8.4.4:
     environment:
       - *default_env
+      - GHC_VERSION: 8.4.4
       - STACK_YAML: stack-8.4.4.yaml
     <<: *default
 
