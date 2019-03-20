@@ -92,7 +92,7 @@ aliases:
         - *install_nvim
         - *restore_build_results
         - *display_stack_version
-        # - *build_hie_pre
+        - *build_hie_pre
         # - *build_hie_deps
         - *build_hie
         - run:
