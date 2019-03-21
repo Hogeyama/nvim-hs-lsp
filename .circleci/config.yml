@@ -121,7 +121,7 @@ aliases:
               else
                 stack --stack-yaml=$STACK_YAML test --fast --no-terminal || cat /tmp/test-hie.log && exit 1
               fi
-              kill `pgrep nvim`
+              # kill `pgrep nvim`
         - run:
             name: Run stack test --pedantic --no-terminal
             command: |
@@ -158,10 +158,10 @@ workflows:
               only:
                 - master
                 - circleci-test
-      # - stack-8.4.4:
-      #     filters:
-      #       branches:
-      #         only:
-      #           - master
-      #           - circleci-test
+      - stack-8.4.4:
+          filters:
+            branches:
+              only:
+                - master
+                - circleci-test
 
