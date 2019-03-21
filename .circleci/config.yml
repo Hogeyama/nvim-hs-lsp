@@ -2,7 +2,7 @@ version: 2
 
 aliases:
   - &default_env
-    CACHE_KEY: 0
+    CACHE_KEY: 1
     SUB_CACHE_KEY: 6
     STACK_VERSION: 1.7.1
   - &create_cache_key_file
