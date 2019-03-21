@@ -3,7 +3,7 @@ version: 2
 aliases:
   - &default_env
     CACHE_KEY: TMP
-    SUB_CACHE_KEY: 6
+    SUB_CACHE_KEY: 7
     STACK_VERSION: 1.9.1
   - &create_cache_key_file
     run:
