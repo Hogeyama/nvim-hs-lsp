@@ -65,9 +65,10 @@ aliases:
           else
             git clone https://github.com/haskell/haskell-ide-engine ~/haskell-ide-engine
           fi
+          (cd ~/haskell-ide-engine; git checkout ec5e34c)
           (cd ~/haskell-ide-engine; ./install.hs submodules)
           (cd ~/haskell-ide-engine; ./install.hs cabal)
-  - &build_hie_deps # 分けてbuildしないとメモリを使い果たして死ぬ
+  - &build_hie_deps # 分けてbuildしないとメモリを使い果たして死ぬので悲しい気持ちになります
       run:
         name: Build hie dependencies
         command: |
@@ -103,9 +104,9 @@ aliases:
               echo $STACK_YAML
               if [[ -z "$STACK_YAML" ]]
               then
-                stack --stack-yaml=$STACK_YAML test -j 1 --only-dependencies --no-terminal --no-run-tests
-              else
                 echo "TODO: test with cabal" && exit 1
+              else
+                stack --stack-yaml=$STACK_YAML test -j 1 --only-dependencies --no-terminal --no-run-tests
               fi
             no_output_timeout: 120m
         - run:
@@ -116,9 +117,9 @@ aliases:
               nvim --headless &
               if [[ -z "$STACK_YAML" ]]
               then
-                stack --stack-yaml=$STACK_YAML test --fast --no-terminal || cat /tmp/test-hie.log && exit 1
-              else
                 echo "TODO: test with cabal" && exit 1
+              else
+                stack --stack-yaml=$STACK_YAML test --fast --no-terminal || cat /tmp/test-hie.log && exit 1
               fi
               kill `pgrep nvim`
         - run:
@@ -126,10 +127,10 @@ aliases:
             command: |
               if [[ -z "$STACK_YAML" ]]
               then
+                echo "TODO: test with cabal" && exit 1
+              else
                 stack --stack-yaml=$STACK_YAML clean
                 stack --stack-yaml=$STACK_YAML test --pedantic --fast --no-run-tests --no-terminal
-              else
-                echo "TODO: test with cabal" && exit 1
               fi
         - *save_build_results
 
@@ -157,10 +158,10 @@ workflows:
               only:
                 - master
                 - circleci-test
-      - stack-8.4.4:
-          filters:
-            branches:
-              only:
-                - master
-                - circleci-test
+      # - stack-8.4.4:
+      #     filters:
+      #       branches:
+      #         only:
+      #           - master
+      #           - circleci-test
 
