@@ -2,8 +2,8 @@ version: 2
 
 aliases:
   - &default_env
-    CACHE_KEY: TMP
-    SUB_CACHE_KEY: 11
+    CACHE_KEY: TMP2
+    SUB_CACHE_KEY: 1
     STACK_VERSION: 1.9.1
     PRE_CACHE_KEY: TMP
   - &create_cache_key_file
@@ -13,25 +13,20 @@ aliases:
         echo $CIRCLE_JOB
         echo $CACHE_KEY     > cache_key
         echo $SUB_CACHE_KEY > sub_cache_key
-        cat  $STACK_YAML    > .stack.yaml || touch .stack.yaml
+        cat  $STACK_YAML    > stack-yaml.txt || touch stack-yaml.txt
         echo $PRE_CACHE_KEY > pre_cache_key
   - &restore_build_results
     restore_cache:
       keys:
-        - cache-{{ checksum "cache_key" }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum ".stack.yaml" }}-{{ checksum "package.yaml" }}-{{ checksum "sub_cache_key" }}
-        - cache-{{ checksum "cache_key" }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum ".stack.yaml" }}-{{ checksum "package.yaml" }}
-        - cache-{{ checksum "cache_key" }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum ".stack.yaml" }}
+        - cache-{{ checksum "cache_key" }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "stack-yaml.txt" }}-{{ checksum "package.yaml" }}-{{ checksum "sub_cache_key" }}
+        - cache-{{ checksum "cache_key" }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "stack-yaml.txt" }}-{{ checksum "package.yaml" }}
+        - cache-{{ checksum "cache_key" }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "stack-yaml.txt" }}
         - cache-{{ checksum "cache_key" }}-{{ .Environment.CIRCLE_JOB }}
-
-        - cache-{{ checksum "cache_key" }}-{{ checksum ".stack.yaml" }}-{{ checksum "package.yaml" }}-{{ checksum "sub_cache_key" }}
-        - cache-{{ checksum "cache_key" }}-{{ checksum ".stack.yaml" }}-{{ checksum "package.yaml" }}
-        - cache-{{ checksum "cache_key" }}-{{ checksum ".stack.yaml" }}
-        - cache-{{ checksum "cache_key" }}
         - cache-{{ checksum "cache_key" }}
   - &save_build_results
       save_cache:
         key:
-          cache-{{ checksum "cache_key" }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum ".stack.yaml" }}-{{ checksum "package.yaml" }}-{{ checksum "sub_cache_key" }}
+          cache-{{ checksum "cache_key" }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "stack-yaml.txt" }}-{{ checksum "package.yaml" }}-{{ checksum "sub_cache_key" }}
         paths:
           - ~/haskell-ide-engine
           - ~/.local/bin
