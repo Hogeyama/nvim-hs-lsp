@@ -76,20 +76,20 @@ aliases:
           cd ~/haskell-ide-engine
           if [[ -z "$STACK_YAML" ]]
           then
+            cabal new-build ghc-exactprint
+            cabal new-build cabal-helper
+            cabal new-build HaRe
+            cabal new-build hie-plugin-api
+            cabal new-build ghc-mod
+            cabal new-build
+          else
+            # stack clean --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml
             stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml ghc-exactprint
             stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml cabal-helper
             stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml HaRe
             stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml hie-plugin-api
             stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml ghc-mod
             stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml
-          else
-            # (cd ~/haskell-ide-engine; stack clean --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml)
-            cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml ghc-exactprint
-            cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml cabal-helper
-            cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml HaRe
-            cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml hie-plugin-api
-            cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml ghc-mod
-            cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml
           fi
           cd $WORKING_DIRECTORY
   - &build_hie
