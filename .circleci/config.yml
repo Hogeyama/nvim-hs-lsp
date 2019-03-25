@@ -108,6 +108,8 @@ aliases:
   - &default
       docker:
         - image: quay.io/haskell_works/stack-build-minimal
+      working_directory:
+        ~
       steps:
         - checkout
         - *create_cache_key_file
