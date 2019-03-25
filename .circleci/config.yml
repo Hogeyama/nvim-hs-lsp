@@ -108,7 +108,7 @@ aliases:
   - &default
       docker:
         - image: quay.io/haskell_works/stack-build-minimal
-      working_directory: null
+      working_directory:
         ~
       steps:
         - checkout
