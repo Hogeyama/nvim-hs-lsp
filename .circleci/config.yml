@@ -127,7 +127,7 @@ aliases:
               then
                 cabal new-install hpack
                 hpack
-                cabal new-build -j 1 --dependencies-only
+                cabal new-build -j1 --dependencies-only
               else
                 stack --stack-yaml=$STACK_YAML test -j 1 --only-dependencies --no-terminal --no-run-tests
               fi
