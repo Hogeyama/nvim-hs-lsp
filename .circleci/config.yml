@@ -164,6 +164,8 @@ jobs:
       - *default_env
       - GHC_VERSION: 8.6.4
       - STACK_YAML: stack-8.6.4.yaml
+    working_directory:
+      ~
     docker:
       - image: quay.io/haskell_works/stack-build-minimal
     <<: *default
@@ -172,6 +174,8 @@ jobs:
       - *default_env
       - GHC_VERSION: 8.4.4
       - STACK_YAML: stack-8.4.4.yaml
+    working_directory:
+      ~
     docker:
       - image: quay.io/haskell_works/stack-build-minimal
     <<: *default
@@ -179,6 +183,8 @@ jobs:
     environment:
       - *default_env
       - GHC_VERSION: 8.4.4
+    working_directory:
+      ~
     docker:
       - image: quay.io/haskell_works/ghc-8.4.4
     <<: *default
