@@ -15,16 +15,9 @@ aliases:
   - &restore_build_results
     restore_cache:
       keys:
-        - cache-{{ checksum "cache_key" }}-{{ .ENVIRONMENT.CIRCLECI_JOB }}-{{ checksum ".stack.yaml" }}-{{ checksum "package.yaml" }}-{{ checksum "sub_cache_key" }}
-        - cache-{{ checksum "cache_key" }}-{{ .ENVIRONMENT.CIRCLECI_JOB }}-{{ checksum ".stack.yaml" }}-{{ checksum "package.yaml" }}
-        - cache-{{ checksum "cache_key" }}-{{ .ENVIRONMENT.CIRCLECI_JOB }}-{{ checksum ".stack.yaml" }}
-        - cache-{{ checksum "cache_key" }}-{{ .ENVIRONMENT.CIRCLECI_JOB }}
-
         - cache-{{ checksum "cache_key" }}-{{ checksum ".stack.yaml" }}-{{ checksum "package.yaml" }}-{{ checksum "sub_cache_key" }}
         - cache-{{ checksum "cache_key" }}-{{ checksum ".stack.yaml" }}-{{ checksum "package.yaml" }}
         - cache-{{ checksum "cache_key" }}-{{ checksum ".stack.yaml" }}
-        - cache-{{ checksum "cache_key" }}-{{ checksum ".stack.yaml" }}
-
         - cache-{{ checksum "cache_key" }}
   - &save_build_results
       save_cache:
@@ -180,12 +173,12 @@ jobs:
     docker:
       - image: quay.io/haskell_works/stack-build-minimal
     <<: *default
-  cabal-8.6.4:
+  cabal-8.4.4:
     environment:
       - *default_env
-      - GHC_VERSION: 8.6.4
+      - GHC_VERSION: 8.4.4
     docker:
-      - image: quay.io/haskell_works/ghc-8.6.4
+      - image: quay.io/haskell_works/ghc-8.4.4
     <<: *default
 
 workflows:
@@ -198,7 +191,7 @@ workflows:
               only:
                 - master
                 - circleci-test
-      - cabal-8.6.4:
+      - cabal-8.4.4:
           filters:
             branches:
               only:
