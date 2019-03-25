@@ -46,6 +46,7 @@ aliases:
           export PATH=~/.cabal/bin:~/.local/bin:$PATH
           mkdir -p ~/.local/bin
           echo $PATH
+          export WORKING_DIRECTORY=`pwd` # 何故かworking_directoryが効かない
   - &install_nvim
       run:
         name: Install Neovim
@@ -90,7 +91,7 @@ aliases:
             cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml ghc-mod
             cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml
           fi
-          cd $CIRCLE_WORKING_DIRECTORY
+          cd $WORKING_DIRECTORY
   - &build_hie
       run:
         name: Build hie for test
@@ -104,12 +105,10 @@ aliases:
             which hie || ./install.hs hie-"$GHC_VERSION"
             ./install.hs build-doc-"$GHC_VERSION"
           fi
-          cd $CIRCLE_WORKING_DIRECTORY
+          cd $WORKING_DIRECTORY
   - &default
       docker:
         - image: quay.io/haskell_works/stack-build-minimal
-      working_directory:
-        ~
       steps:
         - checkout
         - *create_cache_key_file
@@ -164,8 +163,6 @@ jobs:
       - *default_env
       - GHC_VERSION: 8.6.4
       - STACK_YAML: stack-8.6.4.yaml
-    working_directory:
-      ~
     docker:
       - image: quay.io/haskell_works/stack-build-minimal
     <<: *default
@@ -174,8 +171,6 @@ jobs:
       - *default_env
       - GHC_VERSION: 8.4.4
       - STACK_YAML: stack-8.4.4.yaml
-    working_directory:
-      ~
     docker:
       - image: quay.io/haskell_works/stack-build-minimal
     <<: *default
@@ -183,8 +178,6 @@ jobs:
     environment:
       - *default_env
       - GHC_VERSION: 8.4.4
-    working_directory:
-      ~
     docker:
       - image: quay.io/haskell_works/ghc-8.4.4
     <<: *default
