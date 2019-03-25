@@ -119,7 +119,7 @@ aliases:
               then
                 echo "TODO: test with cabal" && exit 1
               else
-                stack --stack-yaml=$STACK_YAML test --fast --no-terminal || cat /tmp/test-hie.log && exit 1
+                stack --stack-yaml=$STACK_YAML test --fast --no-terminal || (cat /tmp/test-hie.log && exit 1)
               fi
               # kill `pgrep nvim`
         - run:
