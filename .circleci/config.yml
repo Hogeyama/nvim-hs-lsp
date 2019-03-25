@@ -3,7 +3,7 @@ version: 2
 aliases:
   - &default_env
     CACHE_KEY: TMP
-    SUB_CACHE_KEY: 8
+    SUB_CACHE_KEY: _8
     STACK_VERSION: 1.9.1
   - &create_cache_key_file
     run:
@@ -72,7 +72,7 @@ aliases:
       run:
         name: Build hie dependencies
         command: |
-          (cd ~/haskell-ide-engine; stack clean --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml)
+          # (cd ~/haskell-ide-engine; stack clean --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml)
           (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml ghc-exactprint)
           (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml cabal-helper)
           (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml HaRe)
