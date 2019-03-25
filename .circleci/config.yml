@@ -41,13 +41,9 @@ aliases:
     run:
       name: Display stack version
       command: |
-        if [[ -z "$STACK_YAML" ]]
-        then
-          echo "skip"
-        else
-          stack --no-terminal upgrade --binary-version=$STACK_VERSION
-          stack --no-terminal --version
-        fi
+        which stack || (curl -sSL https://get.haskellstack.org/ | sh)
+        stack --no-terminal upgrade --binary-version=$STACK_VERSION
+        stack --no-terminal --version
   - &set_path
       run:
         name: Set PATH
