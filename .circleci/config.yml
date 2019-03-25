@@ -31,7 +31,7 @@ aliases:
   - &save_build_results
       save_cache:
         key:
-        - cache-{{ checksum "cache_key" }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum ".stack.yaml" }}-{{ checksum "package.yaml" }}-{{ checksum "sub_cache_key" }}
+          cache-{{ checksum "cache_key" }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum ".stack.yaml" }}-{{ checksum "package.yaml" }}-{{ checksum "sub_cache_key" }}
         paths:
           - ~/haskell-ide-engine
           - ~/.local/bin
