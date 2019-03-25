@@ -15,9 +15,16 @@ aliases:
   - &restore_build_results
     restore_cache:
       keys:
+        - cache-{{ checksum "cache_key" }}-{{ .ENVIRONMENT.CIRCLECI_JOB }}-{{ checksum ".stack.yaml" }}-{{ checksum "package.yaml" }}-{{ checksum "sub_cache_key" }}
+        - cache-{{ checksum "cache_key" }}-{{ .ENVIRONMENT.CIRCLECI_JOB }}-{{ checksum ".stack.yaml" }}-{{ checksum "package.yaml" }}
+        - cache-{{ checksum "cache_key" }}-{{ .ENVIRONMENT.CIRCLECI_JOB }}-{{ checksum ".stack.yaml" }}
+        - cache-{{ checksum "cache_key" }}-{{ .ENVIRONMENT.CIRCLECI_JOB }}
+
         - cache-{{ checksum "cache_key" }}-{{ checksum ".stack.yaml" }}-{{ checksum "package.yaml" }}-{{ checksum "sub_cache_key" }}
         - cache-{{ checksum "cache_key" }}-{{ checksum ".stack.yaml" }}-{{ checksum "package.yaml" }}
         - cache-{{ checksum "cache_key" }}-{{ checksum ".stack.yaml" }}
+        - cache-{{ checksum "cache_key" }}-{{ checksum ".stack.yaml" }}
+
         - cache-{{ checksum "cache_key" }}
   - &save_build_results
       save_cache:
@@ -72,19 +79,39 @@ aliases:
       run:
         name: Build hie dependencies
         command: |
-          # (cd ~/haskell-ide-engine; stack clean --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml)
-          (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml ghc-exactprint)
-          (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml cabal-helper)
-          (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml HaRe)
-          (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml hie-plugin-api)
-          (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml ghc-mod)
-          (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml)
+          cd ~/haskell-ide-engine
+          if [[ -z "$STACK_YAML" ]]
+          then
+            stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml ghc-exactprint
+            stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml cabal-helper
+            stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml HaRe
+            stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml hie-plugin-api
+            stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml ghc-mod
+            stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml
+          else
+            # (cd ~/haskell-ide-engine; stack clean --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml)
+            cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml ghc-exactprint
+            cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml cabal-helper
+            cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml HaRe
+            cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml hie-plugin-api
+            cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml ghc-mod
+            cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml
+          fi
+          cd $CIRCLE_WORKING_DIRECTORY
   - &build_hie
       run:
         name: Build hie for test
         command: |
-          (cd ~/haskell-ide-engine; (which hie || ./install.hs hie-"$GHC_VERSION"))
-          (cd ~/haskell-ide-engine; ./install.hs build-doc-"$GHC_VERSION")
+          cd ~/haskell-ide-engine
+          if [[ -z "$STACK_YAML" ]]
+          then
+            which hie || ./install.hs cabal-hie-"$GHC_VERSION"
+            ./install.hs cabal-build-doc-"$GHC_VERSION"
+          else
+            which hie || ./install.hs hie-"$GHC_VERSION"
+            ./install.hs build-doc-"$GHC_VERSION"
+          fi
+          cd $CIRCLE_WORKING_DIRECTORY
   - &default
       docker:
         - image: quay.io/haskell_works/stack-build-minimal
@@ -104,7 +131,9 @@ aliases:
               echo $STACK_YAML
               if [[ -z "$STACK_YAML" ]]
               then
-                echo "TODO: test with cabal" && exit 1
+                cabal new-install hpack
+                hpack
+                cabal new-build -j 1 --dependencies-only
               else
                 stack --stack-yaml=$STACK_YAML test -j 1 --only-dependencies --no-terminal --no-run-tests
               fi
@@ -117,7 +146,7 @@ aliases:
               nvim --headless &
               if [[ -z "$STACK_YAML" ]]
               then
-                echo "TODO: test with cabal" && exit 1
+                cabal new-test || (cat /tmp/test-hie.log && exit 1)
               else
                 stack --stack-yaml=$STACK_YAML test --fast --no-terminal || (cat /tmp/test-hie.log && exit 1)
               fi
@@ -127,7 +156,7 @@ aliases:
             command: |
               if [[ -z "$STACK_YAML" ]]
               then
-                echo "TODO: test with cabal" && exit 1
+                echo "skip"
               else
                 stack --stack-yaml=$STACK_YAML clean
                 stack --stack-yaml=$STACK_YAML test --pedantic --fast --no-run-tests --no-terminal
@@ -140,12 +169,23 @@ jobs:
       - *default_env
       - GHC_VERSION: 8.6.4
       - STACK_YAML: stack-8.6.4.yaml
+    docker:
+      - image: quay.io/haskell_works/stack-build-minimal
     <<: *default
   stack-8.4.4:
     environment:
       - *default_env
       - GHC_VERSION: 8.4.4
       - STACK_YAML: stack-8.4.4.yaml
+    docker:
+      - image: quay.io/haskell_works/stack-build-minimal
+    <<: *default
+  cabal-8.6.4:
+    environment:
+      - *default_env
+      - GHC_VERSION: 8.6.4
+    docker:
+      - image: quay.io/haskell_works/ghc-8.6.4
     <<: *default
 
 workflows:
@@ -158,10 +198,16 @@ workflows:
               only:
                 - master
                 - circleci-test
-      - stack-8.4.4:
+      - cabal-8.6.4:
           filters:
             branches:
               only:
                 - master
                 - circleci-test
+      # - stack-8.4.4:
+      #     filters:
+      #       branches:
+      #         only:
+      #           - master
+      #           - circleci-test
 
