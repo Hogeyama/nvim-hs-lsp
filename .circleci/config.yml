@@ -133,7 +133,7 @@ aliases:
               stack --stack-yaml=$STACK_YAML clean
               stack --stack-yaml=$STACK_YAML test --pedantic --fast --no-run-tests --no-terminal
         - *save_build_results
-  - &default_cabal # only build
+  - &cabal_default # only build
       steps:
         - checkout
         - *create_cache_key_file
