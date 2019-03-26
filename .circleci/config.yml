@@ -22,7 +22,7 @@ aliases:
         - cache-{{ checksum "cache_key" }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "stack-yaml.txt" }}-{{ checksum "package.yaml" }}
         - cache-{{ checksum "cache_key" }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "stack-yaml.txt" }}
         - cache-{{ checksum "cache_key" }}-{{ .Environment.CIRCLE_JOB }}
-        - cache-{{ checksum "cache_key" }}
+        # - cache-{{ checksum "cache_key" }}
   - &save_build_results
       save_cache:
         key:
@@ -41,9 +41,13 @@ aliases:
     run:
       name: Display stack version
       command: |
-        which stack || (curl -sSL https://get.haskellstack.org/ | sh)
-        stack --no-terminal upgrade --binary-version=$STACK_VERSION
-        stack --no-terminal --version
+        if [[ -z "$STACK_YAML" ]]
+        then
+          echo "skip"
+        else
+          stack --no-terminal upgrade --binary-version=$STACK_VERSION
+          stack --no-terminal --version
+        fi
   - &set_path
       run:
         name: Set PATH
@@ -65,15 +69,27 @@ aliases:
       run:
         name: Prepare for building hie
         command: |
+          cd ~/haskell-ide-engine
           if [ -d ~/haskell-ide-engine ]
           then
             echo "cached"
           else
             git clone https://github.com/haskell/haskell-ide-engine ~/haskell-ide-engine
           fi
-          (cd ~/haskell-ide-engine; git checkout ec5e34c)
-          (cd ~/haskell-ide-engine; ./install.hs submodules)
-          (cd ~/haskell-ide-engine; ./install.hs cabal)
+          git checkout ec5e34c
+          if [[ -z "$STACK_YAML" ]]
+          then
+            # XXX dirty
+            git submodule sync --recursive
+            git submodule update --init --recursive
+            cabal update
+            cabal install Cabal-2.4.1.0
+          else
+            ./install.hs submodules
+            ./install.hs cabal
+          fi
+
+          cd $WORKING_DIRECTORY
   - &build_hie_deps # 分けてbuildしないとメモリを使い果たして死ぬので悲しい気持ちになります
       run:
         name: Build hie dependencies
@@ -191,19 +207,19 @@ workflows:
   version: 2
   all:
     jobs:
-      - stack-8.6.4:
-          filters:
-            branches:
-              only:
-                - master
-                - circleci-test
+      # - stack-8.6.4:
+      #     filters:
+      #       branches:
+      #         only:
+      #           - master
+      #           - circleci-test
+      # - stack-8.4.4:
+      #     filters:
+      #       branches:
+      #         only:
+      #           - master
+      #           - circleci-test
       - cabal-8.4.4:
-          filters:
-            branches:
-              only:
-                - master
-                - circleci-test
-      - stack-8.4.4:
           filters:
             branches:
               only:
