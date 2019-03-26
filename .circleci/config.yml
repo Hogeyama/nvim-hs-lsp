@@ -2,10 +2,10 @@ version: 2
 
 aliases:
   - &default_env
-    CACHE_KEY: TMP2
+    CACHE_KEY: 2
     SUB_CACHE_KEY: 1
     STACK_VERSION: 1.9.1
-    PRE_CACHE_KEY: TMP
+    PRE_CACHE_KEY: 2
   - &create_cache_key_file
     run:
       name: Create cache control key file
@@ -22,7 +22,6 @@ aliases:
         - cache-{{ checksum "cache_key" }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "stack-yaml.txt" }}-{{ checksum "package.yaml" }}
         - cache-{{ checksum "cache_key" }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "stack-yaml.txt" }}
         - cache-{{ checksum "cache_key" }}-{{ .Environment.CIRCLE_JOB }}
-        # - cache-{{ checksum "cache_key" }}
   - &save_build_results
       save_cache:
         key:
