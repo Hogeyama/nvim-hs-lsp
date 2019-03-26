@@ -38,16 +38,11 @@ aliases:
         when:
           always
   - &display_stack_version
-    run:
-      name: Display stack version
-      command: |
-        if [[ -z "$STACK_YAML" ]]
-        then
-          echo "skip"
-        else
+      run:
+        name: Display stack version
+        command: |
           stack --no-terminal upgrade --binary-version=$STACK_VERSION
           stack --no-terminal --version
-        fi
   - &set_path
       run:
         name: Set PATH
@@ -75,64 +70,36 @@ aliases:
           else
             git clone https://github.com/haskell/haskell-ide-engine ~/haskell-ide-engine
           fi
-
   - &build_hie_pre
       run:
         name: Prepare for building hie
         command: |
           cd ~/haskell-ide-engine
           git checkout ec5e34c
-          if [[ -z "$STACK_YAML" ]]
-          then
-            # XXX dirty
-            git submodule sync --recursive
-            git submodule update --init --recursive
-            cabal update
-            cabal install Cabal-2.4.1.0
-          else
-            ./install.hs submodules
-            ./install.hs cabal
-          fi
-
+          ./install.hs submodules
+          ./install.hs cabal
           cd $WORKING_DIRECTORY
-  - &build_hie_deps # 分けてbuildしないとメモリを使い果たして死ぬので悲しい気持ちになります
+  - &build_hie # 分けてbuildしないとメモリを使い果たして死ぬので悲しい気持ちになります
       run:
         name: Build hie dependencies
         command: |
           cd ~/haskell-ide-engine
-          if [[ -z "$STACK_YAML" ]]
-          then
-            cabal new-build ghc-exactprint
-            cabal new-build cabal-helper
-            cabal new-build HaRe
-            cabal new-build hie-plugin-api
-            cabal new-build ghc-mod
-            cabal new-build
-          else
-            # stack clean --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml
-            stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml ghc-exactprint
-            stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml cabal-helper
-            stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml HaRe
-            stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml hie-plugin-api
-            stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml ghc-mod
-            stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml
-          fi
+          stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml ghc-exactprint
+          stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml cabal-helper
+          stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml HaRe
+          stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml hie-plugin-api
+          stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml ghc-mod
+          stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml
           cd $WORKING_DIRECTORY
-  - &build_hie
+  - &install_hie
       run:
         name: Build hie for test
         command: |
           cd ~/haskell-ide-engine
-          if [[ -z "$STACK_YAML" ]]
-          then
-            which hie || ./install.hs cabal-hie-"$GHC_VERSION"
-            ./install.hs cabal-build-doc-"$GHC_VERSION"
-          else
-            which hie || ./install.hs hie-"$GHC_VERSION"
-            ./install.hs build-doc-"$GHC_VERSION"
-          fi
+          which hie || ./install.hs hie-"$GHC_VERSION"
+          ./install.hs build-doc-"$GHC_VERSION"
           cd $WORKING_DIRECTORY
-  - &default
+  - &stack_default
       docker:
         - image: quay.io/haskell_works/stack-build-minimal
       steps:
@@ -142,22 +109,16 @@ aliases:
         - *install_nvim
         - *restore_build_results
         - *display_stack_version
+        # install hie
         - *fetch_hie_repo
         - *build_hie_pre
-        - *build_hie_deps
         - *build_hie
+        - *install_hie
+        # main
         - run:
             name: Install dependencies
             command: |
-              echo $STACK_YAML
-              if [[ -z "$STACK_YAML" ]]
-              then
-                cabal new-install hpack
-                hpack
-                cabal new-build -j1 --dependencies-only
-              else
-                stack --stack-yaml=$STACK_YAML test -j 1 --only-dependencies --no-terminal --no-run-tests
-              fi
+              stack --stack-yaml=$STACK_YAML test -j 1 --only-dependencies --no-terminal --no-run-tests
             no_output_timeout: 120m
         - run:
             name: Run stack test
@@ -165,23 +126,27 @@ aliases:
               export NVIM_LISTEN_ADDRESS=~/nvim_listen_address
               export VIM=./squashfs-root/usr/share/nvim
               nvim --headless &
-              if [[ -z "$STACK_YAML" ]]
-              then
-                cabal new-test || (cat /tmp/test-hie.log && exit 1)
-              else
-                stack --stack-yaml=$STACK_YAML test --fast --no-terminal || (cat /tmp/test-hie.log && exit 1)
-              fi
-              # kill `pgrep nvim`
+              stack --stack-yaml=$STACK_YAML test --fast --no-terminal || (cat /tmp/test-hie.log && exit 1)
         - run:
             name: Run stack test --pedantic --no-terminal
             command: |
-              if [[ -z "$STACK_YAML" ]]
-              then
-                echo "skip"
-              else
-                stack --stack-yaml=$STACK_YAML clean
-                stack --stack-yaml=$STACK_YAML test --pedantic --fast --no-run-tests --no-terminal
-              fi
+              stack --stack-yaml=$STACK_YAML clean
+              stack --stack-yaml=$STACK_YAML test --pedantic --fast --no-run-tests --no-terminal
+        - *save_build_results
+  - &default_cabal # only build
+      steps:
+        - checkout
+        - *create_cache_key_file
+        - *set_path
+        - *restore_build_results
+        - run:
+            name: Build
+            command: |
+              cabal update
+              cabal new-install hpack
+              hpack
+              cabal new-build
+            no_output_timeout: 120m
         - *save_build_results
 
 jobs:
@@ -192,7 +157,7 @@ jobs:
       - STACK_YAML: stack-8.6.4.yaml
     docker:
       - image: quay.io/haskell_works/stack-build-minimal
-    <<: *default
+    <<: *stack_default
   stack-8.4.4:
     environment:
       - *default_env
@@ -200,31 +165,31 @@ jobs:
       - STACK_YAML: stack-8.4.4.yaml
     docker:
       - image: quay.io/haskell_works/stack-build-minimal
-    <<: *default
+    <<: *stack_default
   cabal-8.4.4:
     environment:
       - *default_env
       - GHC_VERSION: 8.4.4
     docker:
       - image: quay.io/haskell_works/ghc-8.4.4
-    <<: *default
+    <<: *cabal_default
 
 workflows:
   version: 2
   all:
     jobs:
-      # - stack-8.6.4:
-      #     filters:
-      #       branches:
-      #         only:
-      #           - master
-      #           - circleci-test
-      # - stack-8.4.4:
-      #     filters:
-      #       branches:
-      #         only:
-      #           - master
-      #           - circleci-test
+      - stack-8.6.4:
+          filters:
+            branches:
+              only:
+                - master
+                - circleci-test
+      - stack-8.4.4:
+          filters:
+            branches:
+              only:
+                - master
+                - circleci-test
       - cabal-8.4.4:
           filters:
             branches:
