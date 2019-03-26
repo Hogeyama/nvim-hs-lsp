@@ -65,17 +65,22 @@ aliases:
           ./nvim --appimage-extract
           mv ./squashfs-root/usr/bin/nvim $HOME/.local/bin
           nvim --version
-  - &build_hie_pre
+  - &fetch_hie_repo
       run:
-        name: Prepare for building hie
+        name: Fetch hie repository
         command: |
-          cd ~/haskell-ide-engine
           if [ -d ~/haskell-ide-engine ]
           then
             echo "cached"
           else
             git clone https://github.com/haskell/haskell-ide-engine ~/haskell-ide-engine
           fi
+
+  - &build_hie_pre
+      run:
+        name: Prepare for building hie
+        command: |
+          cd ~/haskell-ide-engine
           git checkout ec5e34c
           if [[ -z "$STACK_YAML" ]]
           then
@@ -137,6 +142,7 @@ aliases:
         - *install_nvim
         - *restore_build_results
         - *display_stack_version
+        - *fetch_hie_repo
         - *build_hie_pre
         - *build_hie_deps
         - *build_hie
