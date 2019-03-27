@@ -140,8 +140,7 @@ aliases:
             name: Build
             command: |
               cabal update
-              cabal new-install hpack
-              hpack
+              (which hpack || cabal new-install hpack) && hpack
               cabal new-build
             no_output_timeout: 120m
         - *save_build_results
