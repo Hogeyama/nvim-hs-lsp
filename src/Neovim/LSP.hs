@@ -19,29 +19,32 @@ plugin = do
       , exports =
               [
               -- Notification
-                $(command' 'nvimHsLspInitialize)      [ "async"           ]
-              , $(command' 'nvimHsLspStartServer)     [ "async"           ]
-              , $(command' 'nvimHsLspOpenBuffer)      [ "async","!"       ]
-              , $(command' 'nvimHsLspCloseBuffer)     [ "async"           ]
-              , $(command' 'nvimHsLspChangeBuffer)    [ "async","!"       ]
-              , $(command' 'nvimHsLspSaveBuffer)      [ "async","!"       ]
-              , $(command' 'nvimHsLspExit)            [ "async"           ]
-              , $(command' 'nvimHsLspStopServer)      [ "async"           ]
+                $(command' 'nvimHsLspInitialize)        [ "async"           ]
+              , $(command' 'nvimHsLspStartServer)       [ "async"           ]
+              , $(command' 'nvimHsLspOpenBuffer)        [ "async","!"       ]
+              , $(command' 'nvimHsLspCloseBuffer)       [ "async"           ]
+              , $(command' 'nvimHsLspChangeBuffer)      [ "async","!"       ]
+              , $(command' 'nvimHsLspSaveBuffer)        [ "async","!"       ]
+              , $(command' 'nvimHsLspExit)              [ "async"           ]
+              , $(command' 'nvimHsLspStopServer)        [ "async"           ]
               -- Request
-              , $(command' 'nvimHsLspHover)           [ "async"           ]
-              , $(command' 'nvimHsLspInfo)            [ "async"           ]
-              , $(command' 'nvimHsLspDefinition)      [ "async"           ]
-              , $(command' 'nvimHsLspCodeAction)      [                   ]
-              , $(command' 'nvimHsLspFormatting)      [ "async", "!", "%" ]
-              , $(command' 'nvimHsLspReferences)      [ "async"           ]
-              , $(command' 'nvimHsLspHieCaseSplit)    [ "async"           ]
-              , $(command' 'nvimHsLspDocumentSymbol)  [ "async"           ]
-              , $(command' 'nvimHsLspWorkspaceSymbol) [ "async"           ]
-              , $(command' 'nvimHsLspRename)          [ "sync"            ]
-              , $(command' 'nvimHsLspHieHsImport)     [ "sync"            ]
+              , $(command' 'nvimHsLspHover)             [ "async"           ]
+              , $(command' 'nvimHsLspInfo)              [ "async"           ]
+              , $(command' 'nvimHsLspDefinition)        [ "async"           ]
+              , $(command' 'nvimHsLspCodeAction)        [                   ]
+              , $(command' 'nvimHsLspFormatting)        [ "async", "!", "%" ]
+              , $(command' 'nvimHsLspReferences)        [ "async"           ]
+              , $(command' 'nvimHsLspHieCaseSplit)      [ "async"           ]
+              , $(command' 'nvimHsLspDocumentSymbol)    [ "async"           ]
+              , $(command' 'nvimHsLspWorkspaceSymbol)   [ "async"           ]
+              , $(command' 'nvimHsLspRename)            [ "sync"            ]
+              , $(command' 'nvimHsLspHieHsImport)       [ "sync"            ]
               -- Other
-              , $(command' 'nvimHsLspLoadQuickfix)    [ "async", "!"      ]
-              --
+              , $(command' 'nvimHsLspLoadQuickfix)      [ "async", "!"      ]
+              , $(command' 'nvimHsLspToggleQfAutoOpen)  [ "async", "!"      ]
+              , $(command' 'nvimHsLspEnableQfAutoOpen)  [ "async", "!"      ]
+              , $(command' 'nvimHsLspDisableQfAutoOpen) [ "async", "!"      ]
+              -- Completion
               , $(function' 'nvimHsLspComplete)       Sync
               , $(function' 'nvimHsLspAsyncComplete)  Async
               ]

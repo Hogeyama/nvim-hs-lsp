@@ -361,3 +361,25 @@ nvimHsLspRename _ newName = whenInitialized $ focusLang' False $ whenAlreadyOpen
     pos <- fromNvimPos <$> getNvimPos
     waitCallback $ textDocumentRename uri pos newName
 
+-------------------------------------------------------------------------------
+-- Config
+-------------------------------------------------------------------------------
+
+nvimHsLspToggleQfAutoOpen :: CommandArguments -> NeovimLsp ()
+nvimHsLspToggleQfAutoOpen _ = whenInitialized $ focusLang' False $ do
+    modifyContext $ field @"lspConfig"
+                  . field @"autoLoadQuickfix"
+                  %~ not
+
+nvimHsLspEnableQfAutoOpen :: CommandArguments -> NeovimLsp ()
+nvimHsLspEnableQfAutoOpen _ = whenInitialized $ focusLang' False $ do
+    modifyContext $ field @"lspConfig"
+                  . field @"autoLoadQuickfix"
+                  .~ True
+
+nvimHsLspDisableQfAutoOpen :: CommandArguments -> NeovimLsp ()
+nvimHsLspDisableQfAutoOpen _ = whenInitialized $ focusLang' False $ do
+    modifyContext $ field @"lspConfig"
+                  . field @"autoLoadQuickfix"
+                  .~ False
+

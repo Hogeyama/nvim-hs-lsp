@@ -96,7 +96,7 @@ getCwd :: Neovim env (Path Abs Dir)
 getCwd = do
   cwd <- fromObject' =<< vimCallFunction "getcwd" []
   case parseAbsDir cwd of
-    Nothing -> error "impossible"
+    Nothing -> error $ "fail to parse directory name: " <> cwd
     Just cwd' -> return cwd'
 
 getBufLanguage :: (HasLogFunc env)
@@ -106,9 +106,11 @@ getBufLanguage b = tryAny (nvim_buf_get_var b "current_syntax" >>= fromObject') 
     _ -> return Nothing
 
 getBufUri :: Buffer -> Neovim env Uri
-getBufUri b = parseAbsFile <$> nvim_buf_get_name b >>= \case
-    Nothing -> error "impossible"
-    Just file -> return $ pathToUri file
+getBufUri b = do
+    f <- nvim_buf_get_name b
+    case parseAbsFile f of
+      Nothing -> error $ "fail to parse file name: " <> f
+      Just file -> return $ pathToUri file
 
 getNvimPos :: (HasLogFunc env) => Neovim env NvimPos
 getNvimPos = tryAny (vimCallFunction "getpos" [ObjectString "."] >>= fromObject') >>= \case
