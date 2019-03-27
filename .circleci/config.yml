@@ -2,42 +2,52 @@ version: 2
 
 aliases:
   - &default_env
-    environment:
-      CACHE_KEY: 0
-      SUB_CACHE_KEY: 0
-      STACK_VERSION: 1.9.1
+    CACHE_KEY: 2
+    SUB_CACHE_KEY: 1
+    STACK_VERSION: 1.9.1
   - &create_cache_key_file
     run:
       name: Create cache control key file
       command: |
-        echo $CACHE_KEY > cache_key
+        echo $CIRCLE_JOB
+        echo $CACHE_KEY     > cache_key
         echo $SUB_CACHE_KEY > sub_cache_key
+        cat  $STACK_YAML    > stack-yaml.txt || touch stack-yaml.txt
   - &restore_build_results
     restore_cache:
       keys:
-        - cache-{{ checksum "cache_key" }}-{{ checksum "stack.yaml" }}-{{ checksum "package.yaml" }}-{{ checksum "sub_cache_key" }}
-        - cache-{{ checksum "cache_key" }}-{{ checksum "stack.yaml" }}-{{ checksum "package.yaml" }}
-        - cache-{{ checksum "cache_key" }}-{{ checksum "stack.yaml" }}
-        - cache-{{ checksum "cache_key" }}
+        - cache-{{ checksum "cache_key" }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "stack-yaml.txt" }}-{{ checksum "package.yaml" }}-{{ checksum "sub_cache_key" }}
+        - cache-{{ checksum "cache_key" }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "stack-yaml.txt" }}-{{ checksum "package.yaml" }}
+        - cache-{{ checksum "cache_key" }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "stack-yaml.txt" }}
+        - cache-{{ checksum "cache_key" }}-{{ .Environment.CIRCLE_JOB }}
   - &save_build_results
       save_cache:
         key:
-          cache-{{ checksum "cache_key" }}-{{ checksum "stack.yaml" }}-{{ checksum "package.yaml" }}-{{ checksum "sub_cache_key" }}
+          cache-{{ checksum "cache_key" }}-{{ .Environment.CIRCLE_JOB }}-{{ checksum "stack-yaml.txt" }}-{{ checksum "package.yaml" }}-{{ checksum "sub_cache_key" }}
         paths:
           - ~/haskell-ide-engine
           - ~/.local/bin
           - ~/.stack
           - ~/.cabal
+          - ~/.hoogle
           - ~/.ghc
           - .stack-work
         when:
           always
   - &display_stack_version
-    run:
-      name: Display stack version
-      command: |
-        stack --no-terminal upgrade --binary-version=$STACK_VERSION
-        stack --no-terminal --version
+      run:
+        name: Display stack version
+        command: |
+          stack --no-terminal upgrade --binary-version=$STACK_VERSION
+          stack --no-terminal --version
+  - &set_path
+      run:
+        name: Set PATH
+        command: |
+          export PATH=~/.cabal/bin:~/.local/bin:$PATH
+          mkdir -p ~/.local/bin
+          echo $PATH
+          export WORKING_DIRECTORY=`pwd` # 何故かworking_directoryが効かない
   - &install_nvim
       run:
         name: Install Neovim
@@ -45,14 +55,11 @@ aliases:
           curl https://github.com/neovim/neovim/releases/download/v0.3.4/nvim.appimage -L -o nvim
           chmod u+x nvim
           ./nvim --appimage-extract
-          mkdir -p ~/.local/bin
-          export PATH=~/.local/bin:$PATH
-          echo $PATH
           mv ./squashfs-root/usr/bin/nvim $HOME/.local/bin
           nvim --version
-  - &build_hie_pre
+  - &fetch_hie_repo
       run:
-        name: Prepare for building hie
+        name: Fetch hie repository
         command: |
           if [ -d ~/haskell-ide-engine ]
           then
@@ -60,58 +67,130 @@ aliases:
           else
             git clone https://github.com/haskell/haskell-ide-engine ~/haskell-ide-engine
           fi
-          (cd ~/haskell-ide-engine; ./install.hs submodules)
-          (cd ~/haskell-ide-engine; ./install.hs cabal)
-  - &build_hie_deps
+  - &build_hie_pre
+      run:
+        name: Prepare for building hie
+        command: |
+          cd ~/haskell-ide-engine
+          git checkout ec5e34c
+          ./install.hs submodules
+          ./install.hs cabal
+          cd $WORKING_DIRECTORY
+  - &build_hie # 分けてbuildしないとメモリを使い果たして死ぬので悲しい気持ちになります
       run:
         name: Build hie dependencies
         command: |
-          (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-8.6.4.yaml ghc-exactprint)
-          (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-8.6.4.yaml cabal-helper)
-          (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-8.6.4.yaml HaRe)
-          (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-8.6.4.yaml hie-plugin-api)
-          (cd ~/haskell-ide-engine; stack build --no-terminal --stack-yaml=stack-8.6.4.yaml ghc-mod)
-  - &build_hie
+          cd ~/haskell-ide-engine
+          stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml ghc-exactprint
+          stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml cabal-helper
+          stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml HaRe
+          stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml hie-plugin-api
+          stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml ghc-mod
+          stack build --no-terminal --stack-yaml=stack-"$GHC_VERSION".yaml
+          cd $WORKING_DIRECTORY
+  - &install_hie
       run:
         name: Build hie for test
         command: |
-          hie --version || (cd ~/haskell-ide-engine; ./install.hs hie-8.6.4)
+          cd ~/haskell-ide-engine
+          which hie || ./install.hs hie-"$GHC_VERSION"
+          ./install.hs build-doc-"$GHC_VERSION"
+          cd $WORKING_DIRECTORY
+  - &stack_default
+      docker:
+        - image: quay.io/haskell_works/stack-build-minimal
+      steps:
+        - checkout
+        - *create_cache_key_file
+        - *set_path
+        - *install_nvim
+        - *restore_build_results
+        - *display_stack_version
+        # install hie
+        - *fetch_hie_repo
+        - *build_hie_pre
+        - *build_hie
+        - *install_hie
+        # main
+        - run:
+            name: Install dependencies
+            command: |
+              stack --stack-yaml=$STACK_YAML test -j 1 --only-dependencies --no-terminal --no-run-tests
+            no_output_timeout: 120m
+        - run:
+            name: Run stack test
+            command: |
+              export NVIM_LISTEN_ADDRESS=~/nvim_listen_address
+              export VIM=./squashfs-root/usr/share/nvim
+              nvim --headless &
+              stack --stack-yaml=$STACK_YAML test --fast --no-terminal || (cat /tmp/test-hie.log && exit 1)
+        - run:
+            name: Run stack test --pedantic --no-terminal
+            command: |
+              stack --stack-yaml=$STACK_YAML clean
+              stack --stack-yaml=$STACK_YAML test --pedantic --fast --no-run-tests --no-terminal
+        - *save_build_results
+  - &cabal_default # build only
+      steps:
+        - checkout
+        - *create_cache_key_file
+        - *set_path
+        - *restore_build_results
+        - run:
+            name: Build
+            command: |
+              cabal update
+              cabal new-install hpack
+              hpack
+              cabal new-build
+            no_output_timeout: 120m
+        - *save_build_results
 
 jobs:
-  build:
-    branches:
-      only:
-        - master
-        - circleci-test
+  stack-8.6.4:
+    environment:
+      - *default_env
+      - GHC_VERSION: 8.6.4
+      - STACK_YAML: stack-8.6.4.yaml
     docker:
       - image: quay.io/haskell_works/stack-build-minimal
-    <<: *default_env
-    steps:
-      - checkout
-      - *create_cache_key_file
-      - *install_nvim
-      - *restore_build_results
-      - *display_stack_version
-      - *build_hie_pre
-      - *build_hie_deps
-      - *build_hie
-      - run:
-          name: Install dependencies
-          command: stack test -j 1 --only-dependencies --no-terminal --no-run-tests
-          no_output_timeout: 120m
-      - run:
-          name: Run stack test
-          command: |
-            mkdir -p ~/.config/nvim
-            export NVIM_LISTEN_ADDRESS=~/nvim_listen_address
-            export VIM=./squashfs-root/usr/share/nvim
-            nvim --headless &
-            cat test-file/init.vim
-            stack test nvim-hs-lsp:test:spec --fast --no-terminal || cat /tmp/test-hie.log
-            kill `pgrep nvim`
-      - run:
-          name: Run stack test --pedantic --no-terminal
-          command: |
-            stack clean
-            stack test --pedantic --fast --no-run-tests --no-terminal
-      - *save_build_results
+    <<: *stack_default
+  stack-8.4.4:
+    environment:
+      - *default_env
+      - GHC_VERSION: 8.4.4
+      - STACK_YAML: stack-8.4.4.yaml
+    docker:
+      - image: quay.io/haskell_works/stack-build-minimal
+    <<: *stack_default
+  cabal-8.4.4:
+    environment:
+      - *default_env
+      - GHC_VERSION: 8.4.4
+    docker:
+      - image: quay.io/haskell_works/ghc-8.4.4
+    <<: *cabal_default
+
+workflows:
+  version: 2
+  all:
+    jobs:
+      - stack-8.6.4:
+          filters:
+            branches:
+              only:
+                - master
+                - circleci-test
+      - stack-8.4.4:
+          filters:
+            branches:
+              only:
+                - master
+                - circleci-test
+      - cabal-8.4.4:
+          filters:
+            branches:
+              only:
+                - master
+                - circleci-test
+
