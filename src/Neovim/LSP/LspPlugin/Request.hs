@@ -46,13 +46,13 @@ windowShowMessageRequest
   :: Request 'WindowShowMessageRequestK -> WorkerAction ()
 windowShowMessageRequest (Request req) = do
   let type'   = req ^. #params . __ #type
-      message = req ^. #params . __ #message
       actions = req ^. #params . __ #actions
+      message = T.unpack $ req ^. #params . __ #message
   caseOfEnum type'
-    $  MatchEnum @"error"   (nvimEchoe $ "LSP: Error: "   <> T.unpack message)
-    <! MatchEnum @"warning" (nvimEchow $ "LSP: Warning: " <> T.unpack message)
-    <! MatchEnum @"info"    (nvimEchom $ "LSP: Info: "    <> T.unpack message)
-    <! MatchEnum @"log"     (nvimEchom $ "LSP: Log: "     <> T.unpack message)
+    $  MatchEnum @"error"   (nvimEchoe $ "LSP: Error: "   <> message)
+    <! MatchEnum @"warning" (nvimEchow $ "LSP: Warning: " <> message)
+    <! MatchEnum @"info"    (nvimEchom $ "LSP: Info: "    <> message)
+    <! MatchEnum @"log"     (nvimEchom $ "LSP: Log: "     <> message)
     <! nil
   -- ask action
   mAction <- case actions of

@@ -290,10 +290,19 @@ instance {-# OVERLAPPABLE #-} HasField' "outChan" env (TChan ByteString)
 -- Access Context
 -------------------------------------------------------------------------------
 
-receiveMessage :: (HasInChan env, MonadReader env m, MonadIO m) => m InMessage
+receiveMessage :: ( HasInChan env
+                  , MonadReader env m
+                  , MonadIO m
+                  )
+               => m InMessage
 receiveMessage = liftIO . atomically . readTChan =<< view inChanL
 
-sendMessage :: (HasOutChan env, J.ToJSON a, Show a, MonadReader env m, MonadIO m)
+sendMessage :: ( HasOutChan env
+               , J.ToJSON a
+               , Show a
+               , MonadReader env m
+               , MonadIO m
+               )
             => a -> m ()
 sendMessage x = do
     outCh <- view outChanL
@@ -340,7 +349,8 @@ addIdMethodMap id' m = modifyContext (field @"idMethodMap" %~ M.insert id' m)
 
 registerCallback :: (MonadReader env m, MonadIO m, HasContext env)
                  => ID -> Callback -> m ()
-registerCallback id' callback = modifyContext (field @"callbacks" %~ M.insert id' callback)
+registerCallback id' callback =
+    modifyContext (field @"callbacks" %~ M.insert id' callback)
 
 getCallbackById :: (MonadReader env m, MonadIO m, HasContext env)
                 => ID -> m (Maybe Callback)
@@ -376,7 +386,8 @@ withResponse :: (HasLogFunc env, Show e)
 withResponse resp k =
   case resp^. #error of
     Some e -> vim_report_error msg >> return Nothing
-      where msg = "nvim-hs-lsp: error from server:"  <> T.unpack (prettyResponceError e)
+      where msg = "nvim-hs-lsp: error from server:"
+                    <> T.unpack (prettyResponceError e)
     None -> case resp^. #result of
       None   -> logError "withCallbackResult: wrong input" >> return Nothing
       Some x -> Just <$> k x
@@ -389,7 +400,11 @@ withResponse resp k =
 --
 -- >>> :set -XTypeApplications -XDataKinds
 -- >>> let wellTyped _ = "OK"
--- >>> wellTyped $ sendRequest @'InitializeK @LanguageEnv (initializeParam Nothing Nothing)
+-- >>> :{
+--        wellTyped $
+--          sendRequest @'InitializeK @LanguageEnv
+--            (initializeParam Nothing Nothing)
+-- >>> :}
 -- "OK"
 --
 sendRequest :: forall (m :: ClientRequestMethodK) env a
@@ -478,7 +493,8 @@ retypeEnvNeovim :: (env -> env') -> Neovim env' a -> Neovim env a
 retypeEnvNeovim f (Internal.Neovim m) =
   Internal.Neovim $
     transResourceT
-      (withReaderT $ \cfg -> Internal.retypeConfig (f (Internal.customConfig cfg)) cfg)
+      (withReaderT $ \cfg ->
+        Internal.retypeConfig (f (Internal.customConfig cfg)) cfg)
       m
 
 fromJSONEither :: J.FromJSON a => J.Value -> Either String a

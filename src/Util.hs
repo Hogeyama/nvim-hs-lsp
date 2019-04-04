@@ -25,7 +25,8 @@ assignTV l x = do
   v <- view l
   atomically $ writeTVar v x
 
-modifyOverTV :: (MonadReader r m, MonadIO m) => Lens' r (TVar a) -> (a -> a) -> m ()
+modifyOverTV :: (MonadReader r m, MonadIO m)
+             => Lens' r (TVar a) -> (a -> a) -> m ()
 modifyOverTV l f = do
   v <- view l
   atomically $ modifyTVar' v f

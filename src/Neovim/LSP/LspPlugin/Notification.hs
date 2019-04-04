@@ -29,8 +29,10 @@ notificationWorkerAction = forever $ loggingErrorImmortal $ do
         SWindowLogMessage -> windowLogMessage noti
         STelemetryEvent -> telemetryEvent noti
         SWindowShowMessage -> windowShowMessage noti
-        SServerCancel -> logError "notificationHandler: ServerCancel: not implemented"
-        SServerNotificationMisc _ -> logError "notificationHandler: Misc: not implemented"
+        SServerCancel ->
+          logError "notificationHandler: ServerCancel: not implemented"
+        SServerNotificationMisc _ ->
+          logError "notificationHandler: Misc: not implemented"
       _ -> return ()
 
 -------------------------------------------------------------------------------
@@ -45,7 +47,8 @@ showDiagnotics (Notification noti) = do
     modifyContext $ (field @"diagnosticsMap") %~ M.insert uri diagnostics
     -- 今開いてるBufferは優先的に表示する
     -- curiとuriは必ずしも一致しないことに注意
-    --    e.g. hieではapp/Main.hsを編集するとsrc/Lib.hsのdiagも送られてくることがある
+    --    e.g. hieではapp/Main.hsを編集するとsrc/Lib.hsのdiagも
+    --         送られてくることがある
     whenM (readContext . view $
             field @"lspConfig".
             field @"autoLoadQuickfix") $ do
@@ -80,12 +83,12 @@ windowShowMessage :: ServerNotification 'WindowShowMessageK
                   -> WorkerAction ()
 windowShowMessage (Notification noti) = do
     let type'   = noti^. #params.__#type
-        message = noti^. #params.__#message
+        message = T.unpack $ noti^. #params.__#message
     caseOfEnum type'
-       $ (MatchEnum @"error"   $ nvimEchoe $ "LSP: Error: "   <> T.unpack message)
-      <! (MatchEnum @"warning" $ nvimEchow $ "LSP: Warning: " <> T.unpack message)
-      <! (MatchEnum @"info"    $ nvimEchom $ "LSP: Info: "    <> T.unpack message)
-      <! (MatchEnum @"log"     $ nvimEchom $ "LSP: Log: "     <> T.unpack message)
+       $ (MatchEnum @"error"   $ nvimEchoe $ "LSP: Error: "   <> message)
+      <! (MatchEnum @"warning" $ nvimEchow $ "LSP: Warning: " <> message)
+      <! (MatchEnum @"info"    $ nvimEchom $ "LSP: Info: "    <> message)
+      <! (MatchEnum @"log"     $ nvimEchom $ "LSP: Log: "     <> message)
       <! nil
 
 -------------------------------------------------------------------------------

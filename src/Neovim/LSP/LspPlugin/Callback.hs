@@ -34,7 +34,8 @@ callbackWorkerAction = forever $ loggingErrorImmortal $
                         , "Expected: " ++ show (typeOf expected)
                         , "Actual:   " ++ show (typeOf resp)
                         ]
-                    vim_report_error "nvim-hs-lsp: error: callback function type mismatched"
+                    vim_report_error
+                      "nvim-hs-lsp: error: callback function type mismatched"
                   where expected = let _ = callback expected in expected
             Nothing ->
               logDebug $ "no callback set for id: " <> displayShow id'
