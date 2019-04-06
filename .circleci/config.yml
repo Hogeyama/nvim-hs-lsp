@@ -72,7 +72,7 @@ aliases:
         name: Prepare for building hie
         command: |
           cd ~/haskell-ide-engine
-          git checkout ec5e34c
+          git checkout 0.8.0.0
           ./install.hs submodules
           ./install.hs cabal
           cd $WORKING_DIRECTORY
