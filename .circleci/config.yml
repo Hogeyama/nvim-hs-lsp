@@ -72,7 +72,7 @@ aliases:
         name: Prepare for building hie
         command: |
           cd ~/haskell-ide-engine
-          git pull origin master
+          git fetch origin
           git branch
           git tag
           git checkout 0.8.0.0
