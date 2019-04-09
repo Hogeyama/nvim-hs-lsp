@@ -38,12 +38,18 @@ import qualified Neovim               as N (Object (..))
 -- Record
 -------------------------------------------------------------------------------
 
-newtype Record (xs :: [Assoc Symbol *]) = Record { fields :: E.Record xs } deriving (Generic)
-deriving instance (Forall (Instance1 NFData (Field Identity)) xs) => NFData (Record xs)
-deriving instance (Forall (Instance1 Show (Field Identity)) xs) => Show (Record xs)
-deriving instance (Forall (Instance1 Eq   (Field Identity)) xs) => Eq   (Record xs)
-deriving instance ((Forall (Instance1 Eq   (Field Identity)) xs),
-                   (Forall (Instance1 Ord  (Field Identity)) xs)) => Ord  (Record xs)
+newtype Record (xs :: [Assoc Symbol *]) = Record { fields :: E.Record xs }
+deriving instance
+  Generic (Record xs)
+deriving instance
+  (Forall (Instance1 NFData (Field Identity)) xs) => NFData (Record xs)
+deriving instance
+  (Forall (Instance1 Show (Field Identity)) xs) => Show (Record xs)
+deriving instance
+  (Forall (Instance1 Eq   (Field Identity)) xs) => Eq   (Record xs)
+deriving instance
+  ((Forall (Instance1 Eq   (Field Identity)) xs),
+   (Forall (Instance1 Ord  (Field Identity)) xs)) => Ord  (Record xs)
 
 -- (<!) :: Field Identity (k >: v) -> Record xs -> Record (k >: v ': xs)
 -- x <! xs = Record $ x E.<! fields xs
@@ -53,7 +59,8 @@ type LensLike' f s a = LensLike f s s a a
 -- Requirements for this instance
 -- + Instance head is less general than `p rep (f rep') -> p s (f t)`
 --   which is the head of the instance defined in 'Data.Extensible.Label'
--- + Can be used with '(.~) :: ASetter s t a b -> b -> s -> t' without type annotation
+-- + Can be used with '(.~) :: ASetter s t a b -> b -> s -> t' without type
+--   annotation
 --    + 'a' and 't' should be determined by 'b' and 's'
 -- + Can be used with '(^.) :: s -> Getting a s a -> a' without type annotation
 --    + 'a' should be determined by 's'
@@ -67,7 +74,8 @@ instance {-# OVERLAPPING #-}
   where
     fromLabel = __ (Proxy @k)
 
-__ :: forall k v xs f. (Functor f, Associate k v xs) => Proxy k -> LensLike' f (Record xs) v
+__ :: forall k v xs f. (Functor f, Associate k v xs)
+   => Proxy k -> LensLike' f (Record xs) v
 __ p = unsafeCoerce (itemAssoc p :: LensLike' f (E.Record xs) v)
 
 type Nullable = Maybe
@@ -80,8 +88,8 @@ type Nullable = Maybe
 -- >>> :set -XDataKinds -XTypeOperators -XOverloadedStrings -XOverloadedLabels
 -- >>> import RIO
 -- >>> import qualified Data.ByteString.Lazy.Char8 as BL
--- >>> let recordMay = Record $ Nothing =<: nil :: Record '["id" >: Nullable Char]
--- >>> let recordOpt = Record $ None    =<: nil :: Record '["id" >: Option Char]
+-- >>> let recordMay = Record @'["id" >: Nullable Char] $ Nothing =<: nil
+-- >>> let recordOpt = Record @'["id" >: Option Char]   $ None    =<: nil
 -- >>> BL.putStrLn $ encode $ toJSON recordMay
 -- {"id":null}
 -- >>> BL.putStrLn $ encode $ toJSON recordOpt
@@ -153,69 +161,74 @@ type FieldJSON a = (FieldToJSON a, FieldFromJSON a)
 ------------
 
 class FieldFromJSON a where
-  lookupD :: String -> J.Object -> J.Parser a
+    lookupD :: String -> J.Object -> J.Parser a
 instance {-# OVERLAPPING #-} FromJSON a => FieldFromJSON (Option a) where
-  lookupD k v = case HM.lookup (fromString k) v of
-    -- We does not need this case in fact, but some language servers are wrongly
-    -- implemented around this case. e.g., rls returns something like this
-    -- in response to a hover request:
-    --   '{"result":{"contents":[{"language":"rust","value":"&str"}],"range":null}}'
-    -- However, 'range' cannot be 'null' here.
-    Just Null -> Some <$> parseJSON Null <|> return None
-    Just x    -> Some <$> parseJSON x
-    Nothing   -> return None
+    lookupD k v = case HM.lookup (fromString k) v of
+      -- We does not need this case in fact, but some language servers are
+      -- wrongly implemented around this case. e.g., rls returns something like
+      -- this in response to a hover request:
+      --   '{"result":
+      --      {"contents":[{"language":"rust","value":"&str"}],"range":null}}'
+      -- However, 'range' cannot be 'null' here.
+      Just Null -> Some <$> parseJSON Null <|> return None
+      Just x    -> Some <$> parseJSON x
+      Nothing   -> return None
 instance FromJSON a => FieldFromJSON a where
-  lookupD k v = case HM.lookup (fromString k) v of
-    Just x  -> parseJSON x
-    Nothing -> fail $ "Missing key: " ++ k
+    lookupD k v = case HM.lookup (fromString k) v of
+      Just x  -> parseJSON x
+      Nothing -> fail $ "Missing key: " ++ k
 
-instance Forall (KeyValue KnownSymbol FieldFromJSON) xs => FromJSON (Record xs) where
-  parseJSON = withObject "Object" $ \v -> fmap Record $
-    hgenerateFor (Proxy @(KeyValue KnownSymbol FieldFromJSON)) $ \m ->
-      let k = symbolVal (proxyAssocKey m)
-          z = lookupD k v
-      in  Field . Identity <$> z
+instance Forall (KeyValue KnownSymbol FieldFromJSON) xs => FromJSON (Record xs)
+  where
+    parseJSON = withObject "Object" $ \v -> fmap Record $
+      hgenerateFor (Proxy @(KeyValue KnownSymbol FieldFromJSON)) $ \m ->
+        let k = symbolVal (proxyAssocKey m)
+            z = lookupD k v
+        in  Field . Identity <$> z
+
 -- To JSON
 ----------
 
 class FieldToJSON (a :: *) where
-  toJSON' :: a -> Maybe Value
+    toJSON' :: a -> Maybe Value
 instance {-# OVERLAPPING #-} ToJSON a => FieldToJSON (Option a) where
-  toJSON' (Some x) = Just (toJSON x)
-  toJSON' None     = Nothing
+    toJSON' (Some x) = Just (toJSON x)
+    toJSON' None     = Nothing
 instance ToJSON a => FieldToJSON a where
-  toJSON' = Just . toJSON
+    toJSON' = Just . toJSON
 
-instance Forall (KeyValue KnownSymbol FieldToJSON) xs => ToJSON (Record xs) where
-  toJSON (Record xs) = J.Object $ hfoldlWithIndexFor
-    (Proxy @(KeyValue KnownSymbol FieldToJSON))
-    (\_ m kv ->
-      let key  = fromString $ symbolVal $ proxyAssocKey kv
-          mval  = toJSON' $ runIdentity $ getField kv
-      in case mval of
-        Nothing  -> m
-        Just val -> HM.insert key val m)
-    HM.empty
-    xs
+instance
+    Forall (KeyValue KnownSymbol FieldToJSON) xs => ToJSON (Record xs)
+  where
+    toJSON (Record xs) = J.Object $ hfoldlWithIndexFor
+      (Proxy @(KeyValue KnownSymbol FieldToJSON))
+      (\_ m kv ->
+        let key  = fromString $ symbolVal $ proxyAssocKey kv
+            mval  = toJSON' $ runIdentity $ getField kv
+        in case mval of
+          Nothing  -> m
+          Just val -> HM.insert key val m)
+      HM.empty
+      xs
 
 -------------------------------------------------------------------------------
 -- NvimObject
 -------------------------------------------------------------------------------
 
 class FieldNvimObject a where
-  toObject' :: a -> Maybe N.Object
-  lookupObject' :: String -> Map N.Object N.Object -> Either (Doc AnsiStyle) a
+    toObject' :: a -> Maybe N.Object
+    lookupObject' :: String -> Map N.Object N.Object -> Either (Doc AnsiStyle) a
 instance {-# OVERLAPPING #-} NvimObject o => FieldNvimObject (Option o) where
-  toObject' None     = Nothing
-  toObject' (Some x) = Just $ toObject x
-  lookupObject' key m = case M.lookup (N.ObjectString (fromString key)) m of
-    Nothing  -> Right None
-    Just obj -> Some <$> fromObject obj
+    toObject' None     = Nothing
+    toObject' (Some x) = Just $ toObject x
+    lookupObject' key m = case M.lookup (N.ObjectString (fromString key)) m of
+      Nothing  -> Right None
+      Just obj -> Some <$> fromObject obj
 instance NvimObject o => FieldNvimObject o where
-  toObject' = Just . toObject
-  lookupObject' key m = case M.lookup (N.ObjectString (fromString key)) m of
-    Nothing  -> Left (fromString $ "key " <> key <> " not found")
-    Just obj -> fromObject obj
+    toObject' = Just . toObject
+    lookupObject' key m = case M.lookup (N.ObjectString (fromString key)) m of
+      Nothing  -> Left (fromString $ "key " <> key <> " not found")
+      Just obj -> fromObject obj
 
 instance
     ( NFData (Record xs)
@@ -238,5 +251,6 @@ instance
         let k = symbolVal (proxyAssocKey m)
             z = lookupObject' k map'
         in  Field . Identity <$> z
-    fromObject o = Left . fromString $ "ObjectMap is expected, but got " <> show o
+    fromObject o = Left . fromString $
+                    "ObjectMap is expected, but got " <> show o
 

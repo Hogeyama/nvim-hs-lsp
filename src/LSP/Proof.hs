@@ -15,7 +15,9 @@ import           Data.Singletons.TypeLits
 import           LSP.Types
 import           LSP.Method
 
-prfClientReq :: forall (m :: ClientRequestMethodK). Sing m -> Dict (ImplRequest m)
+prfClientReq
+    :: forall (m :: ClientRequestMethodK)
+    .  Sing m -> Dict (ImplRequest m)
 prfClientReq = \case -- {{{
     SInitialize                      -> Dict
     SShutdown                        -> Dict
@@ -44,7 +46,9 @@ prfClientReq = \case -- {{{
     SClientRequestMisc SSym          -> Dict
 -- }}}
 
-prfClientNoti :: forall (m :: ClientNotificationMethodK). Sing m -> Dict (ImplNotification m)
+prfClientNoti
+    :: forall (m :: ClientNotificationMethodK)
+    .  Sing m -> Dict (ImplNotification m)
 prfClientNoti = \case-- {{{
     SInitialized                     -> Dict
     SExit                            -> Dict
@@ -60,7 +64,9 @@ prfClientNoti = \case-- {{{
     SDidChangeWorkspaceFolders       -> Dict
   -- }}}
 
-prfServerResp :: forall (m :: ClientRequestMethodK). Sing m -> Dict (ImplResponse m)
+prfServerResp
+    :: forall (m :: ClientRequestMethodK)
+    .  Sing m -> Dict (ImplResponse m)
 prfServerResp = \case  -- {{{
     SInitialize                      -> Dict
     SShutdown                        -> Dict
@@ -89,7 +95,9 @@ prfServerResp = \case  -- {{{
     SClientRequestMisc SSym          -> Dict
 -- }}}
 
-prfServerReq :: forall (m :: ServerRequestMethodK). Sing m -> Dict (ImplRequest m)
+prfServerReq
+    :: forall (m :: ServerRequestMethodK)
+    .  Sing m -> Dict (ImplRequest m)
 prfServerReq = \case -- {{{
     SWindowShowMessageRequest       -> Dict
     SClientRegisterCapability       -> Dict
@@ -100,7 +108,9 @@ prfServerReq = \case -- {{{
     SWorkspaceConfiguration         -> Dict
 -- }}}
 
-prfServerNoti :: forall (m :: ServerNotificationMethodK). Sing m -> Dict (ImplNotification m)
+prfServerNoti
+    :: forall (m :: ServerNotificationMethodK)
+    .  Sing m -> Dict (ImplNotification m)
 prfServerNoti = \case -- {{{
   SWindowShowMessage              -> Dict
   SWindowLogMessage               -> Dict
@@ -110,7 +120,9 @@ prfServerNoti = \case -- {{{
   SServerNotificationMisc SSym    -> Dict
 -- }}}
 
-prfClientResp :: forall (m :: ServerRequestMethodK). Sing m -> Dict (ImplResponse m)
+prfClientResp
+    :: forall (m :: ServerRequestMethodK)
+    .  Sing m -> Dict (ImplResponse m)
 prfClientResp = \case -- {{{
   SWindowShowMessageRequest   -> notImplemented
   SClientRegisterCapability   -> notImplemented

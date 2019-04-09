@@ -321,7 +321,7 @@ data instance Sing (m :: ClientNotificationMethodK) where -- {{{
   SDidChangeWorkspaceFolders       :: Sing 'DidChangeWorkspaceFoldersK
   SClientNotificationMisc          :: Sing n -> Sing ('ClientNotificationMiscK n)
 --}}}
--- }}}
+--}}}
 -- instance SingI  -- {{{
 instance SingI 'InitializeK                      where sing = SInitialize
 instance SingI 'InitializedK                     where sing = SInitialized

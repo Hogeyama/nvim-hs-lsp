@@ -118,7 +118,8 @@ mkEnum _ = Enum $ embed (Field (Proxy @(AssocValue x)) :: Field Proxy x)
 idOfVariant :: VariantOf h xs -> Int
 idOfVariant (EmbedAt i _) = getMemberId i
 
-enumFromInteger :: forall xs. Forall (ValueIs KnownInt) xs => Integer -> Maybe (Enum xs)
+enumFromInteger :: forall xs. Forall (ValueIs KnownInt) xs
+                => Integer -> Maybe (Enum xs)
 enumFromInteger n = getFirst $
     hfoldMapWithIndexFor @_ @xs (Proxy @(ValueIs KnownInt))
       (\i (x :: E.Nullable (Field Proxy) x) ->
@@ -134,7 +135,8 @@ enumToInteger (Enum xs) = matchWithField
       Field (Const (intVal (Proxy @(AssocValue x)))))
     xs
 
-enumFromText :: forall xs. Forall (ValueIs KnownSymbol) xs => Text -> Maybe (Enum xs)
+enumFromText :: forall xs. Forall (ValueIs KnownSymbol) xs
+             => Text -> Maybe (Enum xs)
 enumFromText s = getFirst $
     hfoldMapWithIndexFor @_ @xs (Proxy @(ValueIs KnownSymbol))
       (\i (x :: E.Nullable (Field Proxy) x) ->

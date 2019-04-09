@@ -5,7 +5,6 @@ aliases:
     CACHE_KEY: 2
     SUB_CACHE_KEY: 1
     STACK_VERSION: 1.9.1
-    PRE_CACHE_KEY: 2
   - &create_cache_key_file
     run:
       name: Create cache control key file
@@ -14,7 +13,6 @@ aliases:
         echo $CACHE_KEY     > cache_key
         echo $SUB_CACHE_KEY > sub_cache_key
         cat  $STACK_YAML    > stack-yaml.txt || touch stack-yaml.txt
-        echo $PRE_CACHE_KEY > pre_cache_key
   - &restore_build_results
     restore_cache:
       keys:
@@ -74,7 +72,8 @@ aliases:
         name: Prepare for building hie
         command: |
           cd ~/haskell-ide-engine
-          git checkout ec5e34c
+          git pull origin master
+          git checkout 0.8.0.0
           ./install.hs submodules
           ./install.hs cabal
           cd $WORKING_DIRECTORY
@@ -132,7 +131,7 @@ aliases:
               stack --stack-yaml=$STACK_YAML clean
               stack --stack-yaml=$STACK_YAML test --pedantic --fast --no-run-tests --no-terminal
         - *save_build_results
-  - &cabal_default # only build
+  - &cabal_default # build only
       steps:
         - checkout
         - *create_cache_key_file
@@ -142,8 +141,7 @@ aliases:
             name: Build
             command: |
               cabal update
-              cabal new-install hpack
-              hpack
+              (which hpack || cabal new-install hpack) && hpack
               cabal new-build
             no_output_timeout: 120m
         - *save_build_results

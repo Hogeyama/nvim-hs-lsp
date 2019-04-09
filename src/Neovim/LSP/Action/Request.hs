@@ -73,7 +73,9 @@ callbackHoverWith process resp = void $ callbackHoverAux `flip` resp $ \case
 
 --
 
-stringOfHoverContents :: MarkedString :|: [MarkedString] :|: MarkupContent -> String
+stringOfHoverContents
+    :: MarkedString :|: [MarkedString] :|: MarkupContent
+    -> String
 stringOfHoverContents (L ms)     = pprMarkedString ms
 stringOfHoverContents (R (L [])) = textDocumentHoverNoInfo
 stringOfHoverContents (R (L xs)) = unlines $ map pprMarkedString xs
@@ -320,7 +322,11 @@ callbackCodeAction (Response resp) = void $ withResponse resp $ \case
           Just action -> undefined action
 
 executeCommand :: (HasOutChan env, HasContext env) => Command -> Neovim env ()
-executeCommand cmd = void $ executeCommandRequest (cmd^. #command) (cmd^. #arguments) (Just nopCallback)
+executeCommand cmd =
+  void $ executeCommandRequest
+    (cmd^. #command)
+    (cmd^. #arguments)
+    (Just nopCallback)
 
 executeCodeAction
     :: (HasLogFunc env, HasOutChan env, HasContext env)
@@ -361,11 +367,17 @@ textDocumentRangeFormatting uri range fopts = do
              <! nil
     sendRequest param (callbackTextDocumentRangeFormatting uri)
 
-callbackTextDocumentFormatting :: Uri -> CallbackOf 'TextDocumentFormattingK ()
-callbackTextDocumentFormatting uri (Response resp) = callbackTextEdits uri resp
+callbackTextDocumentFormatting
+    :: Uri
+    -> CallbackOf 'TextDocumentFormattingK ()
+callbackTextDocumentFormatting uri (Response resp) =
+    callbackTextEdits uri resp
 
-callbackTextDocumentRangeFormatting :: Uri -> CallbackOf 'TextDocumentRangeFormattingK ()
-callbackTextDocumentRangeFormatting uri (Response resp) = callbackTextEdits uri resp
+callbackTextDocumentRangeFormatting
+    :: Uri
+    -> CallbackOf 'TextDocumentRangeFormattingK ()
+callbackTextDocumentRangeFormatting uri (Response resp) =
+    callbackTextEdits uri resp
 
 callbackTextEdits
   :: Show e
@@ -400,16 +412,19 @@ textDocumentReferences uri p callback = do
     sendRequest param callback
 
 callbackTextDocumentReferences :: CallbackOf 'TextDocumentReferencesK ()
-callbackTextDocumentReferences (Response resp) = void $ withResponse resp $ \case
-    Nothing -> nvimEchom "textDocument/references: No result"
-    Just locs -> do
-      logInfo $ "textDocument/references: " <> displayShow locs
-      replaceLocList 0 =<< mapM locationToQfItem' locs -- TODO set winId (current win is used when 0 is set)
-      unless (null locs) $ vimCommand "botright lopen"
+callbackTextDocumentReferences (Response resp) =
+    void $ withResponse resp $ \case
+      Nothing -> nvimEchom "textDocument/references: No result"
+      Just locs -> do
+        logInfo $ "textDocument/references: " <> displayShow locs
+        -- TODO set winId (current win is used when 0 is set)
+        replaceLocList 0 =<< mapM locationToQfItem' locs
+        unless (null locs) $ vimCommand "botright lopen"
   where
     locationToQfItem' loc = do
         Just text <- fmap lastMaybe $ fromObject' =<<
-                        vimCallFunction "readfile" (filename +: False +: lnum +: [])
+                      vimCallFunction "readfile"
+                        (filename +: False +: lnum +: [])
         return $ locationToQfItem loc text
       where
         filename = uriToFilePath (loc^. #uri)
@@ -433,17 +448,20 @@ textDocumentDocumentSymbol uri = do
               <! nil
     sendRequest params (callbackTextDocumentDocumentSymbol uri)
 
-callbackTextDocumentDocumentSymbol :: Uri -> CallbackOf 'TextDocumentDocumentSymbolK ()
-callbackTextDocumentDocumentSymbol uri (Response resp) = void $ withResponse resp $ \case
-    Nothing -> nvimEchom "textDocument/documentSymbol: no symbols"
-    Just (L docSyms) -> do
-      logInfo $ "textDocument/documentSymbol: " <> displayShow docSyms
-      replaceLocList 0 $ map documentSymbolToQfItem docSyms
-      unless (null docSyms) $ vimCommand "botright lopen"
-    Just (R symInfos) -> do
-      logInfo $ "textDocument/documentSymbol: " <> displayShow symInfos
-      replaceLocList 0 $ map symbolInfomartionToQfItem symInfos
-      unless (null symInfos) $ vimCommand "botright lopen"
+callbackTextDocumentDocumentSymbol
+    :: Uri
+    -> CallbackOf 'TextDocumentDocumentSymbolK ()
+callbackTextDocumentDocumentSymbol uri (Response resp) =
+    void $ withResponse resp $ \case
+      Nothing -> nvimEchom "textDocument/documentSymbol: no symbols"
+      Just (L docSyms) -> do
+        logInfo $ "textDocument/documentSymbol: " <> displayShow docSyms
+        replaceLocList 0 $ map documentSymbolToQfItem docSyms
+        unless (null docSyms) $ vimCommand "botright lopen"
+      Just (R symInfos) -> do
+        logInfo $ "textDocument/documentSymbol: " <> displayShow symInfos
+        replaceLocList 0 $ map symbolInfomartionToQfItem symInfos
+        unless (null symInfos) $ vimCommand "botright lopen"
   where
     documentSymbolToQfItem (DocumentSymbol docSym) = Record
          $ #filename @= Some filename

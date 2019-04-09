@@ -47,7 +47,8 @@ focusLang' silent m = vim_get_current_buffer >>= getBufLanguage >>= \case
     Nothing -> error' "unknown filetype"
     Just lang ->
       focusLang (fromString lang) m >>= \case
-        Nothing -> error' $ "language server for " ++ lang ++ " is not yet awaken"
+        Nothing -> error' $
+                    "language server for " <> lang <> " is not yet awaken"
         Just () -> return ()
   where
     error' = if silent then const (return ()) else error
@@ -127,19 +128,28 @@ nvimHsLspCloseBuffer :: CommandArguments -> NeovimLsp ()
 nvimHsLspCloseBuffer _ = focusLang' True $ do
   b <- vim_get_current_buffer
   uri <- getBufUri b
-  ifM (not <$> alreadyOpened uri) (vim_out_write "nvim-hs-lsp: Not opened yet\n") $ do
-    modifyContext $ field @"openedFiles" %~ M.delete uri
-    didCloseBuffer b
+  ifM (not <$> alreadyOpened uri)
+    (vim_out_write "nvim-hs-lsp: Not opened yet\n") $
+    do modifyContext $ field @"openedFiles" %~ M.delete uri
+       didCloseBuffer b
 
 nvimHsLspChangeBuffer :: CommandArguments -> NeovimLsp ()
-nvimHsLspChangeBuffer arg = whenInitialized' silent $ focusLang' True $ whenAlreadyOpened' silent $
+nvimHsLspChangeBuffer arg = varidatedAndThen $ do
     didChangeBuffer =<< vim_get_current_buffer
-  where silent = Just True == bang arg
+  where
+    silent = Just True == bang arg
+    varidatedAndThen = whenInitialized' silent
+                     . focusLang' True
+                     . whenAlreadyOpened' silent
 
 nvimHsLspSaveBuffer :: CommandArguments -> NeovimLsp ()
-nvimHsLspSaveBuffer arg = whenInitialized' silent $ focusLang' True $ whenAlreadyOpened' silent $
+nvimHsLspSaveBuffer arg = varidatedAndThen $ do
     didSaveBuffer =<< vim_get_current_buffer
-  where silent = Just True == bang arg
+  where
+    silent = Just True == bang arg
+    varidatedAndThen = whenInitialized' silent
+                     . focusLang' True
+                     . whenAlreadyOpened' silent
 
 nvimHsLspStopServer :: CommandArguments -> NeovimLsp ()
 nvimHsLspStopServer _ = vim_get_current_buffer >>= getBufLanguage >>= \case
@@ -165,24 +175,36 @@ nvimHsLspFinalize _ = do
 -- Hover
 --------
 nvimHsLspInfo :: CommandArguments -> NeovimLsp ()
-nvimHsLspInfo _ = whenInitialized $ focusLang' False $ whenAlreadyOpened . loggingError $ do
-  uri <- getBufUri =<< vim_get_current_buffer
-  pos <- fromNvimPos <$> getNvimPos
-  void $ hoverRequest uri pos callbackHoverOneLine
+nvimHsLspInfo _ = varidatedAndThen $ loggingError $ do
+    uri <- getBufUri =<< vim_get_current_buffer
+    pos <- fromNvimPos <$> getNvimPos
+    void $ hoverRequest uri pos callbackHoverOneLine
+  where
+    varidatedAndThen = whenInitialized
+              . focusLang' False
+              . whenAlreadyOpened
 
 nvimHsLspHover :: CommandArguments -> NeovimLsp ()
-nvimHsLspHover _ = whenInitialized $ focusLang' False $ whenAlreadyOpened $ do
-  uri <- getBufUri =<< vim_get_current_buffer
-  pos <- fromNvimPos <$> getNvimPos
-  void $ hoverRequest uri pos callbackHoverPreview
+nvimHsLspHover _ = varidatedAndThen $ do
+    uri <- getBufUri =<< vim_get_current_buffer
+    pos <- fromNvimPos <$> getNvimPos
+    void $ hoverRequest uri pos callbackHoverPreview
+  where
+    varidatedAndThen = whenInitialized
+                     . focusLang' False
+                     . whenAlreadyOpened
 
 -- Definition
 -------------
 nvimHsLspDefinition :: CommandArguments -> NeovimLsp ()
-nvimHsLspDefinition _ = whenInitialized $ focusLang' False $ whenAlreadyOpened $ do
-  uri <- getBufUri =<< vim_get_current_buffer
-  pos <- fromNvimPos <$> getNvimPos
-  void $ definitionRequest uri pos callbackDefinition
+nvimHsLspDefinition _ = varidatedAndThen $ do
+    uri <- getBufUri =<< vim_get_current_buffer
+    pos <- fromNvimPos <$> getNvimPos
+    void $ definitionRequest uri pos callbackDefinition
+  where
+    varidatedAndThen = whenInitialized
+                     . focusLang' False
+                     . whenAlreadyOpened
 
 -- Completion
 -------------
@@ -211,7 +233,8 @@ nvimHsLspComplete findstart base =
           xs <- fromMaybe [] <$>
                   waitCallbackWithTimeout (1*1000*1000)
                     (completionRequest uri compPos callbackComplete)
-          let sorted = uncurry (++) $ partition (isPrefixOf base . view #word . fields)  xs
+          let sorted = uncurry (++) $
+                        partition (isPrefixOf base . view #word)  xs
           return (Right sorted)
 
 completionFindStart :: String -> Int -> Int
@@ -272,11 +295,16 @@ nvimHsLspLoadQuickfix arg = focusLang' False $ do
 -------------------------------------------------------------------------------
 
 nvimHsLspCodeAction :: CommandArguments -> NeovimLsp ()
-nvimHsLspCodeAction _ = whenInitialized $ focusLang' False $ whenAlreadyOpened $ do
+nvimHsLspCodeAction _ = varidatedAndThen $ do
     uri <- getBufUri =<< vim_get_current_buffer
     pos <- fromNvimPos <$> getNvimPos
     let range = Record $ #start @= pos <! #end @= pos <! nil
     waitCallback $ codeAction uri range callbackCodeAction
+  where
+    varidatedAndThen = whenInitialized
+                     . focusLang' False
+                     . whenAlreadyOpened
+
 
 -- HIE specific
 ---------------
@@ -285,22 +313,29 @@ nvimHsLspHieCaseSplit :: CommandArguments -> NeovimLsp ()
 nvimHsLspHieCaseSplit _ = hiePointCommand "ghcmod:casesplit"
 
 hiePointCommand :: String -> NeovimLsp ()
-hiePointCommand cmd =  whenInitialized $ focusLang' False $ whenAlreadyOpened $ do
+hiePointCommand cmd = varidatedAndThen $ do
     uri <- getBufUri =<< vim_get_current_buffer
     pos <- fromNvimPos <$> getNvimPos
     let arg = toJSON $ #file @= uri
                     <! #pos  @= pos
                     <! nil @(Field Identity)
     void $ executeCommandRequest cmd (Some [arg]) Nothing
+  where
+    varidatedAndThen = whenInitialized
+                     . focusLang' False
+                     . whenAlreadyOpened
+
 
 -- TODO haskellに限定して良い
 nvimHsLspHieHsImport :: CommandArguments -> String -> NeovimLsp ()
-nvimHsLspHieHsImport _ moduleToImport = focusLang' False $ do
+nvimHsLspHieHsImport _ moduleToImport = varidatedAndThen $ do
     uri <- getBufUri =<< vim_get_current_buffer
     let arg = toJSON $ #file @= uri
                     <! #moduleToImport @= moduleToImport
                     <! nil @(Field Identity)
     void $ executeCommandRequest "hsimport:import" (Some [arg]) Nothing
+  where
+    varidatedAndThen = focusLang' False
 
 
 -------------------------------------------------------------------------------
@@ -308,7 +343,7 @@ nvimHsLspHieHsImport _ moduleToImport = focusLang' False $ do
 -------------------------------------------------------------------------------
 
 nvimHsLspFormatting :: CommandArguments -> NeovimLsp ()
-nvimHsLspFormatting CommandArguments{range,bang} = whenInitialized $ focusLang' False $ whenAlreadyOpened $ do
+nvimHsLspFormatting CommandArguments{range,bang} = varidatedAndThen $ do
     uri <- getBufUri =<< vim_get_current_buffer
     fopts <- readContext $ view $
                 field @"lspConfig" . field @"formattingOptions"
@@ -323,41 +358,83 @@ nvimHsLspFormatting CommandArguments{range,bang} = whenInitialized $ focusLang' 
                   <! #end   @= fromNvimPos (l2,1)
                   <! nil
         waitCallback $ textDocumentRangeFormatting uri range' fopts
+  where
+    varidatedAndThen = whenInitialized
+                     . focusLang' False
+                     . whenAlreadyOpened
 
 -------------------------------------------------------------------------------
 -- References
 -------------------------------------------------------------------------------
 
 nvimHsLspReferences :: CommandArguments -> NeovimLsp ()
-nvimHsLspReferences _ = whenInitialized $ focusLang' False $ whenAlreadyOpened $ do
+nvimHsLspReferences _ = varidatedAndThen $ do
     uri <- getBufUri =<< vim_get_current_buffer
     pos <- fromNvimPos <$> getNvimPos
     waitCallback $ textDocumentReferences uri pos callbackTextDocumentReferences
+  where
+    varidatedAndThen = whenInitialized
+                     . focusLang' False
+                     . whenAlreadyOpened
 
 -------------------------------------------------------------------------------
 -- DocumentSymbol
 -------------------------------------------------------------------------------
 
 nvimHsLspDocumentSymbol :: CommandArguments -> NeovimLsp ()
-nvimHsLspDocumentSymbol _ = whenInitialized $ focusLang' False $ whenAlreadyOpened $ do
+nvimHsLspDocumentSymbol _ = varidatedAndThen $ do
     uri <- getBufUri =<< vim_get_current_buffer
     waitCallback $ textDocumentDocumentSymbol uri
+  where
+    varidatedAndThen = whenInitialized
+                     . focusLang' False
+                     . whenAlreadyOpened
 
 -------------------------------------------------------------------------------
 -- WorkspaceSymbol
 -------------------------------------------------------------------------------
 
 nvimHsLspWorkspaceSymbol :: CommandArguments -> String -> NeovimLsp ()
-nvimHsLspWorkspaceSymbol _ sym = whenInitialized $ focusLang' False $ whenAlreadyOpened $ do
+nvimHsLspWorkspaceSymbol _ sym = varidatedAndThen $ do
     waitCallback $ workspaceSymbol sym callbackWorkspaceSymbol
+  where
+    varidatedAndThen = whenInitialized
+                     . focusLang' False
+                     . whenAlreadyOpened
 
 -------------------------------------------------------------------------------
 -- DocumentSymbol
 -------------------------------------------------------------------------------
 
 nvimHsLspRename :: CommandArguments -> String -> NeovimLsp ()
-nvimHsLspRename _ newName = whenInitialized $ focusLang' False $ whenAlreadyOpened $ do
+nvimHsLspRename _ newName = varidatedAndThen $ do
     uri <- getBufUri =<< vim_get_current_buffer
     pos <- fromNvimPos <$> getNvimPos
     waitCallback $ textDocumentRename uri pos newName
+  where
+    varidatedAndThen = whenInitialized
+                     . focusLang' False
+                     . whenAlreadyOpened
+
+-------------------------------------------------------------------------------
+-- Config
+-------------------------------------------------------------------------------
+
+nvimHsLspToggleQfAutoOpen :: CommandArguments -> NeovimLsp ()
+nvimHsLspToggleQfAutoOpen _ = whenInitialized $ focusLang' False $ do
+    modifyContext $ field @"lspConfig"
+                  . field @"autoLoadQuickfix"
+                  %~ not
+
+nvimHsLspEnableQfAutoOpen :: CommandArguments -> NeovimLsp ()
+nvimHsLspEnableQfAutoOpen _ = whenInitialized $ focusLang' False $ do
+    modifyContext $ field @"lspConfig"
+                  . field @"autoLoadQuickfix"
+                  .~ True
+
+nvimHsLspDisableQfAutoOpen :: CommandArguments -> NeovimLsp ()
+nvimHsLspDisableQfAutoOpen _ = whenInitialized $ focusLang' False $ do
+    modifyContext $ field @"lspConfig"
+                  . field @"autoLoadQuickfix"
+                  .~ False
 

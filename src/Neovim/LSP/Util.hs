@@ -13,7 +13,6 @@ import qualified RIO.Map                      as M
 
 import           Control.Lens                 ((^.), (.~))
 import           Data.Generics.Product        (field)
-import           System.Exit                  (exitSuccess)
 import           System.IO                    (hGetLine)
 import           System.IO.Error              (isEOFError)
 import qualified Data.Aeson                   as J
@@ -96,23 +95,30 @@ getCwd :: Neovim env (Path Abs Dir)
 getCwd = do
   cwd <- fromObject' =<< vimCallFunction "getcwd" []
   case parseAbsDir cwd of
-    Nothing -> error "impossible"
+    Nothing -> error $ "fail to parse directory name: " <> cwd
     Just cwd' -> return cwd'
 
 getBufLanguage :: (HasLogFunc env)
                => Buffer -> Neovim env (Maybe String)
-getBufLanguage b = handleAny (\_ -> return Nothing) $
-    nvim_buf_get_var b "current_syntax" >>= fromObject'
+getBufLanguage b =
+    tryAny (nvim_buf_get_var b "current_syntax" >>= fromObject') >>=
+      \case
+        Right x -> return (Just x)
+        _ -> return Nothing
 
 getBufUri :: Buffer -> Neovim env Uri
-getBufUri b = parseAbsFile <$> nvim_buf_get_name b >>= \case
-    Nothing -> error "impossible"
-    Just file -> return $ pathToUri file
+getBufUri b = do
+    f <- nvim_buf_get_name b
+    case parseAbsFile f of
+      Nothing -> error $ "fail to parse file name: " <> f
+      Just file -> return $ pathToUri file
 
 getNvimPos :: (HasLogFunc env) => Neovim env NvimPos
-getNvimPos = tryAny (vimCallFunction "getpos" [ObjectString "."] >>= fromObject') >>= \case
-  Right ([_bufnum, lnum, col, _off] :: [Int]) -> return (lnum,col)
-  e -> logError (displayShow e) >> error "getNvimPos"
+getNvimPos =
+    tryAny (vimCallFunction "getpos" [ObjectString "."] >>= fromObject') >>=
+      \case
+        Right ([_bufnum, lnum, col, _off] :: [Int]) -> return (lnum,col)
+        e -> logError (displayShow e) >> error "getNvimPos"
 
 getBufContents :: Buffer -> Neovim env Text
 getBufContents b = T.pack.unlines <$> nvim_buf_get_lines b 0 maxBound False
@@ -226,7 +232,8 @@ startServer lang cwd {-cmd args-} workers = do
                         fromObject' =<< vim_get_var "NvimHsLsp_languageConfig"
         let wildConfig = M.findWithDefault M.empty "_" allConfig
             langConfig = M.findWithDefault M.empty (encodeUtf8 lang) allConfig
-            config     = langConfig `M.union` wildConfig -- langConfig is preferred
+                         -- langConfig is preferred
+            config     = langConfig `M.union` wildConfig
         update config defaultLspConfig
       where
         update :: Map ByteString Object -> LspConfig -> Neovim env LspConfig
@@ -307,9 +314,8 @@ startServer lang cwd {-cmd args-} workers = do
                       go $ header { contentLength = read (drop 16 x) }
                  | "Content-Type: " `L.isPrefixOf` x ->
                       go $ header { contentType = Just (drop 14 x) }
-                 | "\r" == x          -> return header
-                 | "ExitSuccess" == x -> exitSuccess -- hie only
-                 | otherwise          -> error $ "receiver: unknown input: " ++ show x
+                 | "\r" == x -> return header
+                 | otherwise -> error $ "receiver: unknown input: " <> show x
 
 data Header = Header
   { contentLength :: ~Int -- lazy initialization
@@ -388,7 +394,8 @@ replaceQfList :: HasLogFunc env => [QfItem] -> Neovim env ()
 replaceQfList qs = void $ vimCallFunction "setqflist" $! qs +: ['r'] +: []
 
 replaceLocList :: HasLogFunc env => Int -> [QfItem] -> Neovim env ()
-replaceLocList winId qs = void $ vimCallFunction "setloclist" $! winId +: qs +: ['r'] +: []
+replaceLocList winId qs =
+    void $ vimCallFunction "setloclist" $! winId +: qs +: ['r'] +: []
 
 diagnosticToQfItems :: Uri -> Diagnostic -> [QfItem]
 diagnosticToQfItems uri d
@@ -473,10 +480,12 @@ applyTextEdits uri edits = do
 --             , "  end"
 --             ]
 --      edit = Record
---           $ #range @= Record ( #start @= Record (#line @= 0 <! #character @= 0 <! nil)
---                             <! #end   @= Record (#line @= 3 <! #character @= 0 <! nil)
---                             <! nil )
---          <! #newText @= "let () =\n  begin match () with\n    | () -> ()\n  end\n"
+--           $ #range @= Record
+--                  ( #start @= Record (#line @= 0 <! #character @= 0 <! nil)
+--                 <! #end   @= Record (#line @= 3 <! #character @= 0 <! nil)
+--                 <! nil )
+--          <! #newText @=
+--                  "let () =\n  begin match () with\n    | () -> ()\n  end\n"
 --          <! nil
 --  in putStr $ T.unpack $ T.unlines $ applyTextEdit text edit
 -- :}
@@ -488,8 +497,9 @@ applyTextEdits uri edits = do
 applyTextEdit :: [Text] -> TextEdit -> [Text]
 applyTextEdit text edit =
     let range = edit^. #range
-        (before, r)   = L.splitAt (range^. #start.__#line) text
-        (body, after) = L.splitAt (range^. #end.__#line - range^.__#start.__#line + 1) r
+        (before, r)   = L.splitAt (range^.__#start.__#line) text
+        (body, after) = L.splitAt (range^.__#end.__#line
+                                    - range^.__#start.__#line + 1) r
         body' = T.lines $ b <> edit^. #newText <> a
           where
             b = T.take (range^. #start.__#character) (L.head body)
@@ -530,10 +540,10 @@ applyDocumentChanges = \case
     L xs -> applyTextDocumentEdits xs
     R _  -> logError "Resource operation is not supported"
 
-applyTextDocumentEdits :: (HasLogFunc env) => [TextDocumentEdit] -> Neovim env ()
+applyTextDocumentEdits :: HasLogFunc env => [TextDocumentEdit] -> Neovim env ()
 applyTextDocumentEdits = mapM_ applyTextDocumentEdit
 
-applyTextDocumentEdit :: (HasLogFunc env) => TextDocumentEdit -> Neovim env ()
+applyTextDocumentEdit :: HasLogFunc env => TextDocumentEdit -> Neovim env ()
 applyTextDocumentEdit textDocumentEdit = do
     let uri   = textDocumentEdit ^. #textDocument.__#uri -- XXX ignore version
         edits = textDocumentEdit ^. #edits
