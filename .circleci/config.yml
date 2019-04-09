@@ -3,7 +3,7 @@ version: 2
 aliases:
   - &default_env
     CACHE_KEY: 2
-    SUB_CACHE_KEY: 1
+    SUB_CACHE_KEY: 2
     STACK_VERSION: 1.9.1
   - &create_cache_key_file
     run:
@@ -72,7 +72,7 @@ aliases:
         name: Prepare for building hie
         command: |
           cd ~/haskell-ide-engine
-          git pull origin master
+          git fetch origin
           git checkout 0.8.0.0
           ./install.hs submodules
           ./install.hs cabal
