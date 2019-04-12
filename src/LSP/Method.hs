@@ -40,8 +40,13 @@ data ClientRequestMethod-- {{{
   | TextDocumentRangeFormatting
   | TextDocumentOnTypeFormatting
   | TextDocumentDefinition
+  | TextDocumentTypeDefinition
+  | TextDocumentImplementation
   | TextDocumentCodeAction
   | TextDocumentCodeLens
+  | TextDocumentDeclaration
+  | TextDocumentPrepareRename
+  | TextDocumentFoldingRange
   | CodeLensResolve
   | TextDocumentDocumentColor
   | TextDocumentDocumentLink
@@ -104,8 +109,13 @@ instance FromJSON ClientRequestMethod where -- {{{
   parseJSON (String "textDocument/rangeFormatting")     = return TextDocumentRangeFormatting
   parseJSON (String "textDocument/onTypeFormatting")    = return TextDocumentOnTypeFormatting
   parseJSON (String "textDocument/definition")          = return TextDocumentDefinition
+  parseJSON (String "textDocument/typeDefinition")      = return TextDocumentTypeDefinition
+  parseJSON (String "textDocument/implementation")      = return TextDocumentImplementation
   parseJSON (String "textDocument/codeAction")          = return TextDocumentCodeAction
   parseJSON (String "textDocument/codeLens")            = return TextDocumentCodeLens
+  parseJSON (String "textDocument/declaration")         = return TextDocumentDeclaration
+  parseJSON (String "textDocument/prepareRename")       = return TextDocumentPrepareRename
+  parseJSON (String "textDocument/foldingRange")        = return TextDocumentFoldingRange
   parseJSON (String "codeLens/resolve")                 = return CodeLensResolve
   parseJSON (String "textDocument/documentLink")        = return TextDocumentDocumentLink
   parseJSON (String "textDocument/documentColor")       = return TextDocumentDocumentColor
@@ -147,8 +157,13 @@ instance ToJSON ClientRequestMethod where -- {{{
   toJSON TextDocumentRangeFormatting     = String "textDocument/rangeFormatting"
   toJSON TextDocumentOnTypeFormatting    = String "textDocument/onTypeFormatting"
   toJSON TextDocumentDefinition          = String "textDocument/definition"
+  toJSON TextDocumentTypeDefinition      = String "textDocument/typeDefinition"
+  toJSON TextDocumentImplementation      = String "textDocument/implementation"
   toJSON TextDocumentCodeAction          = String "textDocument/codeAction"
   toJSON TextDocumentCodeLens            = String "textDocument/codeLens"
+  toJSON TextDocumentDeclaration         = String "textDocument/declaration"
+  toJSON TextDocumentPrepareRename       = String "textDocument/prepareRename"
+  toJSON TextDocumentFoldingRange        = String "textDocument/foldingRange"
   toJSON CodeLensResolve                 = String "codeLens/resolve"
   toJSON TextDocumentRename              = String "textDocument/rename"
   toJSON TextDocumentDocumentLink        = String "textDocument/documentLink"
@@ -229,8 +244,13 @@ data ClientRequestMethodK --{{{
   | TextDocumentRangeFormattingK
   | TextDocumentOnTypeFormattingK
   | TextDocumentDefinitionK
+  | TextDocumentTypeDefinitionK
+  | TextDocumentImplementationK
   | TextDocumentCodeActionK
   | TextDocumentCodeLensK
+  | TextDocumentDeclarationK
+  | TextDocumentPrepareRenameK
+  | TextDocumentFoldingRangeK
   | CodeLensResolveK
   | TextDocumentDocumentLinkK
   | DocumentLinkResolveK
@@ -297,8 +317,13 @@ data instance Sing (m :: ClientRequestMethodK) where -- {{{
   STextDocumentRangeFormatting     :: Sing 'TextDocumentRangeFormattingK
   STextDocumentOnTypeFormatting    :: Sing 'TextDocumentOnTypeFormattingK
   STextDocumentDefinition          :: Sing 'TextDocumentDefinitionK
+  STextDocumentTypeDefinition      :: Sing 'TextDocumentTypeDefinitionK
+  STextDocumentImplementation      :: Sing 'TextDocumentImplementationK
   STextDocumentCodeAction          :: Sing 'TextDocumentCodeActionK
   STextDocumentCodeLens            :: Sing 'TextDocumentCodeLensK
+  STextDocumentDeclaration         :: Sing 'TextDocumentDeclarationK
+  STextDocumentPrepareRename       :: Sing 'TextDocumentPrepareRenameK
+  STextDocumentFoldingRange        :: Sing 'TextDocumentFoldingRangeK
   SCodeLensResolve                 :: Sing 'CodeLensResolveK
   STextDocumentDocumentLink        :: Sing 'TextDocumentDocumentLinkK
   STextDocumentDocumentColor       :: Sing 'TextDocumentDocumentColorK
@@ -350,8 +375,13 @@ instance SingI 'TextDocumentFormattingK          where sing = STextDocumentForma
 instance SingI 'TextDocumentRangeFormattingK     where sing = STextDocumentRangeFormatting
 instance SingI 'TextDocumentOnTypeFormattingK    where sing = STextDocumentOnTypeFormatting
 instance SingI 'TextDocumentDefinitionK          where sing = STextDocumentDefinition
+instance SingI 'TextDocumentTypeDefinitionK      where sing = STextDocumentTypeDefinition
+instance SingI 'TextDocumentImplementationK      where sing = STextDocumentImplementation
 instance SingI 'TextDocumentCodeActionK          where sing = STextDocumentCodeAction
 instance SingI 'TextDocumentCodeLensK            where sing = STextDocumentCodeLens
+instance SingI 'TextDocumentDeclarationK         where sing = STextDocumentDeclaration
+instance SingI 'TextDocumentPrepareRenameK       where sing = STextDocumentPrepareRename
+instance SingI 'TextDocumentFoldingRangeK        where sing = STextDocumentFoldingRange
 instance SingI 'CodeLensResolveK                 where sing = SCodeLensResolve
 instance SingI 'TextDocumentDocumentLinkK        where sing = STextDocumentDocumentLink
 instance SingI 'TextDocumentDocumentColorK       where sing = STextDocumentDocumentColor
@@ -381,8 +411,13 @@ instance SingKind ClientRequestMethodK where-- {{{
     STextDocumentRangeFormatting     -> TextDocumentRangeFormatting
     STextDocumentOnTypeFormatting    -> TextDocumentOnTypeFormatting
     STextDocumentDefinition          -> TextDocumentDefinition
+    STextDocumentTypeDefinition      -> TextDocumentTypeDefinition
+    STextDocumentImplementation      -> TextDocumentImplementation
     STextDocumentCodeAction          -> TextDocumentCodeAction
     STextDocumentCodeLens            -> TextDocumentCodeLens
+    STextDocumentDeclaration         -> TextDocumentDeclaration
+    STextDocumentPrepareRename       -> TextDocumentPrepareRename
+    STextDocumentFoldingRange        -> TextDocumentFoldingRange
     SCodeLensResolve                 -> CodeLensResolve
     STextDocumentDocumentLink        -> TextDocumentDocumentLink
     STextDocumentDocumentColor       -> TextDocumentDocumentColor
@@ -408,8 +443,13 @@ instance SingKind ClientRequestMethodK where-- {{{
     TextDocumentRangeFormatting        -> SomeSing STextDocumentRangeFormatting
     TextDocumentOnTypeFormatting       -> SomeSing STextDocumentOnTypeFormatting
     TextDocumentDefinition             -> SomeSing STextDocumentDefinition
+    TextDocumentTypeDefinition         -> SomeSing STextDocumentTypeDefinition
+    TextDocumentImplementation         -> SomeSing STextDocumentImplementation
     TextDocumentCodeAction             -> SomeSing STextDocumentCodeAction
     TextDocumentCodeLens               -> SomeSing STextDocumentCodeLens
+    TextDocumentDeclaration            -> SomeSing STextDocumentDeclaration
+    TextDocumentPrepareRename          -> SomeSing STextDocumentPrepareRename
+    TextDocumentFoldingRange           -> SomeSing STextDocumentFoldingRange
     CodeLensResolve                    -> SomeSing SCodeLensResolve
     TextDocumentDocumentLink           -> SomeSing STextDocumentDocumentLink
     TextDocumentDocumentColor          -> SomeSing STextDocumentDocumentColor

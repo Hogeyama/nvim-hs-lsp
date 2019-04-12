@@ -35,12 +35,17 @@ prfClientReq = \case -- {{{
     STextDocumentRangeFormatting     -> Dict
     STextDocumentOnTypeFormatting    -> Dict
     STextDocumentDefinition          -> Dict
+    STextDocumentTypeDefinition      -> Dict
+    STextDocumentImplementation      -> Dict
     STextDocumentCodeAction          -> Dict
     STextDocumentCodeLens            -> Dict
+    STextDocumentDeclaration         -> Dict
     SCodeLensResolve                 -> Dict
     STextDocumentDocumentLink        -> Dict
     SDocumentLinkResolve             -> Dict
     STextDocumentRename              -> Dict
+    STextDocumentPrepareRename       -> Dict
+    STextDocumentFoldingRange        -> Dict
     STextDocumentDocumentColor       -> Dict
     STextDocumentColorPresentation   -> Dict
     SClientRequestMisc SSym          -> Dict
@@ -84,12 +89,17 @@ prfServerResp = \case  -- {{{
     STextDocumentRangeFormatting     -> Dict
     STextDocumentOnTypeFormatting    -> Dict
     STextDocumentDefinition          -> Dict
+    STextDocumentTypeDefinition      -> Dict
+    STextDocumentImplementation      -> Dict
     STextDocumentCodeAction          -> Dict
     STextDocumentCodeLens            -> Dict
+    STextDocumentDeclaration         -> Dict
     SCodeLensResolve                 -> Dict
     STextDocumentDocumentLink        -> Dict
     SDocumentLinkResolve             -> Dict
     STextDocumentRename              -> Dict
+    STextDocumentPrepareRename       -> Dict
+    STextDocumentFoldingRange        -> Dict
     STextDocumentDocumentColor       -> Dict
     STextDocumentColorPresentation   -> Dict
     SClientRequestMisc SSym          -> Dict

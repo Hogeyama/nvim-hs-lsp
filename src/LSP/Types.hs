@@ -565,7 +565,7 @@ type instance RequestParam 'InitializeK = Record
    , "initializationOptions" >: Option Value
    , "capabilities"          >: ClientCapabilities
    , "trace"                 >: Option Trace
-   , "workspaceFolders"      >: Option (Nullable [WorkspaceFolder])
+   , "workspaceFolders"      >: Option (Nullable [WorkspaceFolder]) -- Since 3.6.0
    ]
 
 -- | Initialize Response > Result
@@ -733,8 +733,8 @@ type WorkspaceClientCapabilities = Record
    , "executeCommand" >: OptionalRecord
         '[ "dynamicRegistration" >: Option Bool
          ]
-   , "workspaceFolders" >: Option Bool
-   , "configuration" >: Option Bool
+   , "workspaceFolders" >: Option Bool -- Since 3.6.0
+   , "configuration" >: Option Bool -- Since 3.6.0
    ]
   -- }}}
 
@@ -769,7 +769,7 @@ type TextDocumentClientCapabilities = Record
          , "signatureInformation" >: OptionalRecord
               '[ "documentationFormat" >: Option [MarkupKind]
                , "parameterInformation" >: OptionalRecord
-                    '[ "labelOffsetSupport" >: Option Bool
+                    '[ "labelOffsetSupport" >: Option Bool -- Since 3.14.0
                      ]
                ]
          ]
@@ -797,23 +797,23 @@ type TextDocumentClientCapabilities = Record
          ]
    , "declaration"        >: OptionalRecord
         '[ "dynamicRegistration" >: Option Bool
-         , "linkSupport"         >: Option Bool
+         , "linkSupport"         >: Option Bool -- Since 3.14.0
          ]
    , "definition"         >: OptionalRecord
         '[ "dynamicRegistration" >: Option Bool
-         , "linkSupport"         >: Option Bool
+         , "linkSupport"         >: Option Bool -- Since 3.14.0
          ]
-   , "typeDefinition"     >: OptionalRecord
+   , "typeDefinition"     >: OptionalRecord -- Since 3.6.0
         '[ "dynamicRegistration" >: Option Bool
-         , "linkSupport"         >: Option Bool
+         , "linkSupport"         >: Option Bool -- Since 3.14.0
          ]
-   , "implementation"     >: OptionalRecord
+   , "implementation"     >: OptionalRecord -- Since 3.6.0
         '[ "dynamicRegistration" >: Option Bool
          , "linkSupport"         >: Option Bool
          ]
    , "codeAction"         >: OptionalRecord
         '[ "dynamicRegistration" >: Option Bool
-         , "codeActionLiteralSupport" >: OptionalRecord
+         , "codeActionLiteralSupport" >: OptionalRecord -- Since 3.8.0
               '[ "codeActionKind" >: Record
                     '[ "valueSet" >: [CodeActionKind]
                      ]
@@ -825,7 +825,7 @@ type TextDocumentClientCapabilities = Record
    , "documentLink"       >: OptionalRecord
         '[ "dynamicRegistration" >: Option Bool
          ]
-   , "colorProvider"      >: OptionalRecord
+   , "colorProvider"      >: OptionalRecord -- Since 3.6.0
         '[ "dynamicRegistration" >: Option Bool
          ]
    , "rename"             >: OptionalRecord
@@ -834,7 +834,7 @@ type TextDocumentClientCapabilities = Record
    , "publishDiagnostics" >: OptionalRecord
         '[ "realatedInformation" >: Option Bool
          ]
-   , "foldingRange"       >: OptionalRecord
+   , "foldingRange"       >: OptionalRecord -- Since 3.10.0
         '[ "dynamicRegistration" >: Option Bool
          , "rangeLimity"         >: Option Int
          , "lineFoldingOnly"     >: Option Bool
@@ -853,8 +853,8 @@ type ServerCapabilities = Record
    , "completionProvider"               >: Option CompletionOptions
    , "signatureHelpProvider"            >: Option SignatureHelpOptions
    , "definitionProvider"               >: Option DefinitionOptions
-   , "typeDefinitionProvider"           >: Option TypeDefinitionOptions
-   , "implementationProvider"           >: Option ImplementationOptions
+   , "typeDefinitionProvider"           >: Option TypeDefinitionOptions -- Since 3.6.0
+   , "implementationProvider"           >: Option ImplementationOptions -- Since 3.6.0
    , "referencesProvider"               >: Option ReferenceOptions
    , "documentHighlightProvider"        >: Option DocumentHighlightOptions
    , "documentSymbolProvider"           >: Option DocumentSymbolOptions
@@ -871,10 +871,11 @@ type ServerCapabilities = Record
    , "documentOnTypeFormattingProvider" >: Option DocumentOnTypeFormattingOptions
    , "renameProvider"                   >: Option (Bool :|: RenameOptions)
    , "documentLinkProvider"             >: Option DocumentLinkOptions
-   , "colorProvider"                    >: Option ColorOptions
-   , "foldingRangeProvider"             >: Option FoldingRangeOptions
+   , "colorProvider"                    >: Option ColorOptions -- Since 3.6.0
+   , "foldingRangeProvider"             >: Option FoldingRangeOptions -- Since 3.10.0
+   , "declarationProvider"              >: Option DecarationOptions -- Since 3.14.0
    , "executeCommandProvider"           >: Option ExecuteCommandOptions
-   , "workspace"                        >: Option WorkspaceOptions
+   , "workspace"                        >: Option WorkspaceOptions -- Since 3.6.0
    , "experimental"                     >: Option Value
    ]
 
@@ -950,6 +951,9 @@ type ColorOptions = Bool :|: ColorProviderOptions :|:
 -- Note: This type alias is not defined in original specification
 type FoldingRangeOptions = Bool :|: FoldingRangeProviderOptions :|:
   FoldingRangeProviderOptions & TextDocumentRegistrationOptions & StaticRegistrationOptions
+
+type DecarationOptions = Bool :|:
+  TextDocumentRegistrationOptions & StaticRegistrationOptions
 
 type ExecuteCommandOptions = Record
   '[ "commands" >: [String]
@@ -1110,11 +1114,42 @@ type SignatureHelp = Value
 
 -- }}}
 
+-- TextDocumentDeclaration {{{
+----------------------------------------
+-- Since 3.14.0
+type instance RequestParam 'TextDocumentDeclarationK = TextDocumentPositionParams
+type instance ResponseResultParam 'TextDocumentDeclarationK =
+  Nullable (Location :|: [Location] :|: [LocationLink])
+type instance ResponseErrorParam  'TextDocumentDeclarationK = Value
+
+-- }}}
+
 -- TextDocumentDefinition {{{
 ----------------------------------------
 type instance RequestParam 'TextDocumentDefinitionK = TextDocumentPositionParams
-type instance ResponseResultParam 'TextDocumentDefinitionK = Nullable [Location]
+type instance ResponseResultParam 'TextDocumentDefinitionK =
+  Nullable (Location :|: [Location] :|: [LocationLink]) -- LocationLinkは Since 3.14.0
 type instance ResponseErrorParam  'TextDocumentDefinitionK = String
+
+-- }}}
+
+-- TextDocumentTypeDefinition {{{
+----------------------------------------
+-- Since 3.6.0
+type instance RequestParam 'TextDocumentTypeDefinitionK = TextDocumentPositionParams
+type instance ResponseResultParam 'TextDocumentTypeDefinitionK =
+  Nullable (Location :|: [Location] :|: [LocationLink])
+type instance ResponseErrorParam  'TextDocumentTypeDefinitionK = String
+
+-- }}}
+
+-- TextDocumentImplementation {{{
+----------------------------------------
+-- Since 3.6.0
+type instance RequestParam 'TextDocumentImplementationK = TextDocumentPositionParams
+type instance ResponseResultParam 'TextDocumentImplementationK =
+  Nullable (Location :|: [Location] :|: [LocationLink])
+type instance ResponseErrorParam  'TextDocumentImplementationK = String
 
 -- }}}
 
@@ -1177,6 +1212,132 @@ type SymbolInformation = Record
    , "containerName" >: Option String
    ]
 
+--}}}
+
+-- TextDocumentCodeAction {{{
+----------------------------------------
+
+type instance RequestParam 'TextDocumentCodeActionK = CodeActionParams
+type instance ResponseResultParam 'TextDocumentCodeActionK = Nullable [Command :|: CodeAction]
+type instance ResponseErrorParam  'TextDocumentCodeActionK = Value
+
+type CodeActionParams = Record
+  '[ "textDocument" >: TextDocumentIdentifier
+   , "range"        >: Range
+   , "context"      >: CodeActionContext
+   ]
+type CodeActionContext = Record
+  '[ "diagnostics" >: [Diagnostic]
+   , "only"        >: Option [CodeActionKind]
+   ]
+
+type CodeActionKind = EnumS
+  '[ "quickfix"
+   , "refactor"
+   , "refactor.extract"
+   , "refactor.inline"
+   , "refactor.rewrite"
+   , "source"
+   ]
+
+type CodeAction = Record
+  '[ "title"       >: String
+   , "kind"        >: Option CodeActionKind
+   , "diagnostics" >: Option [Diagnostic]
+   , "edit"        >: Option WorkspaceEdit -- Since 3.8.0
+   , "command"     >: Command
+   ]
+
+-- for dynamic registration
+type CodeActionRegistrationOptions =
+  TextDocumentRegistrationOptions & CodeActionOptions
+
+-- }}}
+
+-- TextDocumentCodeLens {{{
+----------------------------------------
+
+type instance RequestParam 'TextDocumentCodeLensK = Record
+  '[ "textDocument" >: TextDocumentIdentifier
+   ]
+type instance ResponseResultParam 'TextDocumentCodeLensK = Nullable [CodeLens]
+type instance ResponseErrorParam  'TextDocumentCodeLensK = Value
+
+type CodeLens = Record
+  '[ "range"   >: Range
+   , "command" >: Option Command
+   , "data"    >: Option Value
+   ]
+
+-- }}}
+
+-- CodeLensResolve {{{
+----------------------------------------
+type instance RequestParam 'CodeLensResolveK = CodeLens
+type instance ResponseResultParam 'CodeLensResolveK = CodeLens
+type instance ResponseErrorParam  'CodeLensResolveK = Value
+
+-- }}}
+
+-- TextDocumentDocumentLink {{{
+----------------------------------------
+type instance RequestParam 'TextDocumentDocumentLinkK = Record
+  '[ "textDocument" >: TextDocumentIdentifier
+   ]
+type instance ResponseResultParam 'TextDocumentDocumentLinkK = Nullable DocumentLink
+type instance ResponseErrorParam  'TextDocumentDocumentLinkK = Value
+
+type DocumentLink = Record
+  '[ "range"  >: Range
+   , "target" >: Option Uri
+   , "data"   >: Option Value
+   ]
+-- }}}
+
+-- DocumentLinkResolve {{{
+----------------------------------------
+type instance RequestParam 'DocumentLinkResolveK = DocumentLink
+type instance ResponseResultParam 'DocumentLinkResolveK = DocumentLink
+type instance ResponseErrorParam  'DocumentLinkResolveK = Value
+-- }}}
+
+-- TextDocumentDocumentColor {{{
+----------------------------------------
+-- Since 3.6.0
+type instance RequestParam 'TextDocumentDocumentColorK = DocumentColorParams
+type instance ResponseResultParam 'TextDocumentDocumentColorK = [ColorInformation]
+type instance ResponseErrorParam  'TextDocumentDocumentColorK = Value
+type ColorInformation = Record
+  '[ "range" >: Range
+   , "color" >: Color
+   ]
+type Color = Record
+  '[ "red"   >: Number
+   , "green" >: Number
+   , "blue"  >: Number
+   , "alpha" >: Number
+   ]
+type DocumentColorParams = Record
+  '[ "textDocument" >: TextDocumentIdentifier
+   ]
+--}}}
+
+-- TextDocumentColorPresentation {{{
+----------------------------------------
+-- Since 3.6.0
+type instance RequestParam 'TextDocumentColorPresentationK = ColorPresentationParams
+type instance ResponseResultParam 'TextDocumentColorPresentationK = [ColorPresentation]
+type instance ResponseErrorParam  'TextDocumentColorPresentationK = Value
+type ColorPresentationParams = Record 
+  '[ "textDocument" >: TextDocumentIdentifier
+   , "color"        >: Color
+   , "range"        >: Range
+   ]
+type ColorPresentation = Record
+  '[ "label"               >: String
+   , "textEdit"            >: Option TextEdit
+   , "additionalTextEdits" >: Option [TextEdit]
+   ]
 --}}}
 
 -- TextDocumentFormatting {{{
@@ -1276,130 +1437,6 @@ type DocumentOnTypeFormattingRegistrationOptions = TextDocumentRegistrationOptio
    ]
 --}}}
 
--- TextDocumentCodeAction {{{
-----------------------------------------
-
-type instance RequestParam 'TextDocumentCodeActionK = CodeActionParams
-type instance ResponseResultParam 'TextDocumentCodeActionK = Nullable [Command :|: CodeAction]
-type instance ResponseErrorParam  'TextDocumentCodeActionK = Value
-
-type CodeActionParams = Record
-  '[ "textDocument" >: TextDocumentIdentifier
-   , "range"        >: Range
-   , "context"      >: CodeActionContext
-   ]
-type CodeActionContext = Record
-  '[ "diagnostics" >: [Diagnostic]
-   , "only"        >: Option [CodeActionKind]
-   ]
-
-type CodeActionKind = EnumS
-  '[ "quickfix"
-   , "refactor"
-   , "refactor.extract"
-   , "refactor.inline"
-   , "refactor.rewrite"
-   , "source"
-   ]
-
-type CodeAction = Record
-  '[ "title"       >: String
-   , "kind"        >: Option CodeActionKind
-   , "diagnostics" >: Option [Diagnostic]
-   , "edit"        >: Option WorkspaceEdit
-   , "command"     >: Command
-   ]
-
--- for dynamic registration
-type CodeActionRegistrationOptions =
-  TextDocumentRegistrationOptions & CodeActionOptions
-
--- }}}
-
--- TextDocumentCodeLens {{{
-----------------------------------------
-
-type instance RequestParam 'TextDocumentCodeLensK = Record
-  '[ "textDocument" >: TextDocumentIdentifier
-   ]
-type instance ResponseResultParam 'TextDocumentCodeLensK = Nullable [CodeLens]
-type instance ResponseErrorParam  'TextDocumentCodeLensK = Value
-
-type CodeLens = Record
-  '[ "range"   >: Range
-   , "command" >: Option Command
-   , "data"    >: Option Value
-   ]
-
--- }}}
-
--- CodeLensResolve {{{
-----------------------------------------
-type instance RequestParam 'CodeLensResolveK = CodeLens
-type instance ResponseResultParam 'CodeLensResolveK = CodeLens
-type instance ResponseErrorParam  'CodeLensResolveK = Value
-
--- }}}
-
--- TextDocumentDocumentLink {{{
-----------------------------------------
-type instance RequestParam 'TextDocumentDocumentLinkK = Record
-  '[ "textDocument" >: TextDocumentIdentifier
-   ]
-type instance ResponseResultParam 'TextDocumentDocumentLinkK = Nullable DocumentLink
-type instance ResponseErrorParam  'TextDocumentDocumentLinkK = Value
-
-type DocumentLink = Record
-  '[ "range"  >: Range
-   , "target" >: Option Uri
-   , "data"   >: Option Value
-   ]
--- }}}
-
--- DocumentLinkResolve {{{
-----------------------------------------
-type instance RequestParam 'DocumentLinkResolveK = DocumentLink
-type instance ResponseResultParam 'DocumentLinkResolveK = DocumentLink
-type instance ResponseErrorParam  'DocumentLinkResolveK = Value
--- }}}
-
--- TextDocumentDocumentColor {{{
-----------------------------------------
-type instance RequestParam 'TextDocumentDocumentColorK = DocumentColorParams
-type instance ResponseResultParam 'TextDocumentDocumentColorK = [ColorInformation]
-type instance ResponseErrorParam  'TextDocumentDocumentColorK = Value
-type ColorInformation = Record
-  '[ "range" >: Range
-   , "color" >: Color
-   ]
-type Color = Record
-  '[ "red"   >: Number
-   , "green" >: Number
-   , "blue"  >: Number
-   , "alpha" >: Number
-   ]
-type DocumentColorParams = Record
-  '[ "textDocument" >: TextDocumentIdentifier
-   ]
---}}}
-
--- TextDocumentColorPresentation {{{
-----------------------------------------
-type instance RequestParam 'TextDocumentColorPresentationK = ColorPresentationParams
-type instance ResponseResultParam 'TextDocumentColorPresentationK = [ColorPresentation]
-type instance ResponseErrorParam  'TextDocumentColorPresentationK = Value
-type ColorPresentationParams = Record 
-  '[ "textDocument" >: TextDocumentIdentifier
-   , "color"        >: Color
-   , "range"        >: Range
-   ]
-type ColorPresentation = Record
-  '[ "label"               >: String
-   , "textEdit"            >: Option TextEdit
-   , "additionalTextEdits" >: Option [TextEdit]
-   ]
---}}}
-
 -- TextDocumentRename {{{
 type instance RequestParam 'TextDocumentRenameK = Record
   '[ "textDocument" >: TextDocumentIdentifier
@@ -1415,8 +1452,43 @@ type RenameRegistrationOptions = TextDocumentRegistrationOptions & Record
 
 -- }}}
 
--- TODO
---type PrepareRename
+-- TextDocumentPrepareRename {{{
+-- Since 3.12.0
+type instance RequestParam 'TextDocumentPrepareRenameK = TextDocumentPositionParams
+type instance ResponseResultParam 'TextDocumentPrepareRenameK =
+  Nullable
+    ( Range :|:
+      Record
+       '[ "range" >: Range
+        , "placeholder" >: Text
+        ] )
+type instance ResponseErrorParam  'TextDocumentPrepareRenameK = Value
+
+-- }}}
+
+-- TextDocumentFoldingRange {{{
+-- Since 3.10.0
+type instance RequestParam 'TextDocumentFoldingRangeK = Record
+  '[ "textDocument" >: TextDocumentIdentifier
+   ]
+type instance ResponseResultParam 'TextDocumentFoldingRangeK =
+  Nullable [FoldingRange]
+type instance ResponseErrorParam  'TextDocumentFoldingRangeK = Value
+
+type FoldingRange = Record
+  '[ "startLine"      >: Number
+   , "startCharacter" >: Option Number
+   , "endLine"        >: Number
+   , "endCharacter"   >: Option Number
+   , "kind"           >: Option FoldingKind
+   ]
+type FoldingKind = EnumS
+  '[ "comment"
+   , "imports"
+   , "regiion"
+   ]
+
+-- }}}
 
 -- Misc {{{
 ----------------------------------------
@@ -1450,6 +1522,20 @@ exitParam = None
 type instance NotificationParam 'ClientCancelK = Record '[ "id" >: ID ]
 
 -- }}}
+
+-- DidChangeWorkspaceFolders {{{
+----------------------------------------
+-- Since 3.6.0
+type instance NotificationParam 'DidChangeWorkspaceFoldersK = DidChangeWorkspaceFoldersParam
+type DidChangeWorkspaceFoldersParam = Record
+  '[ "event" >: WorkspaceFoldersChangeEvent
+   ]
+type WorkspaceFoldersChangeEvent = Record
+  '[ "added"   >: [WorkspaceFolder]
+   , "removed" >: [WorkspaceFolder]
+   ]
+
+--}}}
 
 -- WorkspaceDidChangeConfiguration {{{
 type instance NotificationParam 'WorkspaceDidChangeConfigurationK = Record
@@ -1531,19 +1617,6 @@ type instance NotificationParam 'TextDocumentDidCloseK = Record
    ]
 -- }}}
 
--- DidChangeWorkspaceFolders {{{
-----------------------------------------
-type instance NotificationParam 'DidChangeWorkspaceFoldersK = DidChangeWorkspaceFoldersParam
-type DidChangeWorkspaceFoldersParam = Record
-  '[ "event" >: WorkspaceFoldersChangeEvent
-   ]
-type WorkspaceFoldersChangeEvent = Record
-  '[ "added"   >: [WorkspaceFolder]
-   , "removed" >: [WorkspaceFolder]
-   ]
-
---}}}
-
 -- Misc {{{
 ----------------------------------------
 type instance NotificationParam ('ClientNotificationMiscK s) = Value
@@ -1554,6 +1627,19 @@ type instance NotificationParam ('ClientNotificationMiscK s) = Value
 -------------------------------------------------------------------------------
 -- Server Request --{{{
 -------------------------------------------------------------------------------
+
+-- WindowShowMessageRequest {{{
+----------------------------------------
+type instance RequestParam 'WindowShowMessageRequestK = Record
+  '[ "type"    >: MessageType
+   , "message" >: Text
+   , "actions" >: Option [MessageActionItem]
+   ]
+type instance ResponseResultParam 'WindowShowMessageRequestK = Nullable MessageActionItem
+type instance ResponseErrorParam  'WindowShowMessageRequestK = Value
+
+type MessageActionItem = Record '[ "title" >: String ]
+--}}}
 
 -- ClientRegisterCapability{{{
 ----------------------------------------
@@ -1573,32 +1659,6 @@ type TextDocumentRegistrationOptions = Record
    ]
 -- }}}
 
--- WorkspaceApplyEdit {{{
-----------------------------------------
-type instance RequestParam 'WorkspaceApplyEditK = ApplyWorkspaceEditParams
-type instance ResponseResultParam 'WorkspaceApplyEditK = ApplyWorkspaceEditResponse
-type instance ResponseErrorParam  'WorkspaceApplyEditK = String
-
-type ApplyWorkspaceEditParams = Record
-  '[ "label" >: Option String
-   , "edit"  >: WorkspaceEdit
-   ]
-type ApplyWorkspaceEditResponse = Record
-  '[ "applied" >: Bool
-   ]
---}}}
-
--- WindowShowMessageRequest {{{
-----------------------------------------
-type instance RequestParam 'WindowShowMessageRequestK = Record
-  '[ "type"    >: MessageType
-   , "message" >: Text
-   , "actions" >: Option [MessageActionItem]
-   ]
-type instance ResponseResultParam 'WindowShowMessageRequestK = Nullable MessageActionItem
-type instance ResponseErrorParam  'WindowShowMessageRequestK = Value
---}}}
-
 -- ClientUnregisterCapability {{{
 ----------------------------------------
 type instance RequestParam 'ClientUnregisterCapabilityK = Record
@@ -1615,6 +1675,7 @@ type Unregistration = Record
 
 -- WorkspaceFolders {{{
 ----------------------------------------
+-- Since 3.6.0
 type instance RequestParam 'WorkspaceFoldersK = Void
 type instance ResponseResultParam 'WorkspaceFoldersK = Nullable [WorkspaceFolder]
 type instance ResponseErrorParam  'WorkspaceFoldersK = Value
@@ -1625,8 +1686,9 @@ type WorkspaceFolder = Record
    ]
 --}}}
 
--- WorkspaceFolders {{{
+-- WorkspaceConfiguration {{{
 ----------------------------------------
+-- Since 3.6.0
 type instance RequestParam 'WorkspaceConfigurationK = ConfigurationParams
 type ConfigurationParams = Record
   '[ "items" >: [ConfigurationItem]
@@ -1638,6 +1700,21 @@ type ConfigurationItem = Record
 type instance ResponseResultParam 'WorkspaceConfigurationK = [Value]
 type instance ResponseErrorParam  'WorkspaceConfigurationK = Value
 
+--}}}
+
+-- WorkspaceApplyEdit {{{
+----------------------------------------
+type instance RequestParam 'WorkspaceApplyEditK = ApplyWorkspaceEditParams
+type instance ResponseResultParam 'WorkspaceApplyEditK = ApplyWorkspaceEditResponse
+type instance ResponseErrorParam  'WorkspaceApplyEditK = String
+
+type ApplyWorkspaceEditParams = Record
+  '[ "label" >: Option String
+   , "edit"  >: WorkspaceEdit
+   ]
+type ApplyWorkspaceEditResponse = Record
+  '[ "applied" >: Bool
+   ]
 --}}}
 
 -- Misc {{{
@@ -1652,25 +1729,6 @@ type instance ResponseErrorParam  ('ServerRequestMiscK s) = Value
 -------------------------------------------------------------------------------
 -- Server Notification --{{{
 -------------------------------------------------------------------------------
-
--- WindowShowMessageNotification {{{
-type instance NotificationParam 'WindowShowMessageRequestK = Record
-  '[ "type"    >: MessageType
-   , "message" >: Text
-   , "actions" >: Option [MessageActionItem]
-   ]
-
-type MessageActionItem = Record
-  '[ "title" >: String ]
--- }}}
-
--- TextDocumentPublishDiagnostics {{{
-----------------------------------------
-type instance NotificationParam 'TextDocumentPublishDiagnosticsK = Record
-  '[ "uri"         >: Uri
-   , "diagnostics" >: [Diagnostic]
-   ]
---}}}
 
 -- WindowShowMessage {{{
 ----------------------------------------
@@ -1697,6 +1755,14 @@ type instance NotificationParam 'WindowLogMessageK = Record
 -- TelemetryEvent {{{
 ---------------------------------------
 type instance NotificationParam 'TelemetryEventK = Value
+--}}}
+
+-- TextDocumentPublishDiagnostics {{{
+----------------------------------------
+type instance NotificationParam 'TextDocumentPublishDiagnosticsK = Record
+  '[ "uri"         >: Uri
+   , "diagnostics" >: [Diagnostic]
+   ]
 --}}}
 
 -- Cancel {{{

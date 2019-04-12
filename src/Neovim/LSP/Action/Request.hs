@@ -7,7 +7,6 @@ module Neovim.LSP.Action.Request where
 
 import           RIO
 import           RIO.List
-import           RIO.List.Partial         (head)
 import qualified RIO.Map                  as M
 
 import           Control.Lens             (views)
@@ -131,9 +130,11 @@ callbackDefinition :: CallbackOf 'TextDocumentDefinitionK ()
 callbackDefinition (Response resp) = do
   logDebug $ "responseDefinition: " <> displayShow resp
   void $ withResponse resp $ \case
-    Nothing -> nvimEcho textDocumentDefinitionNoInfo
-    Just [] -> nvimEcho textDocumentDefinitionNoInfo
-    Just r  -> jumpToLocation $ head r
+    Nothing              -> nvimEcho textDocumentDefinitionNoInfo
+    Just (L loc)         -> jumpToLocation loc
+    Just (R (L []))      -> nvimEcho textDocumentDefinitionNoInfo
+    Just (R (L (loc:_))) -> jumpToLocation loc
+    Just (R (R _))       -> logError "LocationLink is unsupported"
 
 jumpToLocation ::  (HasLogFunc env) => Location -> Neovim env ()
 jumpToLocation loc = do

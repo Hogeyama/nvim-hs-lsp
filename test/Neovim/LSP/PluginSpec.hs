@@ -73,7 +73,7 @@ spec = do
           expected = Response . Record
               $  #jsonrpc @= "2.0"
               <: #id @= Just (IDNum 2.0)
-              <: #result @= Some (Just
+              <: #result @= Some ((Just . R . L)
                     [ Record $
                        #uri @= pathToUri (baseDirectory </> src)
                     <: #range @= Record { fields =
@@ -95,7 +95,7 @@ spec = do
           expected = Response . Record
               $  #jsonrpc @= "2.0"
               <: #id @= Just (IDNum 2.0)
-              <: #result @= Some (Just
+              <: #result @= Some ((Just . R . L)
                     [  Record $
                        #uri @= pathToUri (baseDirectory </> tgt)
                     <: #range @= Record { fields =
