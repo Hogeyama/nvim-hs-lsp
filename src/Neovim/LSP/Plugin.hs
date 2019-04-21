@@ -3,28 +3,28 @@
 
 module Neovim.LSP.Plugin where
 
-import           RIO                               hiding ((^.))
-import           RIO.Char                          (isAlphaNum)
-import           RIO.List                          (isPrefixOf, partition)
-import qualified RIO.Map                           as M
+import           RIO                                   hiding ((^.))
+import           RIO.Char                              (isAlphaNum)
+import           RIO.List                              (isPrefixOf, partition)
+import qualified RIO.Map                               as M
 
-import           Control.Lens                      (views)
+import           Control.Lens                          (views)
 import           Control.Lens.Operators
-import           Control.Monad.Extra               (ifM, whenJust)
-import           Data.Aeson                        hiding (Object)
-import qualified Data.ByteString.Char8             as BC
-import           Data.Generics.Product             (field)
+import           Control.Monad.Extra                   (ifM, whenJust)
+import           Data.Aeson                            hiding (Object)
+import qualified Data.ByteString.Char8                 as BC
+import           Data.Generics.Product                 (field)
 
 import           LSP
-import           Util
-import           Neovim                            hiding (unlessM, whenM, (<>))
-import           Neovim.LSP.Action.Notification
-import           Neovim.LSP.Action.Request
+import           Neovim                                hiding (unlessM, whenM, (<>))
 import           Neovim.LSP.Base
-import           Neovim.LSP.LspPlugin.Callback
-import           Neovim.LSP.LspPlugin.Notification (notificationHandler)
-import           Neovim.LSP.LspPlugin.Request      (requestHandler)
+import           Neovim.LSP.ClientMessage.Notification
+import           Neovim.LSP.ClientMessage.Request
+import           Neovim.LSP.ServerMessage.Callback
+import           Neovim.LSP.ServerMessage.Notification (notificationHandler)
+import           Neovim.LSP.ServerMessage.Request      (requestHandler)
 import           Neovim.LSP.Util
+import           Util
 
 -------------------------------------------------------------------------------
 -- Util

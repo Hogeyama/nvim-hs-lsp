@@ -2,7 +2,7 @@
 {-# OPTIONS_GHC -Wall #-}
 {-# LANGUAGE AllowAmbiguousTypes #-}
 
-module Neovim.LSP.Action.Request where
+module Neovim.LSP.ClientMessage.Request where
 
 
 import           RIO
@@ -55,7 +55,7 @@ callbackHoverOneLine = callbackHoverWith $
     head' (s:_) = s
 
 callbackHoverAux
-    :: (Either String String -> WorkerAction a)
+    :: (Either String String -> WorkerM a)
     -> CallbackOf 'TextDocumentHoverK (Maybe a)
 callbackHoverAux processer (Response resp) = do
     logDebug $ "responseHover: " <> displayShow resp

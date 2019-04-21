@@ -1,7 +1,7 @@
 
 {-# OPTIONS_GHC -Wall #-}
 
-module Neovim.LSP.LspPlugin.Notification
+module Neovim.LSP.ServerMessage.Notification
   ( notificationHandler
   ) where
 
@@ -19,10 +19,10 @@ import           Neovim.LSP.Base
 import           Neovim.LSP.Util
 
 notificationHandler :: Worker
-notificationHandler = Worker "noti" notificationWorkerAction
+notificationHandler = Worker "noti" notificationHandler'
 
-notificationWorkerAction :: WorkerAction ()
-notificationWorkerAction = forever $ loggingErrorImmortal $ do
+notificationHandler' :: WorkerM ()
+notificationHandler' = forever $ loggingErrorImmortal $ do
     receiveMessage >>= \case
       SomeNoti noti -> case singByProxy noti of
         STextDocumentPublishDiagnostics -> showDiagnotics noti
@@ -40,7 +40,7 @@ notificationWorkerAction = forever $ loggingErrorImmortal $ do
 -------------------------------------------------------------------------------
 
 showDiagnotics :: ServerNotification 'TextDocumentPublishDiagnosticsK
-               -> WorkerAction ()
+               -> WorkerM ()
 showDiagnotics (Notification noti) = do
     let uri         = noti^. #params.__#uri
         diagnostics = noti^. #params.__#diagnostics
@@ -61,7 +61,7 @@ showDiagnotics (Notification noti) = do
 -------------------------------------------------------------------------------
 
 windowLogMessage :: ServerNotification 'WindowLogMessageK
-                 -> WorkerAction ()
+                 -> WorkerM ()
 windowLogMessage (Notification noti) = do
     let type'   = noti^. #params.__#type
         message = noti^. #params.__#message
@@ -80,7 +80,7 @@ windowLogMessage (Notification noti) = do
 -------------------------------------------------------------------------------
 
 windowShowMessage :: ServerNotification 'WindowShowMessageK
-                  -> WorkerAction ()
+                  -> WorkerM ()
 windowShowMessage (Notification noti) = do
     let type'   = noti^. #params.__#type
         message = T.unpack $ noti^. #params.__#message
@@ -96,7 +96,7 @@ windowShowMessage (Notification noti) = do
 -------------------------------------------------------------------------------
 
 telemetryEvent :: ServerNotification 'TelemetryEventK
-               -> WorkerAction ()
+               -> WorkerM ()
 telemetryEvent (Notification noti) = do
     let params = noti^. #params
     logInfo $ "telemetry/event: " <> displayShow params

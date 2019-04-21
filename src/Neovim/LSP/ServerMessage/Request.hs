@@ -1,7 +1,7 @@
 
 {-# LANGUAGE PartialTypeSignatures #-}
 
-module Neovim.LSP.LspPlugin.Request
+module Neovim.LSP.ServerMessage.Request
   ( requestHandler
   )
 where
@@ -17,23 +17,24 @@ import           Neovim.LSP.Base
 import           Neovim.LSP.Util               as U
 
 requestHandler :: Worker
-requestHandler = Worker "req" requestWorkerAction
+requestHandler = Worker "req" requestHandler'
 
-requestWorkerAction :: WorkerAction ()
-requestWorkerAction = forever $ loggingErrorImmortal $ do
+requestHandler' :: WorkerM ()
+requestHandler' = forever $ loggingErrorImmortal $ do
   receiveMessage >>= \case
     SomeReq (req@(Request inner) :: ServerRequest m) -> case singByProxy req of
-      SWindowShowMessageRequest -> windowShowMessageRequest req
+      SWindowShowMessageRequest ->
+        windowShowMessageRequest req
       SClientRegisterCapability ->
         sendResponse @m (Just (inner ^. #id)) None None
       SClientUnregisterCapability ->
         sendResponse @m (Just (inner ^. #id)) None None
-      SWorkspaceApplyEdit -> respondWorkspaceAplyEdit req
+      SWorkspaceApplyEdit ->
+        respondWorkspaceAplyEdit req
       SWorkspaceFolders ->
         sendResponse @m (Just (inner ^. #id)) (Some Nothing) None
-      SWorkspaceConfiguration -> sendResponse @m (Just (inner ^. #id))
-                                                 (Some nulls)
-                                                 None
+      SWorkspaceConfiguration ->
+        sendResponse @m (Just (inner ^. #id)) (Some nulls) None
         where nulls = replicate (length (inner ^. #params . __ #items)) J.Null
       SServerRequestMisc _ -> logError "requestHandler: Misc: not implemented"
     _ -> return ()
@@ -43,7 +44,7 @@ requestWorkerAction = forever $ loggingErrorImmortal $ do
 -------------------------------------------------------------------------------
 
 windowShowMessageRequest
-  :: Request 'WindowShowMessageRequestK -> WorkerAction ()
+  :: Request 'WindowShowMessageRequestK -> WorkerM ()
 windowShowMessageRequest (Request req) = do
   let type'   = req ^. #params . __ #type
       actions = req ^. #params . __ #actions
@@ -59,21 +60,22 @@ windowShowMessageRequest (Request req) = do
     None          -> return Nothing
     Some actions' -> oneOf $ map (view #title) actions'
   let result = fmap (\action -> Record (#title @= action <: nil)) mAction
-  sendResponse @ 'WindowShowMessageRequestK (Just (req ^. #id))
-                                            (Some result)
-                                            None
+  sendResponse @ 'WindowShowMessageRequestK
+    (Just (req ^. #id))
+    (Some result)
+    None
 
 -- WorkspaceApplyEdit
 ---------------------------------------
 
-respondWorkspaceAplyEdit :: Request 'WorkspaceApplyEditK -> WorkerAction ()
+respondWorkspaceAplyEdit :: Request 'WorkspaceApplyEditK -> WorkerM ()
 respondWorkspaceAplyEdit (Request req) = do
   let edit = req ^. #params . __ #edit
   logDebug $ displayShow edit
   applyWorkspaceEdit edit
   let applied = True
   sendResponse @ 'WorkspaceApplyEditK
-      (Just (req ^. #id))
-      (Some (Record (#applied @= applied <! nil)))
-      None
+    (Just (req ^. #id))
+    (Some (Record (#applied @= applied <! nil)))
+    None
 

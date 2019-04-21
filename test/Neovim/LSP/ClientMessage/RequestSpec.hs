@@ -1,38 +1,39 @@
 {-# OPTIONS_GHC -Wno-unused-imports #-}
+{-# LANGUAGE DeriveGeneric   #-}
 {-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE DeriveGeneric #-}
 --{-# LANGUAGE OverloadedStrings #-}
 
-module Neovim.LSP.Action.RequestSpec (spec) where
+module Neovim.LSP.ClientMessage.RequestSpec (spec) where
 
 import           Prelude
 import           RIO
-import qualified RIO.ByteString               as B
-import           RIO.Partial                  (read)
-import qualified RIO.List                     as L
-import qualified RIO.List.Partial             as L
-import qualified RIO.Text                     as T
-import qualified RIO.Map                      as M
+import qualified RIO.ByteString                        as B
+import qualified RIO.List                              as L
+import qualified RIO.List.Partial                      as L
+import qualified RIO.Map                               as M
+import           RIO.Partial                           (read)
+import qualified RIO.Text                              as T
 
-import           Data.Generics.Product        (HasField' (..), field)
-import           Control.Lens                 ((.~))
+import           Control.Lens                          ((.~))
 import           Data.Aeson
-import           Test.Hspec
-import           Neovim.Test.Wrapper
+import           Data.Generics.Product                 (HasField' (..), field)
 import           Neovim.Context.Internal
+import           Neovim.Test.Wrapper
 import           Path
+import           Test.Hspec
 
 import           LSP
-import           Util
 import           Neovim
 import           Neovim.Debug
-import           Neovim.LSP.Action.Notification
-import           Neovim.LSP.Action.Request
-import           Neovim.LSP.LspPlugin.Callback
 import           Neovim.LSP.Base
 import           Neovim.LSP.Plugin
+import           Neovim.LSP.ClientMessage.Notification
+import           Neovim.LSP.ClientMessage.Request
+import           Neovim.LSP.ServerMessage.Callback
 import           Neovim.LSP.Util
-import           System.Directory                  (getCurrentDirectory, removeDirectoryRecursive)
+import           System.Directory                      (getCurrentDirectory,
+                                                        removeDirectoryRecursive)
+import           Util
 
 data TestEnv = TestEnv
   { outChan :: TChan ByteString
@@ -52,14 +53,14 @@ spec = do
         Right _ <- debug (TestEnv out ctx) m
         ret <- atomically (readTChan out)
         case decode (fromStrictBytes ret) of
-          Nothing -> error $ "Could not parse " <> read (show ret)
+          Nothing   -> error $ "Could not parse " <> read (show ret)
           Just ret' -> ret' `shouldBe` x
 
       shouldReturn' m x = do
         r <- debug (WorkerEnv inChan outChan ctx mempty) m
         case r of
           Right ret -> ret `shouldBe` x
-          Left e -> error (show e)
+          Left e    -> error (show e)
 
   describe "textDocument/hover" $ do
     describe "send" $ do

@@ -10,25 +10,25 @@
 
 module Neovim.LSP.PluginSpec (spec) where
 
-import           Control.Lens                   ((.~))
+import           Control.Lens                          ((.~))
 import           Neovim
 import           Neovim.Context.Internal
 import           Neovim.Test.Wrapper
 import           Path
 import           Prelude
 import           RIO
-import           RIO.List.Partial               (tail)
-import           RIO.Partial                    (fromJust)
-import           System.Directory               (getCurrentDirectory,
-                                                 removeDirectoryRecursive)
+import           RIO.List.Partial                      (tail)
+import           RIO.Partial                           (fromJust)
+import           System.Directory                      (getCurrentDirectory,
+                                                        removeDirectoryRecursive)
 import           Test.Hspec
 
 import           LSP
-import           Neovim.LSP.Action.Notification
-import           Neovim.LSP.Action.Request
 import           Neovim.LSP.Base
-import           Neovim.LSP.LspPlugin.Callback
 import           Neovim.LSP.Plugin
+import           Neovim.LSP.ClientMessage.Notification
+import           Neovim.LSP.ClientMessage.Request
+import           Neovim.LSP.ServerMessage.Callback
 import           Neovim.LSP.Util
 
 spec :: Spec

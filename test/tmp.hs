@@ -5,31 +5,31 @@
 
 module Main where
 
+import           Control.Concurrent.STM
+import           Control.Lens                          (use)
+import           Control.Lens.Operators
+import           Control.Monad                         (forever)
+import           Control.Monad.IO.Class                (MonadIO)
 import           Prelude
 import           RIO
-import           Control.Concurrent.STM
-import           Control.Lens                      (use)
-import           Control.Lens.Operators
-import           Control.Monad                     (forever)
-import           Control.Monad.IO.Class            (MonadIO)
-import           System.Environment                (unsetEnv)
-import           System.IO                         (hGetLine, stdout)
-import           System.Process                    (terminateProcess)
+import           System.Environment                    (unsetEnv)
+import           System.IO                             (hGetLine, stdout)
+import           System.Process                        (terminateProcess)
 
-import           Neovim                            hiding (Plugin, wait)
-import           Neovim.Context                    (quit)
+import           Neovim                                hiding (Plugin, wait)
+import           Neovim.Context                        (quit)
 import           Neovim.Test
 
 import           LSP
-import           Neovim.LSP.Action.Notification    --(didChangeBuffer, didOpenBuffer)
-import           Neovim.LSP.Action.Request         --(hoverRequest)
 import           Neovim.LSP.Base
 import           Neovim.LSP.Plugin
-import           Neovim.LSP.LspPlugin.Notification
-import           Neovim.LSP.LspPlugin.Request
-import           Neovim.LSP.LspPlugin.Callback
+import           Neovim.LSP.ClientMessage.Notification
+import           Neovim.LSP.ClientMessage.Request
+import           Neovim.LSP.ServerMessage.Callback
+import           Neovim.LSP.ServerMessage.Notification
+import           Neovim.LSP.ServerMessage.Request
 import           Neovim.LSP.Util
-import           System.Exit (exitSuccess)
+import           System.Exit                           (exitSuccess)
 
 main :: IO ()
 main = do

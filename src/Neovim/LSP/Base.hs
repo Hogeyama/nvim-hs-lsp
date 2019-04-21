@@ -14,7 +14,7 @@ module Neovim.LSP.Base
   , focusLang
   , Worker(..)
   , WorkerEnv(..)
-  , WorkerAction
+  , WorkerM
   , Context(..)
   , initialContext
   , ServerHandles(..)
@@ -134,11 +134,11 @@ data WorkerEnv = WorkerEnv
    , logFunc :: LogFunc
    } deriving (Generic)
 
-type WorkerAction = Neovim WorkerEnv
+type WorkerM = Neovim WorkerEnv
 
 data Worker = Worker
   { pluginName   :: String
-  , pluginAction :: WorkerAction ()
+  , pluginAction :: WorkerM ()
   }
 
 -- | Context shared with main thread and all plugins.
@@ -155,7 +155,7 @@ data Context = Context
 
 data Callback where
   Callback :: Typeable m => TMVar a -> CallbackOf m a -> Callback
-type CallbackOf m a = ServerResponse m -> WorkerAction a
+type CallbackOf m a = ServerResponse m -> WorkerM a
 data CallbackTicket a = CallbackTicket
   { callbackID  :: ID
   , callbackVar :: TMVar a

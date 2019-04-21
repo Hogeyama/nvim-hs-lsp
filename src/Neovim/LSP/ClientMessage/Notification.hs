@@ -2,7 +2,7 @@
 {-# LANGUAGE AllowAmbiguousTypes #-}
 {-# OPTIONS_GHC -Wall #-}
 
-module Neovim.LSP.Action.Notification where
+module Neovim.LSP.ClientMessage.Notification where
 
 import           RIO
 import qualified RIO.Map                      as M

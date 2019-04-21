@@ -1,7 +1,7 @@
 
 {-# OPTIONS_GHC -Wall #-}
 
-module Neovim.LSP.LspPlugin.Callback where
+module Neovim.LSP.ServerMessage.Callback where
 
 import           RIO
 
@@ -13,10 +13,10 @@ import           Neovim                   ()
 import           Neovim.LSP.Base
 
 callbackHandler :: Worker
-callbackHandler = Worker "callback" callbackWorkerAction
+callbackHandler = Worker "callback" callbackHandler'
 
-callbackWorkerAction :: WorkerAction ()
-callbackWorkerAction = forever $ loggingErrorImmortal $
+callbackHandler' :: WorkerM ()
+callbackHandler' = forever $ loggingErrorImmortal $
     receiveMessage >>= \case
       SomeResp resp@(Response inner) ->
         case inner^. #id of
