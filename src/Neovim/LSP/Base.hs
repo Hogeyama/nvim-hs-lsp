@@ -259,29 +259,29 @@ parseMessage _ _ = Left "そんなバナナ2"
 -- Lens
 -------------------------------------------------------------------------------
 
-instance {-# OVERLAPPABLE #-} HasField' "logFunc" env LogFunc
-    => HasLogFunc env
+instance {-# OVERLAPPABLE #-}
+    HasField' "logFunc" env LogFunc => HasLogFunc env
   where
     logFuncL = field' @"logFunc"
 
 class HasContext env where
-  contextL :: Lens' env (TVar Context)
-instance {-# OVERLAPPABLE #-} HasField' "context" env (TVar Context)
-    => HasContext env
+    contextL :: Lens' env (TVar Context)
+instance {-# OVERLAPPABLE #-}
+    HasField' "context" env (TVar Context) => HasContext env
   where
     contextL = field' @"context"
 
 class HasInChan env where
-  inChanL :: Lens' env (TChan InMessage)
-instance {-# OVERLAPPABLE #-} HasField' "inChan" env (TChan InMessage)
-    => HasInChan env
+    inChanL :: Lens' env (TChan InMessage)
+instance {-# OVERLAPPABLE #-}
+    HasField' "inChan" env (TChan InMessage) => HasInChan env
   where
     inChanL = field' @"inChan"
 
 class HasOutChan env where
-  outChanL :: Lens' env (TChan ByteString)
-instance {-# OVERLAPPABLE #-} HasField' "outChan" env (TChan ByteString)
-    => HasOutChan env
+    outChanL :: Lens' env (TChan ByteString)
+instance {-# OVERLAPPABLE #-}
+    HasField' "outChan" env (TChan ByteString) => HasOutChan env
   where
     outChanL = field' @"outChan"
 
