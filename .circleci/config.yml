@@ -145,7 +145,8 @@ aliases:
         - run:
             name: Build
             command: |
-              git clone git@github.com:Hogeyama/hflmc2.git 
+              git clone git@github.com:Hogeyama/hflmc2.git
+              git clone git@bitbucket.org:ryosu_sato/mochi.git
               exit 1
               cabal update
               (which hpack || cabal new-install hpack) && hpack
