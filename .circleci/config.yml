@@ -136,6 +136,10 @@ aliases:
   - &cabal_default # build only
       steps:
         - checkout
+        - add_ssh_keys:
+            fingerprints:
+              - "SO:ME:FIN:G:ER:PR:IN:T"
+              - "ca:7c:6d:b5:3d:a8:c7:5c:d4:38:1e:3a:05:3f:59:0a"
         - *create_cache_key_file
         - *set_path
         - *restore_build_results
