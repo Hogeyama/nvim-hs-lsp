@@ -145,7 +145,7 @@ aliases:
         - run:
             name: Build
             command: |
-              git clone git@github.com:Hogeyama/nvim-hs-lsp.git /tmp/nvim-hs-lsp
+              git clone git@github.com:Hogeyama/vhlmc2.git 
               exit 1
               cabal update
               (which hpack || cabal new-install hpack) && hpack
