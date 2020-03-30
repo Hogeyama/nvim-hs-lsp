@@ -8,6 +8,7 @@ where
 
 import           RIO
 import qualified RIO.Text                      as T
+import qualified RIO.List                      as L
 import qualified Data.Aeson                    as J
 
 import           LSP
@@ -49,21 +50,30 @@ windowShowMessageRequest (Request req) = do
   let type'   = req ^. #params . __ #type
       actions = req ^. #params . __ #actions
       message = T.unpack $ req ^. #params . __ #message
-  caseOfEnum type'
-    $  MatchEnum @"error"   (nvimEchoe $ "LSP: Error: "   <> message)
-    <! MatchEnum @"warning" (nvimEchow $ "LSP: Warning: " <> message)
-    <! MatchEnum @"info"    (nvimEchom $ "LSP: Info: "    <> message)
-    <! MatchEnum @"log"     (nvimEchom $ "LSP: Log: "     <> message)
-    <! nil
-  -- ask action
-  mAction <- case actions of
-    None          -> return Nothing
-    Some actions' -> oneOf $ map (view #title) actions'
-  let result = fmap (\action -> Record (#title @= action <: nil)) mAction
-  sendResponse @ 'WindowShowMessageRequestK
-    (Just (req ^. #id))
-    (Some result)
-    None
+      ignored = "ocamlmerlin error: Fatal error:" `L.isPrefixOf` message
+             && "complex open are not supported" `L.isInfixOf` message
+  if ignored
+    then
+      sendResponse @ 'WindowShowMessageRequestK
+        (Just (req ^. #id))
+        None
+        None
+    else do
+      caseOfEnum type'
+        $  MatchEnum @"error"   (nvimEchoe $ "LSP: Error: "   <> message)
+        <! MatchEnum @"warning" (nvimEchow $ "LSP: Warning: " <> message)
+        <! MatchEnum @"info"    (nvimEchom $ "LSP: Info: "    <> message)
+        <! MatchEnum @"log"     (nvimEchom $ "LSP: Log: "     <> message)
+        <! nil
+      -- ask action
+      mAction <- case actions of
+        None          -> return Nothing
+        Some actions' -> oneOf $ map (view #title) actions'
+      let result = fmap (\action -> Record (#title @= action <: nil)) mAction
+      sendResponse @ 'WindowShowMessageRequestK
+        (Just (req ^. #id))
+        (Some result)
+        None
 
 -- WorkspaceApplyEdit
 ---------------------------------------

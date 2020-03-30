@@ -7,7 +7,7 @@ class Source(Base):
     def __init__(self, vim):
         super().__init__(vim)
 
-        self.rank = 100
+        self.rank = 1000
         self.name = "nvim-hs-lsp"
         self.mark = "[nhl]"
         self.sorters = ["sorter_rank"]

@@ -106,7 +106,7 @@ getBufLanguage b =
         Right x -> return (Just x)
         _ -> return Nothing
 
-getBufUri :: Buffer -> Neovim env Uri
+getBufUri :: HasCallStack => Buffer -> Neovim env Uri
 getBufUri b = do
     f <- nvim_buf_get_name b
     case parseAbsFile f of
@@ -154,78 +154,80 @@ startServer
     -> Path Abs Dir   -- ^ CWD
     -> [Worker]       -- ^ Worker
     -> NeovimLsp ()
-startServer lang cwd {-cmd args-} workers = do
+startServer lang cwd workers = do
     config <- loadLspConfig
     logDebug $ displayShow config
-    let cmd:args = serverCommand config
+    case serverCommand config of
+      Just (cmd:args) -> do
 
-    -- spawn
-    --------
-    (Just hin, Just hout, Just herr, ph) <-
-       liftIO $ createProcess $ (proc cmd args)
-         { cwd = Just (toFilePath cwd)
-         , std_in = CreatePipe
-         , std_out = CreatePipe
-         , std_err = CreatePipe
-         }
-    liftIO $ do
-      hSetBuffering hin  NoBuffering
-      hSetBuffering hout NoBuffering
-      hSetBuffering herr NoBuffering
+        -- spawn
+        --------
+        (Just hin, Just hout, Just herr, ph) <-
+           liftIO $ createProcess $ (proc cmd args)
+             { cwd = Just (toFilePath cwd)
+             , std_in = CreatePipe
+             , std_out = CreatePipe
+             , std_err = CreatePipe
+             }
+        liftIO $ do
+          hSetBuffering hin  NoBuffering
+          hSetBuffering hout NoBuffering
+          hSetBuffering herr NoBuffering
 
-    ---- create language env
-    ------------------------
-    logFunc <- view (field @"logFunc")
-    let serverHandles = ServerHandles
-          { serverIn = hin
-          , serverOut = hout
-          , serverErr = herr
-          , serverProcHandle = ph
-          }
-    emptyOtherHandles <- newTVarIO (OtherHandles [])
-    inCh <- newTChanIO
-    outCh <- newTChanIO
-    lspConfig <- loadLspConfig
-    newContext <- newTVarIO initialContext
-    atomically $ modifyTVar newContext (field @"lspConfig" .~ lspConfig)
+        ---- create language env
+        ------------------------
+        logFunc <- view (field @"logFunc")
+        let serverHandles = ServerHandles
+              { serverIn = hin
+              , serverOut = hout
+              , serverErr = herr
+              , serverProcHandle = ph
+              }
+        emptyOtherHandles <- newTVarIO (OtherHandles [])
+        inCh <- newTChanIO
+        outCh <- newTChanIO
+        lspConfig <- loadLspConfig
+        newContext <- newTVarIO initialContext
+        atomically $ modifyTVar newContext (field @"lspConfig" .~ lspConfig)
 
-    ---- register
-    -------------
-    let languageEnv = LanguageEnv
-                    { logFunc = logFunc
-                    , language = lang
-                    , serverHandles = serverHandles
-                    , otherHandles = emptyOtherHandles
-                    , inChan = inCh
-                    , outChan = outCh
-                    , context = newContext
-                    }
-    field @"languageMap" %== M.insert lang languageEnv
+        ---- register
+        -------------
+        let languageEnv = LanguageEnv
+                        { logFunc = logFunc
+                        , language = lang
+                        , serverHandles = serverHandles
+                        , otherHandles = emptyOtherHandles
+                        , inChan = inCh
+                        , outChan = outCh
+                        , context = newContext
+                        }
+        field @"languageMap" %== M.insert lang languageEnv
 
-    -- setup
-    --------
-    logInfo $ fromString $ unlines
-       [ ""
-       , "＿人人人人人人＿"
-       , "＞　__init__　＜"
-       , "￣Y^Y^Y^Y^Y^Y^Y￣"
-       ]
+        -- setup
+        --------
+        logInfo $ fromString $ unlines
+           [ ""
+           , "＿人人人人人人＿"
+           , "＞　__init__　＜"
+           , "￣Y^Y^Y^Y^Y^Y^Y￣"
+           ]
 
-    void $ focusLang lang $ do
-      registerAsyncHandle "sender" =<< async (sender hin outCh)
-      registerAsyncHandle "receiver" =<< async (receiver hout inCh)
-      registerAsyncHandle "herr-watcher" =<< async (watcher herr)
-      dispatch workers
+        void $ focusLang lang $ do
+          registerAsyncHandle "sender" =<< async (sender hin outCh)
+          registerAsyncHandle "receiver" =<< async (receiver hout inCh)
+          registerAsyncHandle "herr-watcher" =<< async (watcher herr)
+          dispatch workers
 
-      ---- communication
-      ------------------
-      waitCallback $ sendRequest @'InitializeK
-         (initializeParam Nothing (Just (pathToUri cwd)))
-         nopCallback
-      sendNotification @'InitializedK (Record nil)
-      whenJustM (getWorkspaceSettings lspConfig) $ \v -> do
-        let param = Record (#settings @= v <! nil)
-        sendNotification @'WorkspaceDidChangeConfigurationK param
+          ---- communication
+          ------------------
+          waitCallback $ sendRequest @'InitializeK
+             (initializeParam Nothing (Just (pathToUri cwd)))
+             nopCallback
+          sendNotification @'InitializedK (Record nil)
+          whenJustM (getWorkspaceSettings lspConfig) $ \v -> do
+            let param = Record (#settings @= v <! nil)
+            sendNotification @'WorkspaceDidChangeConfigurationK param
+      _ -> nvimEchoe $ "No server command provided for " <> show lang
   where
     loadLspConfig = do
         allConfig <- fromObject' =<< vim_get_var "NvimHsLsp_languageConfig"
@@ -263,8 +265,7 @@ startServer lang cwd {-cmd args-} workers = do
         Just file -> liftIO $ J.decodeFileStrict' file
         Nothing -> return Nothing
 
-    watcher :: (MonadUnliftIO m, MonadReader env m, HasLogFunc env)
-            => Handle -> m ()
+    watcher :: HasLogFunc env => Handle -> Neovim env ()
     watcher herr =
         do s <- B.hGetLine herr
            showAndLog $ "STDERR: " <> displayBytesUtf8 s
@@ -275,12 +276,11 @@ startServer lang cwd {-cmd args-} workers = do
       where
         showAndLog msg = do
             logError msg
-            --vim_report_error' $ T.unpack $ utf8BuilderToText msg
+            vim_report_error $ T.unpack $ utf8BuilderToText msg
             -- なんでRIOには'Utf8Builder -> String'の関数がないんだ
             -- rlsがうるさいのでreportやめます
 
-    sender :: (MonadUnliftIO m, MonadReader env m, HasLogFunc env)
-           => Handle -> TChan ByteString -> m ()
+    sender :: HasLogFunc env => Handle -> TChan ByteString -> Neovim env ()
     sender serverIn chan = forever $ loggingErrorDeep $ do
         bs <- atomically $ readTChan chan
         hPutBuilder serverIn $ getUtf8Builder $ mconcat
@@ -370,13 +370,22 @@ type VimCompleteItem = Record
 -------------------------------------------------------------------------------
 
 diagnosticsToQfItems :: Uri -> Map Uri [Diagnostic] -> [QfItem]
-diagnosticsToQfItems prior diagMap = pripri ++ rest
+diagnosticsToQfItems prior diagMap0 = pripri ++ rest
   where
     pripri = toQfItems prior (M.findWithDefault [] prior diagMap)
     rest   = M.foldMapWithKey toQfItems (M.delete prior diagMap)
     toQfItems uri diagnostics =
         concatMap (diagnosticToQfItems uri) $
           L.sortOn (view #severity) diagnostics
+
+    diagMap = M.map (map fixMerlin) diagMap0
+    fixMerlin :: Diagnostic -> Diagnostic
+    fixMerlin d
+      | Some "merlin" == d^. #source
+      , not $ "Warning" `T.isPrefixOf` (d^. #message)
+          = d & #severity .~ Some #error
+      | otherwise
+          = d
 
 -------------------------------------------------------------------------------
 
@@ -402,10 +411,20 @@ diagnosticToQfItems uri d
     | otherwise = header : rest
   where
     ignored = or
-      [ d^. #source == Some "pyflakes"
-      , d^. #message == "" -- ghc-modがなんか送ってくる (hie-0.6.0.0)
+      [
+      -- Python
+        d^. #source == Some "pyflakes"
       , d^. #source == Some "hlint"
           && "Parse error:" `T.isPrefixOf` (d^. #message)
+      , d^. #source == Some "mypy"
+          && "No library stub file for module" `T.isPrefixOf` (d^. #message)
+      , d^. #source == Some "mypy"
+          && "Cannot find module named" `T.isPrefixOf` (d^. #message)
+      -- OCaml
+      , d^. #source == Some "merlin"
+          && d^. #message == "Unbound module Pervasives"
+      -- Haskell
+      , d^. #message == "" -- ghc-modがなんか送ってくる (hie-0.6.0.0)
       ]
     header = Record
            $ #filename @= Some (toFilePath (uriToAbsFilePath uri))

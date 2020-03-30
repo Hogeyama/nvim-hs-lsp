@@ -30,6 +30,7 @@ plugin = do
               -- Request
               , $(command' 'nvimHsLspHover)             [ "async"           ]
               , $(command' 'nvimHsLspInfo)              [ "async"           ]
+              , $(command' 'nvimHsLspHoverFloat)        [ "async"           ]
               , $(command' 'nvimHsLspDefinition)        [ "async"           ]
               , $(command' 'nvimHsLspCodeAction)        [                   ]
               , $(command' 'nvimHsLspFormatting)        [ "async", "!", "%" ]

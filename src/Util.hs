@@ -14,28 +14,28 @@ import           GHC.Stack                    (callStack, popCallStack)
 -- Mutable State
 -------------------------------------------------------------------------------
 
-useTV :: (MonadReader r m, MonadIO m) => Lens' r (TVar a) -> m a
+useTV :: (MonadReader r m, MonadIO m) => Getting (TVar a) r (TVar a) -> m a
 useTV l = readTVarIO =<< view l
 
-usesTV :: (MonadReader r m, MonadIO m) => Lens' r (TVar a) -> (a -> b) -> m b
+usesTV :: (MonadReader r m, MonadIO m) => Getting (TVar a) r (TVar a) -> (a -> b) -> m b
 usesTV l f = f <$> useTV l
 
-assignTV :: (MonadReader r m, MonadIO m) => Lens' r (TVar a) -> a -> m ()
+assignTV :: (MonadReader r m, MonadIO m) => Getting (TVar a) r (TVar a) -> a -> m ()
 assignTV l x = do
   v <- view l
   atomically $ writeTVar v x
 
 modifyOverTV :: (MonadReader r m, MonadIO m)
-             => Lens' r (TVar a) -> (a -> a) -> m ()
+             => Getting (TVar a) r (TVar a) -> (a -> a) -> m ()
 modifyOverTV l f = do
   v <- view l
   atomically $ modifyTVar' v f
 
-(.==) :: (MonadReader r m, MonadIO m) => Lens' r (TVar a) -> a -> m ()
+(.==) :: (MonadReader r m, MonadIO m) => Getting (TVar a) r (TVar a) -> a -> m ()
 (.==) = assignTV
 infix 4 .==
 
-(%==) :: (MonadReader r m, MonadIO m) => Lens' r (TVar a) -> (a -> a) -> m ()
+(%==) :: (MonadReader r m, MonadIO m) => Getting (TVar a) r (TVar a) -> (a -> a) -> m ()
 (%==) = modifyOverTV
 infix 4 %==
 

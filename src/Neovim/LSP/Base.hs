@@ -53,6 +53,10 @@ module Neovim.LSP.Base
   , dispatch
   , registerAsyncHandle
 
+  , NeovimEvent
+  , addNeovimEventHandler
+  , removeNeovimEventHandler
+
   , module API
   )
   where
@@ -128,10 +132,11 @@ focusLang lang m = usesTV (field @"languageMap") (M.lookup lang) >>= \case
 
 -- | Enviroment of each plugin.
 data WorkerEnv = WorkerEnv
-   { inChan  :: TChan InMessage
-   , outChan :: TChan ByteString
-   , context :: TVar Context
-   , logFunc :: LogFunc
+   { language :: Language
+   , inChan   :: TChan InMessage
+   , outChan  :: TChan ByteString
+   , context  :: TVar Context
+   , logFunc  :: LogFunc
    } deriving (Generic)
 
 type WorkerM = Neovim WorkerEnv
@@ -151,7 +156,28 @@ data Context = Context
    , lspConfig      :: LspConfig
    , diagnosticsMap :: Map Uri [Diagnostic]
    , openedFiles    :: Map Uri Version
+   , onEvent        :: Map NeovimEvent [Neovim LanguageEnv ()]
    } deriving (Generic)
+
+type NeovimEvent = String
+
+addNeovimEventHandler
+    :: HasContext env
+    => NeovimEvent
+    -> Neovim LanguageEnv ()
+    -> Neovim env ()
+addNeovimEventHandler event action =
+    modifyContext (field @"onEvent" %~ M.alter f event)
+  where
+    f Nothing   = Just [action]
+    f (Just as) = Just $ as ++ [action]
+
+removeNeovimEventHandler
+    :: HasContext env
+    => NeovimEvent
+    -> Neovim env ()
+removeNeovimEventHandler event =
+    modifyContext $ field @"onEvent" %~ M.delete event
 
 data Callback where
   Callback :: Typeable m => TMVar a -> CallbackOf m a -> Callback
@@ -171,7 +197,9 @@ initialContext = Context
   , lspConfig      = defaultLspConfig
   , diagnosticsMap = M.empty
   , openedFiles    = M.empty
+  , onEvent        = M.empty
   }
+
 
 data ServerHandles = ServerHandles
   { serverIn         :: Handle
@@ -188,7 +216,7 @@ newtype OtherHandles = OtherHandles
 data LspConfig = LspConfig
   { autoLoadQuickfix  :: Bool
   , settingsPath      :: Maybe FilePath
-  , serverCommand     :: ~[String]
+  , serverCommand     :: Maybe [String]
   , formattingOptions :: FormattingOptions
   } deriving (Generic, Show)
 
@@ -196,7 +224,7 @@ defaultLspConfig :: LspConfig
 defaultLspConfig =  LspConfig
   { autoLoadQuickfix  = False
   , settingsPath      = Nothing
-  , serverCommand     = error "No server command provided"
+  , serverCommand     = Nothing
   , formattingOptions = FormattingOptions . Record
                       $ #tabSize @= 2
                      <! #insertSpaces @= True
@@ -447,6 +475,7 @@ sendResponse id' resp err' = sendMessage $ response @m id' resp err'
 
 dispatch :: [Worker] -> Neovim LanguageEnv ()
 dispatch hs = do
+    lang    <- view $ field @"language"
     inChG   <- view $ field @"inChan"
     outCh   <- view $ field @"outChan"
     ctx     <- view $ field @"context"
@@ -455,10 +484,11 @@ dispatch hs = do
     inChs <- forM hs $ \(Worker name action) -> do
       inCh <- liftIO newTChanIO
       let workerEnv = WorkerEnv
-                    { inChan  = inCh
-                    , outChan = outCh
-                    , context = ctx
-                    , logFunc = logFunc
+                    { language = lang
+                    , inChan   = inCh
+                    , outChan  = outCh
+                    , context  = ctx
+                    , logFunc  = logFunc
                     }
       a <- asyncNeovim workerEnv $ loggingErrorImmortal action
       registerAsyncHandle name a

@@ -178,7 +178,8 @@ instance FromJSON a => FieldFromJSON a where
       Just x  -> parseJSON x
       Nothing -> fail $ "Missing key: " ++ k
 
-instance Forall (KeyValue KnownSymbol FieldFromJSON) xs => FromJSON (Record xs)
+instance
+    Forall (KeyValue KnownSymbol FieldFromJSON) xs => FromJSON (Record xs)
   where
     parseJSON = withObject "Object" $ \v -> fmap Record $
       hgenerateFor (Proxy @(KeyValue KnownSymbol FieldFromJSON)) $ \m ->

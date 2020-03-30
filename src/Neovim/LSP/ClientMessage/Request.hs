@@ -4,7 +4,6 @@
 
 module Neovim.LSP.ClientMessage.Request where
 
-
 import           RIO
 import           RIO.List
 import qualified RIO.Map                  as M
@@ -34,8 +33,57 @@ hoverRequest :: (HasOutChan env, HasContext env)
              -> CallbackOf 'TextDocumentHoverK a
              -> Neovim env (CallbackTicket a)
 hoverRequest uri pos callback = do
-  let param = textDocumentPositionParams uri pos
-  sendRequest param callback
+    let param = textDocumentPositionParams uri pos
+    sendRequest param callback
+
+{- coc.nvimでの表示
+ filter :: ([Char] -> Bool) -> [[Char]] -> [[Char]]
+———————————————————————————————————————————————————————————————————————————————
+ filter :: forall a. (a -> Bool) -> [a] -> [a]
+ `filter`, applied to a predicate and a list, returns the list of
+  those elements that satisfy the predicate; i.e.,
+ filter p xs = [ x | x <- xs, p x]```
+ [Documentation](file:///home/hogeyama/.stack/programs/x86_64-linux/ghc-8.6.4/
+ share/doc/ghc-8.6.4/html/libraries/base-4.12.0.0/GHC-List.html#v:filter)
+ [Source](file:///home/hogeyama/.stack/programs/x86_64-linux/ghc-8.6.4/share/
+ doc/ghc-8.6.4/html/libraries/base-4.12.0.0/src/GHC-List.html#filter)
+ base GHC.List
+-}
+
+callbackHoverFloat :: CallbackOf 'TextDocumentHoverK ()
+callbackHoverFloat resp = void $ callbackHoverAux `flip` resp $ \case
+    Left e -> nvimEcho e
+    Right msg -> do
+      let ls = map (" "++) $ lines msg
+          height = fromIntegral $ length ls
+          width  = (+1) $ fromIntegral $ fromMaybe 10 $ maximumMaybe (map length ls)
+          opts = M.fromList
+            [ ("relative", ObjectString "cursor")
+            , ("width", ObjectInt width)
+            , ("height", ObjectInt height)
+            , ("col", ObjectInt 0)
+            , ("row", ObjectInt 1)
+            , ("anchor", ObjectString "NW") -- TODO cursorの位置次第では"SW"
+            , ("style", ObjectString "minimal")
+            ]
+      if height > 0 then do
+        buf  <- nvim_create_buf False True
+        win  <- nvim_open_win buf False opts -- True: enter the float window
+        lang <- view $ field @"language"
+        nvim_buf_set_lines buf 0 (-1) True ls
+        nvim_win_set_option win "listchars" (ObjectString "")
+        -- nvim_buf_set_option buf "filetype" (ObjectString "pandoc")
+        -- TODO markdownを簡潔に表示するの厳しいな
+        -- concealとかうまく使えるかな
+        nvim_buf_set_option buf "filetype" (ObjectString (encodeUtf8 lang))
+        nvim_buf_set_option buf "filetype" (ObjectString (encodeUtf8 lang))
+        let close = do
+                logInfo "close floating window"
+                nvim_win_close win True
+        addNeovimEventHandler "CursorMoved" close
+        addNeovimEventHandler "CursorMovedI" close
+      else do
+        nvimEcho textDocumentHoverNoInfo
 
 callbackHoverPreview :: CallbackOf 'TextDocumentHoverK ()
 callbackHoverPreview resp = void $ callbackHoverAux `flip` resp $ \case
@@ -77,7 +125,17 @@ stringOfHoverContents
     -> String
 stringOfHoverContents (L ms)     = pprMarkedString ms
 stringOfHoverContents (R (L [])) = textDocumentHoverNoInfo
-stringOfHoverContents (R (L xs)) = unlines $ map pprMarkedString xs
+--stringOfHoverContents (R (L xs)) = unlines $ map pprMarkedString xs
+stringOfHoverContents (R (L xs)) = intercalate split cs
+  where split = "\n" ++ replicate width '-' ++ " \n" -- TODO
+        cs    = map (removeEmptyLines.pprMarkedString) xs
+        width = maximum' $ map length (lines (unlines cs))
+          where maximum' = fromMaybe 0 . maximumMaybe
+        removeEmptyLines  = go . removeFirstNewlines
+          where -- TODO なまえ
+            go [] = []
+            go ('\n':'\n':'\n':ys) = go ('\n':'\n':ys)
+            go (y:ys) = y : go ys
 stringOfHoverContents (R (R x))  = x^. #value
 
 -- TODO markdownをどう表示するか
@@ -85,8 +143,11 @@ pprMarkedString :: MarkedString -> String
 pprMarkedString (L s) = s
 pprMarkedString (R x) = x^. #value
 
+removeFirstNewlines :: String -> String
+removeFirstNewlines = dropWhile (=='\n')
+
 removeLastNewlines :: String -> String
-removeLastNewlines = reverse . dropWhile (=='\n') .reverse
+removeLastNewlines = reverse . dropWhile (=='\n') . reverse
 
 removeCodeStartEnd :: String -> String
 removeCodeStartEnd = unlines . filter ((/="```") . take 3) . lines
@@ -481,15 +542,6 @@ callbackTextDocumentDocumentSymbol uri (Response resp) =
         text = docSym^. #name -- TODO other info
     symbolInfomartionToQfItem symInfo = -- TODO other info
         locationToQfItem (symInfo^. #location) (symInfo^. #name)
-
---newtype DocumentSymbol = DocumentSymbol (Record
---  '[ "name" >: String
---   , "detail" >: Option String
---   , "kind" >: SymbolKind
---   , "deprecated" >: Option Bool
---   , "range" >: Range
---   , "children" >: Option [DocumentSymbol]
---   ])
 
 --}}}
 

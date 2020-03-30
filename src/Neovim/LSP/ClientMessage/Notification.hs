@@ -29,65 +29,69 @@ import           Neovim.LSP.Util
 ---------------------------------------
 didOpenBuffer :: (HasOutChan env, HasContext env, HasLogFunc env)
               => Buffer -> Neovim env ()
-didOpenBuffer b = do
-    uri      <- getBufUri b
-    version  <- genUniqueVersion
-    getBufLanguage b >>= \case
-      Just language -> do
-        contents <- getBufContents b
-        let textDocumentItem = Record
-                             $ #uri        @= uri
-                            <! #languageId @= language
-                            <! #version    @= version
-                            <! #text       @= contents
-                            <! nil
-        sendNotification @'TextDocumentDidOpenK
-             $ didOpenTextDocumentParam textDocumentItem
-      Nothing -> do
-        logError $ "didOpenBuffer: No language detected for "
-                    <> fromString (uriToFilePath uri)
+didOpenBuffer b = tryAny (getBufUri b) >>= \case
+    Right uri -> do
+      version  <- genUniqueVersion
+      getBufLanguage b >>= \case
+        Just language -> do
+          contents <- getBufContents b
+          let textDocumentItem = Record
+                               $ #uri        @= uri
+                              <! #languageId @= language
+                              <! #version    @= version
+                              <! #text       @= contents
+                              <! nil
+          sendNotification @'TextDocumentDidOpenK
+               $ didOpenTextDocumentParam textDocumentItem
+        Nothing -> do
+          logError $ "didOpenBuffer: No language detected for "
+                      <> fromString (uriToFilePath uri)
+    Left{} -> return ()
 
 -- TextDocumentDidClose Notification
 ---------------------------------------
 didCloseBuffer :: (HasOutChan env, HasContext env) => Buffer -> Neovim env ()
-didCloseBuffer b = do
-    uri <- getBufUri b
-    let param = Record
-              $ #textDocument @= textDocumentIdentifier uri
-             <! nil
-    sendNotification @'TextDocumentDidCloseK param
-    resetDiagnostics uri
+didCloseBuffer b = tryAny (getBufUri b) >>= \case
+    Right uri -> do
+      let param = Record
+                $ #textDocument @= textDocumentIdentifier uri
+               <! nil
+      sendNotification @'TextDocumentDidCloseK param
+      resetDiagnostics uri
+    Left{} -> return ()
 
 -- TextDocumentDidSave Notification
 ---------------------------------------
 didSaveBuffer :: (HasOutChan env, HasContext env) => Buffer -> Neovim env ()
-didSaveBuffer b = do
-    uri  <- getBufUri b
-    let param = Record
-              $ #textDocument @= textDocumentIdentifier uri
-             <! #text         @= None --Some contents
-             <! nil
-    sendNotification @'TextDocumentDidSaveK param
-    resetDiagnostics uri
+didSaveBuffer b = tryAny (getBufUri b) >>= \case
+    Right uri -> do
+      let param = Record
+                $ #textDocument @= textDocumentIdentifier uri
+               <! #text         @= None --Some contents
+               <! nil
+      sendNotification @'TextDocumentDidSaveK param
+      resetDiagnostics uri
+    Left{} -> return ()
 
 -- TextDocumentDidChange Notification
 ---------------------------------------
 didChangeBuffer :: (HasOutChan env, HasContext env) => Buffer -> Neovim env ()
-didChangeBuffer b = do
-    uri      <- getBufUri b
-    contents <- getBufContents b
-    version  <- genUniqueVersion
-    let change = Record
-               $ #range       @= None
-              <! #rangeLength @= None
-              <! #text        @= contents
-              <! nil
-        param = Record
-              $ #textDocument   @= versionedTextDocmentIdentifier uri version
-             <! #contentChanges @= [change]
-             <! nil
-    sendNotification @'TextDocumentDidChangeK param
-    resetDiagnostics uri
+didChangeBuffer b = tryAny (getBufUri b) >>= \case
+    Right uri -> do
+      contents <- getBufContents b
+      version  <- genUniqueVersion
+      let change = Record
+                 $ #range       @= None
+                <! #rangeLength @= None
+                <! #text        @= contents
+                <! nil
+          param = Record
+                $ #textDocument   @= versionedTextDocmentIdentifier uri version
+               <! #contentChanges @= [change]
+               <! nil
+      sendNotification @'TextDocumentDidChangeK param
+      resetDiagnostics uri
+    Left{} -> return ()
 
 resetDiagnostics :: HasContext env => Uri -> Neovim env ()
 resetDiagnostics uri =

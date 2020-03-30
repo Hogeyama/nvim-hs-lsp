@@ -2,7 +2,7 @@ name:                nvim-hs-lsp
 version:             0.2.0.0
 
 default-extensions:
-- AutoDeriveTypeable
+- DeriveDataTypeable
 - BangPatterns
 - ConstraintKinds
 - DefaultSignatures

@@ -25,6 +25,7 @@ import           Neovim.LSP.ServerMessage.Notification (notificationHandler)
 import           Neovim.LSP.ServerMessage.Request      (requestHandler)
 import           Neovim.LSP.Util
 import           Util
+import Data.Either.Combinators (whenRight)
 
 -------------------------------------------------------------------------------
 -- Util
@@ -55,10 +56,12 @@ focusLang' silent m = vim_get_current_buffer >>= getBufLanguage >>= \case
 
 whenAlreadyOpened' :: Bool -> Neovim LanguageEnv () -> Neovim LanguageEnv ()
 whenAlreadyOpened' silent m = do
-  uri <- getBufUri =<< vim_get_current_buffer
-  ifM (alreadyOpened uri)
-    m
-    (unless silent $ vim_out_write "nvim-hs-lsp: Not opened yet\n")
+  b <- vim_get_current_buffer
+  muri <- tryAny $ getBufUri b
+  whenRight muri $ \uri -> do
+    ifM (alreadyOpened uri)
+      m
+      (unless silent $ vim_out_write "nvim-hs-lsp: Not opened yet\n")
 
 whenAlreadyOpened :: Neovim LanguageEnv () -> Neovim LanguageEnv ()
 whenAlreadyOpened = whenAlreadyOpened' False
@@ -84,12 +87,14 @@ nvimHsLspInitialize _ = loggingError $ do
             [ notificationHandler, requestHandler, callbackHandler ]
           let pat = def { acmdPattern = "*" }
               arg = def { bang = Just True }
-          Just Right{} <- addAutocmd "BufRead,BufNewFile"
+          Just Right{} <- addAutocmd "BufRead,BufNewFile" "async"
                             pat (nvimHsLspOpenBuffer arg)
-          Just Right{} <- addAutocmd "TextChanged,TextChangedI"
+          Just Right{} <- addAutocmd "TextChanged,TextChangedI" "async"
                             pat (nvimHsLspChangeBuffer arg)
-          Just Right{} <- addAutocmd "BufWrite"
+          Just Right{} <- addAutocmd "BufWrite" "async"
                             pat (nvimHsLspSaveBuffer arg)
+          Just Right{} <- addAutocmd "CursorMoved" "async"
+                            pat onCursorMoved
           nvimHsLspOpenBuffer def
           void $ focusLang (fromString lang) $
             whenM (readContext . view $
@@ -119,19 +124,21 @@ nvimHsLspOpenBuffer _arg = focusLang' True $ do
   whenJust mft $ \ft -> do
     serverFT <- view (field @"language")
     when (fromString ft == serverFT) $ do
-      uri <- getBufUri b
-      unlessM (alreadyOpened uri) $ do
-        modifyContext $ field @"openedFiles" %~ M.insert uri 0
-        didOpenBuffer b
+      tryAny (getBufUri b) >>= \case -- TODO AnyではなくgetBufUri専用
+        Right uri -> unlessM (alreadyOpened uri) $ do
+          modifyContext $ field @"openedFiles" %~ M.insert uri 0
+          didOpenBuffer b
+        Left{} -> return ()
 
 nvimHsLspCloseBuffer :: CommandArguments -> NeovimLsp ()
 nvimHsLspCloseBuffer _ = focusLang' True $ do
   b <- vim_get_current_buffer
-  uri <- getBufUri b
-  ifM (not <$> alreadyOpened uri)
-    (vim_out_write "nvim-hs-lsp: Not opened yet\n") $
-    do modifyContext $ field @"openedFiles" %~ M.delete uri
-       didCloseBuffer b
+  tryAny (getBufUri b) >>= \case -- TODO AnyではなくgetBufUri専用
+    Right uri -> ifM (not <$> alreadyOpened uri)
+      (vim_out_write "nvim-hs-lsp: Not opened yet\n") $
+      do modifyContext $ field @"openedFiles" %~ M.delete uri
+         didCloseBuffer b
+    Left{} -> return ()
 
 nvimHsLspChangeBuffer :: CommandArguments -> NeovimLsp ()
 nvimHsLspChangeBuffer arg = varidatedAndThen $ do
@@ -194,6 +201,16 @@ nvimHsLspHover _ = varidatedAndThen $ do
                      . focusLang' False
                      . whenAlreadyOpened
 
+nvimHsLspHoverFloat :: CommandArguments -> NeovimLsp ()
+nvimHsLspHoverFloat _ = varidatedAndThen $ do
+    uri <- getBufUri =<< vim_get_current_buffer
+    pos <- fromNvimPos <$> getNvimPos
+    void $ hoverRequest uri pos callbackHoverFloat
+  where
+    varidatedAndThen = whenInitialized
+                     . focusLang' False
+                     . whenAlreadyOpened
+
 -- Definition
 -------------
 nvimHsLspDefinition :: CommandArguments -> NeovimLsp ()
@@ -221,7 +238,7 @@ nvimHsLspComplete findstart base =
               ObjectInt n -> n
               ObjectString s
                 | Just n <- readMaybe (BC.unpack s) -> n
-              _ -> error "流石にここに来たら怒っていいよね"
+              _ -> error "impossible"
         if findStart == 1 then do
           s   <- nvim_get_current_line
           col <- snd <$> getNvimPos
@@ -233,13 +250,16 @@ nvimHsLspComplete findstart base =
           xs <- fromMaybe [] <$>
                   waitCallbackWithTimeout (1*1000*1000)
                     (completionRequest uri compPos callbackComplete)
+          logInfo "COMPELTION"
+          logInfo $ "base: " <> displayShow base
+          logInfo $ displayShow xs
           let sorted = uncurry (++) $
                         partition (isPrefixOf base . view #word)  xs
           return (Right sorted)
 
 completionFindStart :: String -> Int -> Int
 completionFindStart curLine col =
-  let isKeyword c = isAlphaNum c || (c `elem` ['_','\''])
+  let isKeyword c = isAlphaNum c || (c `elem` ['_','\'']) -- TODO make this configureble
       foo = reverse $ dropWhile isKeyword $ reverse $ take (col-1) curLine
       len = length foo
   in  len
@@ -437,4 +457,17 @@ nvimHsLspDisableQfAutoOpen _ = whenInitialized $ focusLang' False $ do
     modifyContext $ field @"lspConfig"
                   . field @"autoLoadQuickfix"
                   .~ False
+
+-------------------------------------------------------------------------------
+-- AutoCmd
+-------------------------------------------------------------------------------
+
+onCursorMoved :: NeovimLsp ()
+onCursorMoved = focusLang' True $ do
+    readContext (views (field @"onEvent") (M.lookup "CursorMoved")) >>= \case
+      Nothing -> return () --logInfo "onCursorMoved: empty"
+      Just as -> do
+        -- logInfo "onCursorMoved: non empty"
+        mapM_ tryAny as
+        removeNeovimEventHandler "CursorMoved"
 
